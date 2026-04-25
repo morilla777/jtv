@@ -1,0 +1,68 @@
+export const es: Record<string, string> = {
+  // Topbar
+  'topbar.brandSubtitle': 'Java Turing Visual - Web MVP',
+  'topbar.new': 'Nueva',
+  'topbar.save': 'Guardar',
+  'topbar.import': 'Importar',
+  'topbar.export': 'Exportar',
+  'topbar.validate': 'Validar',
+  'topbar.execute': 'Ejecutar',
+  'topbar.reset': 'Reset',
+  'topbar.machine': 'Máquina',
+
+  'topbar.menu.file': 'Archivo',
+  'topbar.menu.edit': 'Edici\u00f3n',
+  'topbar.menu.settings': 'Configuraci\u00f3n',
+  'topbar.menu.help': 'Ayuda',
+  'topbar.menu.file.new': 'Nueva',
+  'topbar.menu.file.open': 'Abrir',
+  'topbar.menu.file.save': 'Guardar',
+  'topbar.menu.file.saveAs': 'Guardar Como...',
+  'topbar.menu.file.print': 'Imprimir',
+  'topbar.menu.file.recentMachines': 'M\u00e1quinas Recientes',
+  'topbar.menu.file.recentMachines.dummyOne': 'M\u00e1quina de ejemplo 1',
+  'topbar.menu.file.recentMachines.dummyTwo': 'M\u00e1quina de ejemplo 2',
+  'topbar.menu.file.exportTo': 'Exportar a...',
+  'topbar.menu.file.exportTo.json': 'Archivo JSON',
+  'topbar.menu.file.exportTo.png': 'Imagen PNG',
+  'topbar.menu.file.exit': 'Salir',
+  'topbar.menu.edit.undo': 'Deshacer',
+  'topbar.menu.edit.redo': 'Rehacer',
+  'topbar.menu.edit.makeInitial': 'Hacer Inicial',
+  'topbar.menu.edit.changeTape': 'Cambiar Cinta',
+  'topbar.menu.edit.cut': 'Cortar',
+  'topbar.menu.edit.copy': 'Copiar',
+  'topbar.menu.edit.paste': 'Pegar',
+  'topbar.menu.edit.delete': 'Eliminar',
+  'topbar.menu.settings.burstSize': 'Tama\u00f1o de R\u00e1faga',
+  'topbar.menu.settings.notationChange': 'Cambio de Notaci\u00f3n',
+  'topbar.menu.help.contents': 'Contenidos',
+  'topbar.menu.help.about': 'Acerca de JTV...',
+
+  // Explorer
+  'explorer.title': 'Explorador',
+  'explorer.machines': 'Máquinas',
+  'explorer.examples': 'Ejemplos',
+
+  // Designer
+  'designer.title': 'Diseño de Máquina',
+  'designer.state': 'Estado',
+  'designer.transition': 'Transición',
+  'designer.center': 'Centrar',
+
+  // Properties
+  'properties.tool': 'Herramienta',
+
+  // Simulator
+  'simulator.title': 'Simulación',
+  'simulator.inputPlaceholder': 'Entrada, por ejemplo: aabb',
+  'simulator.initialize': 'Inicializar',
+  'simulator.step': 'Paso',
+  'simulator.run': 'Ejecutar',
+  'simulator.pause': 'Pausa',
+  'simulator.restart': 'Reiniciar',
+  'simulator.currentState': 'Estado actual',
+  'simulator.steps': 'Pasos',
+  'simulator.status': 'Estado',
+  'simulator.ready': 'Listo',
+};

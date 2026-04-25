@@ -1,18 +1,19 @@
 import { Component } from '@angular/core';
 import { TabsModule } from 'primeng/tabs';
+import { TranslatePipe } from '../i18n/translate.pipe';
 
 @Component({
   selector: 'app-explorer-panel',
-  imports: [TabsModule],
+  imports: [TabsModule, TranslatePipe],
   template: `
     <div class="panel">
-      <div class="panel-header">Explorador</div>
+      <div class="panel-header">{{ 'explorer.title' | translate }}</div>
 
       <div class="panel-body">
         <p-tabs value="machines">
           <p-tablist>
-            <p-tab value="machines">Máquinas</p-tab>
-            <p-tab value="examples">Ejemplos</p-tab>
+            <p-tab value="machines">{{ 'explorer.machines' | translate }}</p-tab>
+            <p-tab value="examples">{{ 'explorer.examples' | translate }}</p-tab>
           </p-tablist>
 
           <p-tabpanels>

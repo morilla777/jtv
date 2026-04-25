@@ -1,39 +1,215 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { type MenuItem } from 'primeng/api';
 import { ToolbarModule } from 'primeng/toolbar';
 import { ButtonModule } from 'primeng/button';
+import { MenubarModule } from 'primeng/menubar';
+import { SelectModule, type SelectChangeEvent } from 'primeng/select';
+import { TranslatePipe } from '../i18n/translate.pipe';
+import { TranslationService, type Language } from '../i18n/translation.service';
+
+interface LanguageOption {
+  code: Language;
+  label: string;
+  flagSrc: string;
+  flagAlt: string;
+}
 
 @Component({
   selector: 'app-topbar',
-  imports: [ToolbarModule, ButtonModule],
+  imports: [FormsModule, MenubarModule, ToolbarModule, ButtonModule, SelectModule, TranslatePipe],
   template: `
-    <p-toolbar styleClass="jtv-topbar">
-      <ng-template #start>
-        <div class="brand">
-          <span class="brand-title">JTV 2.0</span>
-          <span class="brand-subtitle">Java Turing Visual - Web MVP</span>
-        </div>
-      </ng-template>
+    <div class="topbar-shell">
+      <p-menubar [model]="menuItems" styleClass="jtv-menubar">
+        <ng-template #end>
+          <div class="brand menubar-brand">
+            <span class="brand-title">JTV 2.0</span>
+            <span class="brand-subtitle">{{ 'topbar.brandSubtitle' | translate }}</span>
+          </div>
+        </ng-template>
+      </p-menubar>
 
-      <ng-template #center>
-        <div class="toolbar-actions">
-          <p-button label="Nueva" icon="pi pi-file" severity="secondary" />
-          <p-button label="Guardar" icon="pi pi-save" severity="secondary" />
-          <p-button label="Importar" icon="pi pi-upload" severity="secondary" />
-          <p-button label="Exportar" icon="pi pi-download" severity="secondary" />
-          <p-button label="Validar" icon="pi pi-check-circle" severity="info" />
-          <p-button label="Ejecutar" icon="pi pi-play" severity="success" />
-          <p-button label="Reset" icon="pi pi-refresh" severity="contrast" />
-        </div>
-      </ng-template>
+      <p-toolbar styleClass="jtv-topbar">
+        <ng-template #center>
+          <div class="toolbar-actions">
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.new' | translate"
+              [title]="'topbar.new' | translate"
+            >
+              <img src="assets/images/New24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.save' | translate"
+              [title]="'topbar.save' | translate"
+            >
+              <img src="assets/images/Save24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.import' | translate"
+              [title]="'topbar.import' | translate"
+            >
+              <img src="assets/images/Open24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.export' | translate"
+              [title]="'topbar.export' | translate"
+            >
+              <img src="assets/images/Print24.gif" alt="" />
+            </button>
+            <span class="toolbar-separator" role="separator" aria-orientation="vertical"></span>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.menu.edit.undo' | translate"
+              [title]="'topbar.menu.edit.undo' | translate"
+            >
+              <img src="assets/images/Undo24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.menu.edit.redo' | translate"
+              [title]="'topbar.menu.edit.redo' | translate"
+            >
+              <img src="assets/images/Redo24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.menu.edit.cut' | translate"
+              [title]="'topbar.menu.edit.cut' | translate"
+            >
+              <img src="assets/images/Cut24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.menu.edit.copy' | translate"
+              [title]="'topbar.menu.edit.copy' | translate"
+            >
+              <img src="assets/images/Copy24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.menu.edit.paste' | translate"
+              [title]="'topbar.menu.edit.paste' | translate"
+            >
+              <img src="assets/images/Paste24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.menu.edit.delete' | translate"
+              [title]="'topbar.menu.edit.delete' | translate"
+            >
+              <img src="assets/images/Delete24.gif" alt="" />
+            </button>
+            <span class="toolbar-separator" role="separator" aria-orientation="vertical"></span>
+            <p-button
+              label="A="
+              styleClass="notation-button"
+              [attr.aria-label]="'topbar.validate' | translate"
+              [title]="'topbar.validate' | translate"
+              severity="secondary"
+            />
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.execute' | translate"
+              [title]="'topbar.execute' | translate"
+            >
+              <img src="assets/images/Play24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.reset' | translate"
+              [title]="'topbar.reset' | translate"
+            >
+              <img src="assets/images/Stop24.gif" alt="" />
+            </button>
+          </div>
+        </ng-template>
 
-      <ng-template #end>
-        <span class="machine-name">Máquina: NUEVA</span>
-      </ng-template>
-    </p-toolbar>
+        <ng-template #end>
+          <div class="topbar-end">
+            <span class="machine-name">{{ 'topbar.machine' | translate }}: NUEVA</span>
+            <div class="lang-switcher">
+              <p-select
+                [options]="languageOptions"
+                [ngModel]="selectedLanguageOption"
+                optionLabel="label"
+                size="small"
+                styleClass="language-select"
+                panelStyleClass="language-select-panel"
+                (onChange)="onLanguageChange($event)"
+              >
+                <ng-template #selectedItem let-selectedOption>
+                  @if (selectedOption) {
+                    <div class="language-option">
+                      <img class="language-flag" [src]="selectedOption.flagSrc" [alt]="selectedOption.flagAlt" />
+                      <span>{{ selectedOption.label }}</span>
+                    </div>
+                  }
+                </ng-template>
+
+                <ng-template #item let-language>
+                  <div class="language-option">
+                    <img class="language-flag" [src]="language.flagSrc" [alt]="language.flagAlt" />
+                    <span>{{ language.label }}</span>
+                  </div>
+                </ng-template>
+              </p-select>
+            </div>
+          </div>
+        </ng-template>
+      </p-toolbar>
+    </div>
   `,
   styles: [`
     :host {
       display: block;
+      position: relative;
+      z-index: 1000;
+    }
+
+    .topbar-shell {
+      display: flex;
+      flex-direction: column;
+    }
+
+    :host ::ng-deep .jtv-menubar {
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
+      border-top: 0;
+      min-height: 2.5rem;
+      padding-block: 0.125rem;
+    }
+
+    :host ::ng-deep .jtv-menubar .p-menubar-submenu {
+      z-index: 1001;
     }
 
     .jtv-topbar {
@@ -47,6 +223,12 @@ import { ButtonModule } from 'primeng/button';
       display: flex;
       flex-direction: column;
       line-height: 1.1;
+    }
+
+    .menubar-brand {
+      align-items: flex-end;
+      padding-inline: 0.5rem;
+      white-space: nowrap;
     }
 
     .brand-title {
@@ -65,10 +247,239 @@ import { ButtonModule } from 'primeng/button';
       flex-wrap: wrap;
     }
 
+    .image-toolbar-button {
+      width: 2.25rem;
+      height: 2.25rem;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .image-toolbar-button img {
+      display: block;
+      width: 24px;
+      height: 24px;
+    }
+
+    .toolbar-separator {
+      align-self: stretch;
+      width: 1px;
+      min-height: 2rem;
+      margin-inline: 0.25rem;
+      background: var(--p-content-border-color);
+    }
+
+    :host ::ng-deep .notation-button .p-button-label {
+      font-family: 'Times New Roman', Times, serif;
+      font-style: italic;
+    }
+
+    :host ::ng-deep .notation-button {
+      width: 2.25rem;
+      height: 2.25rem;
+      padding: 0;
+      justify-content: center;
+    }
+
+    .topbar-end {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
     .machine-name {
       font-size: 0.9rem;
       color: var(--p-text-muted-color);
     }
+
+    .lang-switcher {
+      display: flex;
+      min-width: 6.5rem;
+    }
+
+    .language-option {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      line-height: 1;
+    }
+
+    .language-flag {
+      width: 1.25rem;
+      height: 0.875rem;
+      border-radius: 2px;
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--p-text-color) 15%, transparent);
+      object-fit: cover;
+    }
+
+    :host ::ng-deep .language-select {
+      width: 6.5rem;
+    }
+
+    :host ::ng-deep .language-select .p-select-label {
+      padding-top: 0.375rem;
+      padding-bottom: 0.375rem;
+    }
   `],
 })
-export class Topbar {}
+export class Topbar {
+  readonly i18n = inject(TranslationService);
+
+  get menuItems(): MenuItem[] {
+    return [
+      {
+        label: this.i18n.translate('topbar.menu.file'),
+        icon: 'pi pi-file',
+        items: [
+          {
+            label: this.i18n.translate('topbar.menu.file.new'),
+            icon: 'pi pi-plus',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.file.open'),
+            icon: 'pi pi-folder-open',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.file.save'),
+            icon: 'pi pi-save',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.file.saveAs'),
+            icon: 'pi pi-save',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.file.print'),
+            icon: 'pi pi-print',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.file.recentMachines'),
+            icon: 'pi pi-history',
+            items: [
+              {
+                label: this.i18n.translate('topbar.menu.file.recentMachines.dummyOne'),
+                icon: 'pi pi-cog',
+              },
+              {
+                label: this.i18n.translate('topbar.menu.file.recentMachines.dummyTwo'),
+                icon: 'pi pi-cog',
+              },
+            ],
+          },
+          {
+            label: this.i18n.translate('topbar.menu.file.exportTo'),
+            icon: 'pi pi-download',
+            items: [
+              {
+                label: this.i18n.translate('topbar.menu.file.exportTo.json'),
+                icon: 'pi pi-code',
+              },
+              {
+                label: this.i18n.translate('topbar.menu.file.exportTo.png'),
+                icon: 'pi pi-image',
+              },
+            ],
+          },
+          {
+            separator: true,
+          },
+          {
+            label: this.i18n.translate('topbar.menu.file.exit'),
+            icon: 'pi pi-sign-out',
+          },
+        ],
+      },
+      {
+        label: this.i18n.translate('topbar.menu.edit'),
+        icon: 'pi pi-pencil',
+        items: [
+          {
+            label: this.i18n.translate('topbar.menu.edit.undo'),
+            icon: 'pi pi-undo',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.edit.redo'),
+            icon: 'pi pi-refresh',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.edit.makeInitial'),
+            icon: 'pi pi-flag',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.edit.changeTape'),
+            icon: 'pi pi-sliders-h',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.edit.cut'),
+            icon: 'pi pi-eraser',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.edit.copy'),
+            icon: 'pi pi-copy',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.edit.paste'),
+            icon: 'pi pi-clone',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.edit.delete'),
+            icon: 'pi pi-trash',
+          },
+        ],
+      },
+      {
+        label: this.i18n.translate('topbar.menu.settings'),
+        icon: 'pi pi-cog',
+        items: [
+          {
+            label: this.i18n.translate('topbar.menu.settings.burstSize'),
+            icon: 'pi pi-bolt',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.settings.notationChange'),
+            icon: 'pi pi-language',
+          },
+        ],
+      },
+      {
+        label: this.i18n.translate('topbar.menu.help'),
+        icon: 'pi pi-question-circle',
+        items: [
+          {
+            label: this.i18n.translate('topbar.menu.help.contents'),
+            icon: 'pi pi-book',
+          },
+          {
+            label: this.i18n.translate('topbar.menu.help.about'),
+            icon: 'pi pi-info-circle',
+          },
+        ],
+      },
+    ];
+  }
+
+  readonly languageOptions: LanguageOption[] = [
+    {
+      code: 'es',
+      label: 'ES',
+      flagSrc: 'assets/images/flag-cl.svg',
+      flagAlt: 'Bandera chilena',
+    },
+    {
+      code: 'en',
+      label: 'EN',
+      flagSrc: 'assets/images/flag-gb.svg',
+      flagAlt: 'Bandera britanica',
+    },
+  ];
+
+  get selectedLanguageOption(): LanguageOption {
+    return this.languageOptions.find((language) => language.code === this.i18n.currentLang()) ?? this.languageOptions[0];
+  }
+
+  onLanguageChange(event: SelectChangeEvent): void {
+    const selected = event.value as LanguageOption | null;
+
+    if (selected) {
+      this.i18n.setLanguage(selected.code);
+    }
+  }
+}

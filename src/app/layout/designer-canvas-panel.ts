@@ -1,19 +1,20 @@
 import { Component } from '@angular/core';
 import { ButtonModule } from 'primeng/button';
+import { TranslatePipe } from '../i18n/translate.pipe';
 
 @Component({
   selector: 'app-designer-canvas-panel',
-  imports: [ButtonModule],
+  imports: [ButtonModule, TranslatePipe],
   template: `
     <div class="panel">
-      <div class="panel-header">Diseño de Máquina</div>
+      <div class="panel-header">{{ 'designer.title' | translate }}</div>
 
       <div class="canvas-toolbar">
-        <p-button icon="pi pi-plus" label="Estado" size="small" severity="secondary" />
-        <p-button icon="pi pi-share-alt" label="Transición" size="small" severity="secondary" />
+        <p-button icon="pi pi-plus" [label]="'designer.state' | translate" size="small" severity="secondary" />
+        <p-button icon="pi pi-share-alt" [label]="'designer.transition' | translate" size="small" severity="secondary" />
         <p-button icon="pi pi-search-plus" size="small" severity="contrast" />
         <p-button icon="pi pi-search-minus" size="small" severity="contrast" />
-        <p-button icon="pi pi-compass" label="Centrar" size="small" severity="contrast" />
+        <p-button icon="pi pi-compass" [label]="'designer.center' | translate" size="small" severity="contrast" />
       </div>
 
       <div class="canvas-container">

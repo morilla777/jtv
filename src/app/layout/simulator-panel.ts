@@ -3,27 +3,28 @@ import { FormsModule } from '@angular/forms';
 import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
 import { TagModule } from 'primeng/tag';
+import { TranslatePipe } from '../i18n/translate.pipe';
 
 @Component({
   selector: 'app-simulator-panel',
-  imports: [FormsModule, InputTextModule, ButtonModule, TagModule],
+  imports: [FormsModule, InputTextModule, ButtonModule, TagModule, TranslatePipe],
   template: `
     <div class="panel simulator-panel">
-      <div class="panel-header">Simulación</div>
+      <div class="panel-header">{{ 'simulator.title' | translate }}</div>
 
       <div class="simulator-toolbar">
-        <input pInputText [(ngModel)]="input" placeholder="Entrada, por ejemplo: aabb" />
-        <p-button label="Inicializar" icon="pi pi-step-forward" severity="secondary" />
-        <p-button label="Paso" icon="pi pi-angle-right" severity="info" />
-        <p-button label="Run" icon="pi pi-play" severity="success" />
-        <p-button label="Pausa" icon="pi pi-pause" severity="warn" />
-        <p-button label="Reiniciar" icon="pi pi-refresh" severity="contrast" />
+        <input pInputText [(ngModel)]="input" [placeholder]="'simulator.inputPlaceholder' | translate" />
+        <p-button [label]="'simulator.initialize' | translate" icon="pi pi-step-forward" severity="secondary" />
+        <p-button [label]="'simulator.step' | translate" icon="pi pi-angle-right" severity="info" />
+        <p-button [label]="'simulator.run' | translate" icon="pi pi-play" severity="success" />
+        <p-button [label]="'simulator.pause' | translate" icon="pi pi-pause" severity="warn" />
+        <p-button [label]="'simulator.restart' | translate" icon="pi pi-refresh" severity="contrast" />
       </div>
 
       <div class="execution-status">
-        <p-tag severity="info" value="Estado actual: q0"></p-tag>
-        <p-tag severity="secondary" value="Pasos: 0"></p-tag>
-        <p-tag severity="success" value="Status: Ready"></p-tag>
+        <p-tag severity="info" [value]="('simulator.currentState' | translate) + ': q0'"></p-tag>
+        <p-tag severity="secondary" [value]="('simulator.steps' | translate) + ': 0'"></p-tag>
+        <p-tag severity="success" [value]="('simulator.status' | translate) + ': ' + ('simulator.ready' | translate)"></p-tag>
       </div>
 
       <div class="tape-wrapper">

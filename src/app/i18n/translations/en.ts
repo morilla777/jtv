@@ -1,0 +1,68 @@
+export const en: Record<string, string> = {
+  // Topbar
+  'topbar.brandSubtitle': 'Java Turing Visual - Web MVP',
+  'topbar.new': 'New',
+  'topbar.save': 'Save',
+  'topbar.import': 'Import',
+  'topbar.export': 'Export',
+  'topbar.validate': 'Validate',
+  'topbar.execute': 'Execute',
+  'topbar.reset': 'Reset',
+  'topbar.machine': 'Machine',
+
+  'topbar.menu.file': 'File',
+  'topbar.menu.edit': 'Edit',
+  'topbar.menu.settings': 'Settings',
+  'topbar.menu.help': 'Help',
+  'topbar.menu.file.new': 'New',
+  'topbar.menu.file.open': 'Open',
+  'topbar.menu.file.save': 'Save',
+  'topbar.menu.file.saveAs': 'Save As...',
+  'topbar.menu.file.print': 'Print',
+  'topbar.menu.file.recentMachines': 'Recent Machines',
+  'topbar.menu.file.recentMachines.dummyOne': 'Sample machine 1',
+  'topbar.menu.file.recentMachines.dummyTwo': 'Sample machine 2',
+  'topbar.menu.file.exportTo': 'Export to...',
+  'topbar.menu.file.exportTo.json': 'JSON file',
+  'topbar.menu.file.exportTo.png': 'PNG image',
+  'topbar.menu.file.exit': 'Exit',
+  'topbar.menu.edit.undo': 'Undo',
+  'topbar.menu.edit.redo': 'Redo',
+  'topbar.menu.edit.makeInitial': 'Make Initial',
+  'topbar.menu.edit.changeTape': 'Change Tape',
+  'topbar.menu.edit.cut': 'Cut',
+  'topbar.menu.edit.copy': 'Copy',
+  'topbar.menu.edit.paste': 'Paste',
+  'topbar.menu.edit.delete': 'Delete',
+  'topbar.menu.settings.burstSize': 'Burst Size',
+  'topbar.menu.settings.notationChange': 'Notation Change',
+  'topbar.menu.help.contents': 'Contents',
+  'topbar.menu.help.about': 'About JTV...',
+
+  // Explorer
+  'explorer.title': 'Explorer',
+  'explorer.machines': 'Machines',
+  'explorer.examples': 'Examples',
+
+  // Designer
+  'designer.title': 'Machine Design',
+  'designer.state': 'State',
+  'designer.transition': 'Transition',
+  'designer.center': 'Center',
+
+  // Properties
+  'properties.tool': 'Tool',
+
+  // Simulator
+  'simulator.title': 'Simulation',
+  'simulator.inputPlaceholder': 'Input, e.g.: aabb',
+  'simulator.initialize': 'Initialize',
+  'simulator.step': 'Step',
+  'simulator.run': 'Run',
+  'simulator.pause': 'Pause',
+  'simulator.restart': 'Restart',
+  'simulator.currentState': 'Current state',
+  'simulator.steps': 'Steps',
+  'simulator.status': 'Status',
+  'simulator.ready': 'Ready',
+};

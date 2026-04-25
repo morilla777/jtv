@@ -1,10 +1,11 @@
 import { Component } from '@angular/core';
 import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
+import { TranslatePipe } from '../i18n/translate.pipe';
 
 @Component({
   selector: 'app-properties-panel',
-  imports: [ButtonModule, TooltipModule],
+  imports: [ButtonModule, TooltipModule, TranslatePipe],
   template: `
     <div class="panel">
       <div class="panel-body">
@@ -12,13 +13,13 @@ import { TooltipModule } from 'primeng/tooltip';
           @for (btn of buttons; track btn.id) {
             <button
               pButton
-              [pTooltip]="btn.label"
+              [pTooltip]="('properties.tool' | translate) + ' ' + btn.id"
               tooltipPosition="top"
               severity="secondary"
               [outlined]="true"
               class="tool-btn"
             >
-              <img [src]="btn.icon" [alt]="btn.label" class="btn-icon" />
+              <img [src]="btn.icon" [alt]="('properties.tool' | translate) + ' ' + btn.id" class="btn-icon" />
             </button>
           }
         </div>
@@ -68,7 +69,6 @@ import { TooltipModule } from 'primeng/tooltip';
 export class PropertiesPanel {
   readonly buttons = Array.from({ length: 18 }, (_, i) => ({
     id: i + 1,
-    label: `Herramienta ${i + 1}`,
     icon: 'assets/images/L.gif',
   }));
 }

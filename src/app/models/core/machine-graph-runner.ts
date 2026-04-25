@@ -30,7 +30,7 @@ export class MachineGraphRunner {
       visited.add(currentGroup.id);
 
       const nextLink = this.findTraversableOutgoingLink(graph.links, currentGroup, context);
-      currentGroup = nextLink?.targetGroup ?? null;
+      currentGroup = nextLink?.targetGroup ?? undefined;
     }
 
     return true;
