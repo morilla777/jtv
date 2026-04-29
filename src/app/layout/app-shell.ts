@@ -25,13 +25,13 @@ import { SimulatorPanel } from './simulator-panel';
           layout="vertical"
           [panelSizes]="[72, 28]"
           [gutterSize]="6"
-          styleClass="main-splitter"
+          class="main-splitter"
         >
           <ng-template #panel>
             <p-splitter
               [panelSizes]="[18, 66.7, 15.3]"
               [gutterSize]="6"
-              styleClass="designer-splitter"
+              class="designer-splitter"
             >
               <ng-template #panel>
                 <app-explorer-panel />

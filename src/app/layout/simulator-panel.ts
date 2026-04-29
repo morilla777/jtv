@@ -1,40 +1,100 @@
 import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
-import { TagModule } from 'primeng/tag';
-import { TranslatePipe } from '../i18n/translate.pipe';
+import { InputTextModule } from 'primeng/inputtext';
+import { SelectModule } from 'primeng/select';
+import { ToolbarModule } from 'primeng/toolbar';
 
 @Component({
   selector: 'app-simulator-panel',
-  imports: [FormsModule, InputTextModule, ButtonModule, TagModule, TranslatePipe],
+  imports: [ButtonModule, FormsModule, InputTextModule, SelectModule, ToolbarModule],
   template: `
-    <div class="panel simulator-panel">
-      <div class="panel-header">{{ 'simulator.title' | translate }}</div>
+    <div class="panel">
+      <p-toolbar class="simulator-toolbar">
+        <ng-template #center>
+          <div class="simulator-main-actions">
+            @for (button of tapeButtons; track button.icon) {
+              <button
+                pButton
+                type="button"
+                class="image-toolbar-button p-button-secondary"
+                [attr.aria-label]="button.label"
+                [title]="button.label"
+              >
+                <img [src]="button.icon" alt="" />
+              </button>
+            }
 
-      <div class="simulator-toolbar">
-        <input pInputText [(ngModel)]="input" [placeholder]="'simulator.inputPlaceholder' | translate" />
-        <p-button [label]="'simulator.initialize' | translate" icon="pi pi-step-forward" severity="secondary" />
-        <p-button [label]="'simulator.step' | translate" icon="pi pi-angle-right" severity="info" />
-        <p-button [label]="'simulator.run' | translate" icon="pi pi-play" severity="success" />
-        <p-button [label]="'simulator.pause' | translate" icon="pi pi-pause" severity="warn" />
-        <p-button [label]="'simulator.restart' | translate" icon="pi pi-refresh" severity="contrast" />
-      </div>
+            <span class="toolbar-separator" role="separator" aria-orientation="vertical"></span>
 
-      <div class="execution-status">
-        <p-tag severity="info" [value]="('simulator.currentState' | translate) + ': q0'"></p-tag>
-        <p-tag severity="secondary" [value]="('simulator.steps' | translate) + ': 0'"></p-tag>
-        <p-tag severity="success" [value]="('simulator.status' | translate) + ': ' + ('simulator.ready' | translate)"></p-tag>
-      </div>
+            <p-select
+              [options]="tapeOptions"
+              [(ngModel)]="selectedTape"
+              size="small"
+              class="tape-select"
+              ariaLabel="Cinta"
+            />
 
-      <div class="tape-wrapper">
-        <div class="tape">
-          @for (cell of tape; track $index) {
-            <div class="cell" [class.active]="$index === 1">
-              {{ cell }}
-            </div>
+            <input
+              pInputText
+              type="text"
+              class="tape-input"
+              [(ngModel)]="tapeValue"
+              aria-label="Contenido de cinta"
+            />
+          </div>
+        </ng-template>
+
+        <ng-template #end>
+          <div class="toolbar-end-group">
+            <span class="toolbar-separator" role="separator" aria-orientation="vertical"></span>
+
+            <p-toolbar class="tape-navigation-toolbar">
+              <ng-template #start>
+                <div class="toolbar-actions toolbar-actions-compact">
+                  @for (button of tapeNavigationButtons; track button.icon) {
+                    <button
+                      pButton
+                      type="button"
+                      class="image-toolbar-button p-button-secondary"
+                      [attr.aria-label]="button.label"
+                      [title]="button.label"
+                    >
+                      <img [src]="button.icon" alt="" />
+                    </button>
+                  }
+                </div>
+              </ng-template>
+            </p-toolbar>
+          </div>
+        </ng-template>
+      </p-toolbar>
+
+      <div class="tapes-canvas">
+        <svg class="tapes-svg" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-label="Cintas de Máquina de Turing">
+          @for (tape of tapeRows; track tape.label) {
+            <g class="tape-row">
+              <text x="28" [attr.y]="tape.y + 21" class="tape-label">{{ tape.label }}</text>
+              <rect x="108" [attr.y]="tape.y - 2" width="1032" height="36" rx="4" class="tape-track"></rect>
+
+              @for (cell of tapeCells; track cell.x) {
+                <rect
+                  [attr.x]="cell.x"
+                  [attr.y]="tape.y"
+                  width="64"
+                  height="32"
+                  class="tape-cell"
+                  [class.tape-cell-active]="cell.active"
+                ></rect>
+                <text [attr.x]="cell.x + 32" [attr.y]="tape.y + 22" text-anchor="middle" class="cell-value">
+                  {{ cell.value }}
+                </text>
+              }
+
+              <path [attr.d]="headPath(tape.y)" class="tape-head"></path>
+            </g>
           }
-        </div>
+        </svg>
       </div>
     </div>
   `,
@@ -46,60 +106,193 @@ import { TranslatePipe } from '../i18n/translate.pipe';
       background: var(--p-surface-card);
     }
 
-    .panel-header {
-      padding: 0.75rem 1rem;
-      font-weight: 600;
-      border-bottom: 1px solid var(--p-surface-border);
+    :host ::ng-deep .simulator-toolbar {
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
+      border-top: 0;
+      padding: 0.25rem;
     }
 
-    .simulator-toolbar {
-      display: flex;
-      gap: 0.5rem;
-      padding: 0.75rem;
-      border-bottom: 1px solid var(--p-surface-border);
-      flex-wrap: wrap;
+    :host ::ng-deep .simulator-toolbar .p-toolbar-center {
+      flex: 1 1 auto;
+      min-width: 0;
     }
 
-    .execution-status {
-      display: flex;
-      gap: 0.5rem;
-      padding: 0.75rem;
-      border-bottom: 1px solid var(--p-surface-border);
-      flex-wrap: wrap;
+    :host ::ng-deep .simulator-toolbar .p-toolbar-end {
+      flex: 0 0 auto;
     }
 
-    .tape-wrapper {
-      flex: 1;
-      overflow: auto;
-      padding: 1rem;
+    :host ::ng-deep .tape-navigation-toolbar {
+      border: 0;
+      padding: 0;
+      background: transparent;
     }
 
-    .tape {
-      display: flex;
-      gap: 0.25rem;
-      align-items: center;
-      min-height: 72px;
-    }
-
-    .cell {
-      width: 48px;
-      height: 48px;
-      border: 1px solid var(--p-surface-border);
+    .simulator-main-actions {
       display: flex;
       align-items: center;
+      gap: 0.375rem;
+      width: 100%;
+      min-width: 0;
+      flex-wrap: nowrap;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      min-width: 0;
+      flex-wrap: nowrap;
+    }
+
+    .toolbar-actions-compact {
+      width: auto;
+    }
+
+    .toolbar-end-group {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      flex: 0 0 auto;
+    }
+
+    .image-toolbar-button {
+      width: 2.25rem;
+      height: 2.25rem;
       justify-content: center;
-      background: var(--p-surface-card);
-      font-weight: 600;
-      border-radius: 8px;
+      padding: 0;
     }
 
-    .cell.active {
-      border: 2px solid var(--p-primary-color);
-      transform: scale(1.05);
+    .image-toolbar-button img {
+      display: block;
+      width: 24px;
+      height: 24px;
+    }
+
+    .toolbar-separator {
+      align-self: stretch;
+      width: 1px;
+      min-height: 2rem;
+      margin-inline: 0.25rem;
+      background: var(--p-content-border-color);
+    }
+
+    :host ::ng-deep .tape-select {
+      width: 7rem;
+    }
+
+    .tape-input {
+      flex: 1 1 0;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .tapes-canvas {
+      flex: 1;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: 0.5rem;
+      background: var(--p-surface-ground);
+    }
+
+    .tapes-svg {
+      display: block;
+      width: 100%;
+      height: max(100%, 300px);
+      min-height: 280px;
+    }
+
+    .tape-label {
+      font-size: 18px;
+      font-weight: 600;
+      fill: var(--p-text-color);
+    }
+
+    .tape-track {
+      fill: cyan;
+      stroke: var(--p-surface-border);
+      stroke-width: 1.5;
+    }
+
+    .tape-cell {
+      fill: cyan;
+      stroke: var(--p-surface-border);
+      stroke-width: 1.25;
+    }
+
+    .tape-cell-active {
+      fill: yellow;
+      stroke: color-mix(in srgb, yellow 65%, black);
+      stroke-width: 2.5;
+    }
+
+    .cell-value {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 20px;
+      font-weight: 600;
+      fill: var(--p-text-color);
+    }
+
+    .tape-head {
+      fill: var(--p-primary-color);
+      stroke: color-mix(in srgb, var(--p-primary-color) 72%, black);
+      stroke-width: 1;
     }
   `],
 })
 export class SimulatorPanel {
-  input = 'aabb';
-  tape = ['#', 'a', 'a', 'b', 'b', '#', '#', '#', '#', '#'];
+  readonly tapeButtons = [
+    {
+      label: 'Agregar cinta',
+      icon: 'assets/images/AddTape24.gif',
+    },
+    {
+      label: 'Quitar cinta',
+      icon: 'assets/images/RemoveTape24.gif',
+    },
+    {
+      label: 'Limpiar todas las cintas',
+      icon: 'assets/images/ClearAllTape24.gif',
+    },
+    {
+      label: 'Limpiar cinta',
+      icon: 'assets/images/ClearTape24.gif',
+    },
+  ];
+
+  readonly tapeNavigationButtons = [
+    {
+      label: 'Retroceder página de cinta',
+      icon: 'assets/images/BackwardTapePage24.gif',
+    },
+    {
+      label: 'Centrar página de cinta',
+      icon: 'assets/images/CenterTapePage24.gif',
+    },
+    {
+      label: 'Avanzar página de cinta',
+      icon: 'assets/images/ForwardTapePage24.gif',
+    },
+  ];
+
+  readonly tapeOptions = ['Cinta 1', 'Cinta 2'];
+  readonly tapeRows = Array.from({ length: 5 }, (_, index) => ({
+    label: `Cinta ${index + 1}`,
+    y: 24 + index * 52,
+  }));
+  readonly tapeCells = Array.from({ length: 16 }, (_, index) => ({
+    x: 112 + index * 64,
+    value: index === 0 || index > 8 ? '#' : ['a', 'b', 'b', 'a', '1', '0', 'a', 'b'][index - 1],
+    active: index === 5,
+  }));
+
+  selectedTape = this.tapeOptions[0];
+  tapeValue = '';
+
+  headPath(y: number): string {
+    const x = 112 + 5 * 64 + 32;
+    return `M ${x - 10} ${y + 46} L ${x + 10} ${y + 46} L ${x} ${y + 36} Z`;
+  }
 }

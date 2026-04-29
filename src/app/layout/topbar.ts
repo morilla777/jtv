@@ -20,16 +20,46 @@ interface LanguageOption {
   imports: [FormsModule, MenubarModule, ToolbarModule, ButtonModule, SelectModule, TranslatePipe],
   template: `
     <div class="topbar-shell">
-      <p-menubar [model]="menuItems" styleClass="jtv-menubar">
+      <p-menubar [model]="menuItems" class="jtv-menubar">
         <ng-template #end>
-          <div class="brand menubar-brand">
-            <span class="brand-title">JTV 2.0</span>
-            <span class="brand-subtitle">{{ 'topbar.brandSubtitle' | translate }}</span>
+          <div class="menubar-end">
+            <div class="lang-switcher">
+              <p-select
+                [options]="languageOptions"
+                [ngModel]="selectedLanguageOption"
+                optionLabel="label"
+                size="small"
+                class="language-select"
+                panelStyleClass="language-select-panel"
+                (onChange)="onLanguageChange($event)"
+              >
+                <ng-template #selectedItem let-selectedOption>
+                  @if (selectedOption) {
+                    <div class="language-option">
+                      <img class="language-flag" [src]="selectedOption.flagSrc" [alt]="selectedOption.flagAlt" />
+                      <span>{{ selectedOption.label }}</span>
+                    </div>
+                  }
+                </ng-template>
+
+                <ng-template #item let-language>
+                  <div class="language-option">
+                    <img class="language-flag" [src]="language.flagSrc" [alt]="language.flagAlt" />
+                    <span>{{ language.label }}</span>
+                  </div>
+                </ng-template>
+              </p-select>
+            </div>
+
+            <div class="brand menubar-brand">
+              <span class="brand-title">JTV 2.0</span>
+              <span class="brand-subtitle">{{ 'topbar.brandSubtitle' | translate }}</span>
+            </div>
           </div>
         </ng-template>
       </p-menubar>
 
-      <p-toolbar styleClass="jtv-topbar">
+      <p-toolbar class="jtv-topbar">
         <ng-template #center>
           <div class="toolbar-actions">
             <button
@@ -126,7 +156,7 @@ interface LanguageOption {
             <span class="toolbar-separator" role="separator" aria-orientation="vertical"></span>
             <p-button
               label="A="
-              styleClass="notation-button"
+              class="notation-button"
               [attr.aria-label]="'topbar.validate' | translate"
               [title]="'topbar.validate' | translate"
               severity="secondary"
@@ -154,34 +184,37 @@ interface LanguageOption {
 
         <ng-template #end>
           <div class="topbar-end">
-            <span class="machine-name">{{ 'topbar.machine' | translate }}: NUEVA</span>
-            <div class="lang-switcher">
-              <p-select
-                [options]="languageOptions"
-                [ngModel]="selectedLanguageOption"
-                optionLabel="label"
-                size="small"
-                styleClass="language-select"
-                panelStyleClass="language-select-panel"
-                (onChange)="onLanguageChange($event)"
-              >
-                <ng-template #selectedItem let-selectedOption>
-                  @if (selectedOption) {
-                    <div class="language-option">
-                      <img class="language-flag" [src]="selectedOption.flagSrc" [alt]="selectedOption.flagAlt" />
-                      <span>{{ selectedOption.label }}</span>
-                    </div>
-                  }
-                </ng-template>
-
-                <ng-template #item let-language>
-                  <div class="language-option">
-                    <img class="language-flag" [src]="language.flagSrc" [alt]="language.flagAlt" />
-                    <span>{{ language.label }}</span>
-                  </div>
-                </ng-template>
-              </p-select>
-            </div>
+            <p-select
+              [options]="symbolOptions"
+              [(ngModel)]="selectedSymbol"
+              size="small"
+              class="toolbar-select symbol-select"
+              panelStyleClass="symbol-select-panel"
+              ariaLabel="Símbolo"
+            />
+            <p-select
+              [options]="greekLowercaseOptions"
+              [(ngModel)]="selectedGreekLowercase"
+              size="small"
+              class="toolbar-select symbol-select"
+              panelStyleClass="symbol-select-panel"
+              ariaLabel="Letra griega"
+            />
+            <p-select
+              [options]="uppercaseOptions"
+              [(ngModel)]="selectedUppercase"
+              size="small"
+              class="toolbar-select symbol-select"
+              panelStyleClass="symbol-select-panel"
+              ariaLabel="Letra mayúscula"
+            />
+            <p-select
+              [options]="machineOptions"
+              [(ngModel)]="selectedMachine"
+              size="small"
+              class="toolbar-select machine-select"
+              ariaLabel="Máquina"
+            />
           </div>
         </ng-template>
       </p-toolbar>
@@ -229,6 +262,12 @@ interface LanguageOption {
       align-items: flex-end;
       padding-inline: 0.5rem;
       white-space: nowrap;
+    }
+
+    .menubar-end {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
     }
 
     .brand-title {
@@ -283,12 +322,8 @@ interface LanguageOption {
     .topbar-end {
       display: flex;
       align-items: center;
-      gap: 1rem;
-    }
-
-    .machine-name {
-      font-size: 0.9rem;
-      color: var(--p-text-muted-color);
+      gap: 0.375rem;
+      flex-wrap: wrap;
     }
 
     .lang-switcher {
@@ -319,10 +354,76 @@ interface LanguageOption {
       padding-top: 0.375rem;
       padding-bottom: 0.375rem;
     }
+
+    :host ::ng-deep .toolbar-select .p-select-label {
+      padding-top: 0.375rem;
+      padding-bottom: 0.375rem;
+      font-size: 0.875rem;
+    }
+
+    :host ::ng-deep .symbol-select {
+      width: 5rem;
+    }
+
+    :host ::ng-deep .symbol-select .p-select-label {
+      font-family: 'Times New Roman', Times, serif;
+      font-style: italic;
+    }
+
+    :host ::ng-deep .symbol-select-panel .p-select-option {
+      font-family: 'Times New Roman', Times, serif;
+      font-style: italic;
+    }
+
+    :host ::ng-deep .machine-select {
+      width: 9.5rem;
+    }
   `],
 })
 export class Topbar {
   readonly i18n = inject(TranslationService);
+
+  readonly symbolOptions = [
+    '#',
+    ...Array.from({ length: 26 }, (_, index) => String.fromCharCode(97 + index)),
+    ...Array.from({ length: 10 }, (_, index) => index.toString()),
+  ];
+
+  readonly greekLowercaseOptions = [
+    'α',
+    'β',
+    'γ',
+    'δ',
+    'ε',
+    'ζ',
+    'η',
+    'θ',
+    'ι',
+    'κ',
+    'λ',
+    'μ',
+    'ν',
+    'ξ',
+    'ο',
+    'π',
+    'ρ',
+    'σ',
+    'τ',
+    'υ',
+    'φ',
+    'χ',
+    'ψ',
+    'ω',
+  ];
+
+  readonly uppercaseOptions = Array.from({ length: 26 }, (_, index) => String.fromCharCode(65 + index));
+
+  readonly machineOptions = ['MAQUINA 1', 'MÁQUINA 2'];
+
+  selectedSymbol = this.symbolOptions[0];
+  selectedGreekLowercase = this.greekLowercaseOptions[0];
+  selectedUppercase = this.uppercaseOptions[0];
+  selectedMachine = this.machineOptions[0];
 
   get menuItems(): MenuItem[] {
     return [

@@ -1,22 +1,10 @@
 import { Component } from '@angular/core';
-import { ButtonModule } from 'primeng/button';
-import { TranslatePipe } from '../i18n/translate.pipe';
 
 @Component({
   selector: 'app-designer-canvas-panel',
-  imports: [ButtonModule, TranslatePipe],
+  imports: [],
   template: `
     <div class="panel">
-      <div class="panel-header">{{ 'designer.title' | translate }}</div>
-
-      <div class="canvas-toolbar">
-        <p-button icon="pi pi-plus" [label]="'designer.state' | translate" size="small" severity="secondary" />
-        <p-button icon="pi pi-share-alt" [label]="'designer.transition' | translate" size="small" severity="secondary" />
-        <p-button icon="pi pi-search-plus" size="small" severity="contrast" />
-        <p-button icon="pi pi-search-minus" size="small" severity="contrast" />
-        <p-button icon="pi pi-compass" [label]="'designer.center' | translate" size="small" severity="contrast" />
-      </div>
-
       <div class="canvas-container">
         <svg class="designer-svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet">
           <defs>
@@ -61,20 +49,6 @@ import { TranslatePipe } from '../i18n/translate.pipe';
       display: flex;
       flex-direction: column;
       background: var(--p-surface-card);
-    }
-
-    .panel-header {
-      padding: 0.75rem 1rem;
-      font-weight: 600;
-      border-bottom: 1px solid var(--p-surface-border);
-    }
-
-    .canvas-toolbar {
-      display: flex;
-      gap: 0.5rem;
-      padding: 0.75rem;
-      border-bottom: 1px solid var(--p-surface-border);
-      flex-wrap: wrap;
     }
 
     .canvas-container {
