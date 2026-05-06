@@ -157,8 +157,8 @@ interface LanguageOption {
             <p-button
               label="A="
               class="notation-button"
-              [attr.aria-label]="'topbar.validate' | translate"
-              [title]="'topbar.validate' | translate"
+              [attr.aria-label]="'topbar.parameterAssignment' | translate"
+              [title]="'topbar.parameterAssignment' | translate"
               severity="secondary"
             />
             <button
@@ -174,8 +174,8 @@ interface LanguageOption {
               pButton
               type="button"
               class="image-toolbar-button p-button-secondary"
-              [attr.aria-label]="'topbar.reset' | translate"
-              [title]="'topbar.reset' | translate"
+              [attr.aria-label]="'topbar.stop' | translate"
+              [title]="'topbar.stop' | translate"
             >
               <img src="assets/images/Stop24.gif" alt="" />
             </button>
@@ -313,6 +313,13 @@ interface LanguageOption {
     }
 
     :host ::ng-deep .notation-button {
+      width: 2.25rem;
+      height: 2.25rem;
+      padding: 0;
+      justify-content: center;
+    }
+
+    :host ::ng-deep .notation-button .p-button {
       width: 2.25rem;
       height: 2.25rem;
       padding: 0;

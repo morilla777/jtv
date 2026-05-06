@@ -4,10 +4,22 @@ import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { ToolbarModule } from 'primeng/toolbar';
+import { TranslatePipe } from '../i18n/translate.pipe';
+
+interface SimulatorButton {
+  readonly labelKey: string;
+  readonly icon: string;
+}
+
+interface TapeOption {
+  readonly value: number;
+  readonly labelKey: string;
+  readonly number: number;
+}
 
 @Component({
   selector: 'app-simulator-panel',
-  imports: [ButtonModule, FormsModule, InputTextModule, SelectModule, ToolbarModule],
+  imports: [ButtonModule, FormsModule, InputTextModule, SelectModule, ToolbarModule, TranslatePipe],
   template: `
     <div class="panel">
       <p-toolbar class="simulator-toolbar">
@@ -18,8 +30,8 @@ import { ToolbarModule } from 'primeng/toolbar';
                 pButton
                 type="button"
                 class="image-toolbar-button p-button-secondary"
-                [attr.aria-label]="button.label"
-                [title]="button.label"
+                [attr.aria-label]="button.labelKey | translate"
+                [title]="button.labelKey | translate"
               >
                 <img [src]="button.icon" alt="" />
               </button>
@@ -30,17 +42,28 @@ import { ToolbarModule } from 'primeng/toolbar';
             <p-select
               [options]="tapeOptions"
               [(ngModel)]="selectedTape"
+              optionValue="value"
               size="small"
               class="tape-select"
-              ariaLabel="Cinta"
-            />
+              [ariaLabel]="'simulator.tapeSelectAria' | translate"
+            >
+              <ng-template #selectedItem let-selectedOption>
+                @if (selectedOption) {
+                  <span>{{ selectedOption.labelKey | translate: { number: selectedOption.number } }}</span>
+                }
+              </ng-template>
+
+              <ng-template #item let-tape>
+                <span>{{ tape.labelKey | translate: { number: tape.number } }}</span>
+              </ng-template>
+            </p-select>
 
             <input
               pInputText
               type="text"
               class="tape-input"
               [(ngModel)]="tapeValue"
-              aria-label="Contenido de cinta"
+              [attr.aria-label]="'simulator.tapeInputAria' | translate"
             />
           </div>
         </ng-template>
@@ -57,8 +80,8 @@ import { ToolbarModule } from 'primeng/toolbar';
                       pButton
                       type="button"
                       class="image-toolbar-button p-button-secondary"
-                      [attr.aria-label]="button.label"
-                      [title]="button.label"
+                      [attr.aria-label]="button.labelKey | translate"
+                      [title]="button.labelKey | translate"
                     >
                       <img [src]="button.icon" alt="" />
                     </button>
@@ -71,27 +94,36 @@ import { ToolbarModule } from 'primeng/toolbar';
       </p-toolbar>
 
       <div class="tapes-canvas">
-        <svg class="tapes-svg" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-label="Cintas de Máquina de Turing">
-          @for (tape of tapeRows; track tape.label) {
+        <svg class="tapes-svg" [attr.viewBox]="tapesViewBox" preserveAspectRatio="none" [attr.aria-label]="'simulator.tapesCanvasAria' | translate">
+          @for (tape of tapeRows; track tape.number) {
             <g class="tape-row">
-              <text x="28" [attr.y]="tape.y + 21" class="tape-label">{{ tape.label }}</text>
-              <rect x="108" [attr.y]="tape.y - 2" width="1032" height="36" rx="4" class="tape-track"></rect>
+              <text x="28" [attr.y]="tape.y + 21" class="tape-label">
+                {{ 'simulator.tape' | translate: { number: tape.number } }}
+              </text>
+              <rect
+                [attr.x]="tapeTrackX"
+                [attr.y]="tape.y - 2"
+                [attr.width]="tapeTrackWidth"
+                height="36"
+                rx="4"
+                class="tape-track"
+              ></rect>
 
               @for (cell of tapeCells; track cell.x) {
                 <rect
                   [attr.x]="cell.x"
                   [attr.y]="tape.y"
-                  width="64"
+                  [attr.width]="tapeCellWidth"
                   height="32"
+                  [attr.rx]="cell.edge ? 4 : 0"
+                  [attr.ry]="cell.edge ? 4 : 0"
                   class="tape-cell"
                   [class.tape-cell-active]="cell.active"
                 ></rect>
-                <text [attr.x]="cell.x + 32" [attr.y]="tape.y + 22" text-anchor="middle" class="cell-value">
+                <text [attr.x]="cell.x + tapeCellWidth / 2" [attr.y]="tape.y + 22" text-anchor="middle" class="cell-value">
                   {{ cell.value }}
                 </text>
               }
-
-              <path [attr.d]="headPath(tape.y)" class="tape-head"></path>
             </g>
           }
         </svg>
@@ -99,7 +131,15 @@ import { ToolbarModule } from 'primeng/toolbar';
     </div>
   `,
   styles: [`
+    :host {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+    }
+
     .panel {
+      width: 100%;
       height: 100%;
       display: flex;
       flex-direction: column;
@@ -230,69 +270,73 @@ import { ToolbarModule } from 'primeng/toolbar';
 
     .cell-value {
       font-family: 'Times New Roman', Times, serif;
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 600;
       fill: var(--p-text-color);
     }
 
-    .tape-head {
-      fill: var(--p-primary-color);
-      stroke: color-mix(in srgb, var(--p-primary-color) 72%, black);
-      stroke-width: 1;
-    }
   `],
 })
 export class SimulatorPanel {
-  readonly tapeButtons = [
+  readonly tapeCellCount = 70;
+  readonly tapeBaseCellWidth = 32;
+  readonly tapeCellWidth = this.tapeBaseCellWidth * 0.8;
+  readonly tapeStartX = 112;
+  readonly tapeTrackX = this.tapeStartX - 4;
+  readonly tapeTrackWidth = this.tapeCellCount * this.tapeCellWidth + 8;
+  readonly tapeHeadIndex = Math.floor(this.tapeCellCount / 2);
+  readonly tapesViewBox = `0 0 ${this.tapeTrackX + this.tapeCellCount * this.tapeBaseCellWidth + 28} 300`;
+
+  readonly tapeButtons: SimulatorButton[] = [
     {
-      label: 'Agregar cinta',
+      labelKey: 'simulator.tapeActions.add',
       icon: 'assets/images/AddTape24.gif',
     },
     {
-      label: 'Quitar cinta',
+      labelKey: 'simulator.tapeActions.remove',
       icon: 'assets/images/RemoveTape24.gif',
     },
     {
-      label: 'Limpiar todas las cintas',
+      labelKey: 'simulator.tapeActions.clearAll',
       icon: 'assets/images/ClearAllTape24.gif',
     },
     {
-      label: 'Limpiar cinta',
+      labelKey: 'simulator.tapeActions.clear',
       icon: 'assets/images/ClearTape24.gif',
     },
   ];
 
-  readonly tapeNavigationButtons = [
+  readonly tapeNavigationButtons: SimulatorButton[] = [
     {
-      label: 'Retroceder página de cinta',
+      labelKey: 'simulator.tapeNavigation.backwardPage',
       icon: 'assets/images/BackwardTapePage24.gif',
     },
     {
-      label: 'Centrar página de cinta',
+      labelKey: 'simulator.tapeNavigation.centerPage',
       icon: 'assets/images/CenterTapePage24.gif',
     },
     {
-      label: 'Avanzar página de cinta',
+      labelKey: 'simulator.tapeNavigation.forwardPage',
       icon: 'assets/images/ForwardTapePage24.gif',
     },
   ];
 
-  readonly tapeOptions = ['Cinta 1', 'Cinta 2'];
+  readonly tapeOptions: TapeOption[] = [
+    { value: 1, labelKey: 'simulator.tape', number: 1 },
+    { value: 2, labelKey: 'simulator.tape', number: 2 },
+  ];
   readonly tapeRows = Array.from({ length: 5 }, (_, index) => ({
-    label: `Cinta ${index + 1}`,
+    number: index + 1,
     y: 24 + index * 52,
   }));
-  readonly tapeCells = Array.from({ length: 16 }, (_, index) => ({
-    x: 112 + index * 64,
+  readonly tapeCells = Array.from({ length: this.tapeCellCount }, (_, index) => ({
+    x: this.tapeStartX + index * this.tapeCellWidth,
     value: index === 0 || index > 8 ? '#' : ['a', 'b', 'b', 'a', '1', '0', 'a', 'b'][index - 1],
-    active: index === 5,
+    active: index === this.tapeHeadIndex,
+    edge: index === 0 || index === this.tapeCellCount - 1,
   }));
 
-  selectedTape = this.tapeOptions[0];
+  selectedTape = this.tapeOptions[0].value;
   tapeValue = '';
 
-  headPath(y: number): string {
-    const x = 112 + 5 * 64 + 32;
-    return `M ${x - 10} ${y + 46} L ${x + 10} ${y + 46} L ${x} ${y + 36} Z`;
-  }
 }

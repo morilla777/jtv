@@ -85,6 +85,13 @@ import { SimulatorPanel } from './simulator-panel';
 
     :host ::ng-deep .p-splitter-panel {
       min-height: 0;
+      min-width: 0;
+    }
+
+    :host ::ng-deep .p-splitter-panel > * {
+      width: 100%;
+      height: 100%;
+      min-width: 0;
     }
   `],
 })
