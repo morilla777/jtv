@@ -94,36 +94,82 @@ interface TapeOption {
       </p-toolbar>
 
       <div class="tapes-canvas">
-        <svg class="tapes-svg" [attr.viewBox]="tapesViewBox" preserveAspectRatio="none" [attr.aria-label]="'simulator.tapesCanvasAria' | translate">
+        <svg class="tapes-svg" [attr.viewBox]="tapesViewBox" preserveAspectRatio="xMinYMin meet" [attr.aria-label]="'simulator.tapesCanvasAria' | translate">
           @for (tape of tapeRows; track tape.number) {
             <g class="tape-row">
-              <text x="28" [attr.y]="tape.y + 21" class="tape-label">
-                {{ 'simulator.tape' | translate: { number: tape.number } }}
+              <text x="5" [attr.y]="tape.y + tapeLabelBaselineOffset" class="tape-label">
+                {{ tape.number }}
+              </text>
+              <rect
+                [attr.x]="tapeMarkerX"
+                [attr.y]="tape.y + tapeMarkerYOffset"
+                [attr.width]="tapeMarkerWidth"
+                [attr.height]="tapeMarkerHeight"
+                class="tape-marker"
+              ></rect>
+              <text
+                [attr.x]="tapeMarkerX + tapeMarkerWidth / 2"
+                [attr.y]="tape.y + tapeMarkerTextBaselineOffset"
+                text-anchor="middle"
+                class="tape-marker-text"
+              >
+                0
               </text>
               <rect
                 [attr.x]="tapeTrackX"
                 [attr.y]="tape.y - 2"
                 [attr.width]="tapeTrackWidth"
-                height="36"
+                [attr.height]="tapeTrackHeight"
                 rx="4"
                 class="tape-track"
               ></rect>
 
               @for (cell of tapeCells; track cell.x) {
+                <g>
+                  <title>{{ tape.number }}[{{ cell.index }}]</title>
+                  <rect
+                    [attr.x]="cell.x"
+                    [attr.y]="tape.y"
+                    [attr.width]="tapeCellWidth"
+                    [attr.height]="tapeCellHeight"
+                    [attr.rx]="cell.edge ? 4 : 0"
+                    [attr.ry]="cell.edge ? 4 : 0"
+                    class="tape-cell"
+                    [class.tape-cell-active]="cell.active"
+                  ></rect>
+                  <text [attr.x]="cell.x + tapeCellWidth / 2" [attr.y]="tape.y + cellTextBaselineOffset" text-anchor="middle" class="cell-value">
+                    {{ cell.value }}
+                  </text>
+                </g>
+              }
+
+              @for (cell of activeTapeCells; track cell.x) {
                 <rect
                   [attr.x]="cell.x"
                   [attr.y]="tape.y"
                   [attr.width]="tapeCellWidth"
-                  height="32"
+                  [attr.height]="tapeCellHeight"
                   [attr.rx]="cell.edge ? 4 : 0"
                   [attr.ry]="cell.edge ? 4 : 0"
-                  class="tape-cell"
-                  [class.tape-cell-active]="cell.active"
+                  class="tape-head-border"
                 ></rect>
-                <text [attr.x]="cell.x + tapeCellWidth / 2" [attr.y]="tape.y + 22" text-anchor="middle" class="cell-value">
-                  {{ cell.value }}
-                </text>
               }
+
+              <rect
+                [attr.x]="tapeEndMarkerX"
+                [attr.y]="tape.y + tapeMarkerYOffset"
+                [attr.width]="tapeMarkerWidth"
+                [attr.height]="tapeMarkerHeight"
+                class="tape-marker"
+              ></rect>
+              <text
+                [attr.x]="tapeEndMarkerX + tapeMarkerWidth / 2"
+                [attr.y]="tape.y + tapeMarkerTextBaselineOffset"
+                text-anchor="middle"
+                class="tape-marker-text"
+              >
+                68
+              </text>
             </g>
           }
         </svg>
@@ -240,14 +286,27 @@ interface TapeOption {
     .tapes-svg {
       display: block;
       width: 100%;
-      height: max(100%, 300px);
-      min-height: 280px;
+      height: auto;
+      min-height: 0;
     }
 
     .tape-label {
-      font-size: 18px;
+      font-size: 30px;
       font-weight: 600;
       fill: var(--p-text-color);
+    }
+
+    .tape-marker {
+      fill: red;
+      stroke: #000;
+      stroke-width: 1;
+    }
+
+    .tape-marker-text {
+      font-family: Arial, sans-serif;
+      font-size: 18px;
+      font-weight: 600;
+      fill: #fff;
     }
 
     .tape-track {
@@ -258,19 +317,26 @@ interface TapeOption {
 
     .tape-cell {
       fill: cyan;
-      stroke: var(--p-surface-border);
+      stroke: #000;
       stroke-width: 1.25;
     }
 
     .tape-cell-active {
       fill: yellow;
-      stroke: color-mix(in srgb, yellow 65%, black);
+      stroke: red;
       stroke-width: 2.5;
+    }
+
+    .tape-head-border {
+      fill: none;
+      stroke: red;
+      stroke-width: 2.5;
+      pointer-events: none;
     }
 
     .cell-value {
       font-family: 'Times New Roman', Times, serif;
-      font-size: 16px;
+      font-size: 30px;
       font-weight: 600;
       fill: var(--p-text-color);
     }
@@ -278,14 +344,25 @@ interface TapeOption {
   `],
 })
 export class SimulatorPanel {
-  readonly tapeCellCount = 70;
+  readonly tapeCellCount = 86;
   readonly tapeBaseCellWidth = 32;
   readonly tapeCellWidth = this.tapeBaseCellWidth * 0.8;
+  readonly tapeCellHeight = 32;
+  readonly tapeTrackHeight = this.tapeCellHeight + 4;
+  readonly tapeRowStep = 42;
+  readonly tapeLabelBaselineOffset = 27;
+  readonly cellTextBaselineOffset = 27;
   readonly tapeStartX = 112;
+  readonly tapeMarkerX = 70;
+  readonly tapeMarkerWidth = 40;
+  readonly tapeMarkerHeight = this.tapeCellHeight / 2;
+  readonly tapeMarkerYOffset = (this.tapeCellHeight - this.tapeMarkerHeight) / 2;
+  readonly tapeMarkerTextBaselineOffset = 23;
   readonly tapeTrackX = this.tapeStartX - 4;
   readonly tapeTrackWidth = this.tapeCellCount * this.tapeCellWidth + 8;
-  readonly tapeHeadIndex = Math.floor(this.tapeCellCount / 2);
-  readonly tapesViewBox = `0 0 ${this.tapeTrackX + this.tapeCellCount * this.tapeBaseCellWidth + 28} 300`;
+  readonly tapeEndMarkerX = this.tapeStartX + this.tapeCellCount * this.tapeCellWidth + 2;
+  readonly tapeHeadIndex = 43;
+  readonly tapesViewBox = `0 0 ${this.tapeTrackX + 70 * this.tapeBaseCellWidth + 28} 230`;
 
   readonly tapeButtons: SimulatorButton[] = [
     {
@@ -327,14 +404,16 @@ export class SimulatorPanel {
   ];
   readonly tapeRows = Array.from({ length: 5 }, (_, index) => ({
     number: index + 1,
-    y: 24 + index * 52,
+    y: 4 + index * this.tapeRowStep,
   }));
   readonly tapeCells = Array.from({ length: this.tapeCellCount }, (_, index) => ({
+    index,
     x: this.tapeStartX + index * this.tapeCellWidth,
     value: index === 0 || index > 8 ? '#' : ['a', 'b', 'b', 'a', '1', '0', 'a', 'b'][index - 1],
     active: index === this.tapeHeadIndex,
     edge: index === 0 || index === this.tapeCellCount - 1,
   }));
+  readonly activeTapeCells = this.tapeCells.filter((cell) => cell.active);
 
   selectedTape = this.tapeOptions[0].value;
   tapeValue = '';
