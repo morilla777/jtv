@@ -1,30 +1,51 @@
-import { Component } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TranslatePipe } from '../i18n/translate.pipe';
+import { TranslationService } from '../i18n/translation.service';
+import { JtvStore } from '../stores/jtv.store';
 
-interface SimulatorButton {
+interface TapeButton {
   readonly labelKey: string;
   readonly icon: string;
+  readonly action?: () => void;
 }
 
 interface TapeOption {
   readonly value: number;
-  readonly labelKey: string;
+  readonly label: string;
+}
+
+interface TapeCellView {
+  readonly index: number;
+  readonly position: number;
+  readonly x: number;
+  readonly value: string;
+  readonly active: boolean;
+  readonly edge: boolean;
+}
+
+interface TapeRowView {
+  readonly id: string;
   readonly number: number;
+  readonly y: number;
+  readonly startPosition: number;
+  readonly endPosition: number;
+  readonly cells: TapeCellView[];
+  readonly activeCells: TapeCellView[];
 }
 
 @Component({
-  selector: 'app-simulator-panel',
+  selector: 'app-tapes-panel',
   imports: [ButtonModule, FormsModule, InputTextModule, SelectModule, ToolbarModule, TranslatePipe],
   template: `
     <div class="panel">
-      <p-toolbar class="simulator-toolbar">
+      <p-toolbar class="tapes-toolbar">
         <ng-template #center>
-          <div class="simulator-main-actions">
+          <div class="tapes-main-actions">
             @for (button of tapeButtons; track button.icon) {
               <button
                 pButton
@@ -32,6 +53,7 @@ interface TapeOption {
                 class="image-toolbar-button p-button-secondary"
                 [attr.aria-label]="button.labelKey | translate"
                 [title]="button.labelKey | translate"
+                (click)="button.action?.()"
               >
                 <img [src]="button.icon" alt="" />
               </button>
@@ -40,29 +62,25 @@ interface TapeOption {
             <span class="toolbar-separator" role="separator" aria-orientation="vertical"></span>
 
             <p-select
-              [options]="tapeOptions"
-              [(ngModel)]="selectedTape"
+              [options]="tapeOptions()"
+              [(ngModel)]="selectedTapeIndex"
+              optionLabel="label"
               optionValue="value"
               size="small"
               class="tape-select"
+              appendTo="body"
               [ariaLabel]="'simulator.tapeSelectAria' | translate"
-            >
-              <ng-template #selectedItem let-selectedOption>
-                @if (selectedOption) {
-                  <span>{{ selectedOption.labelKey | translate: { number: selectedOption.number } }}</span>
-                }
-              </ng-template>
-
-              <ng-template #item let-tape>
-                <span>{{ tape.labelKey | translate: { number: tape.number } }}</span>
-              </ng-template>
-            </p-select>
+            />
 
             <input
               pInputText
               type="text"
               class="tape-input"
-              [(ngModel)]="tapeValue"
+              [ngModel]="tapeValue"
+              (input)="sanitizeTapeValueInput($event)"
+              (keydown.enter)="loadSelectedTape(); $event.preventDefault()"
+              inputmode="text"
+              pattern="[a-z0-9#]*"
               [attr.aria-label]="'simulator.tapeInputAria' | translate"
             />
           </div>
@@ -82,6 +100,7 @@ interface TapeOption {
                       class="image-toolbar-button p-button-secondary"
                       [attr.aria-label]="button.labelKey | translate"
                       [title]="button.labelKey | translate"
+                      (click)="button.action?.()"
                     >
                       <img [src]="button.icon" alt="" />
                     </button>
@@ -94,8 +113,8 @@ interface TapeOption {
       </p-toolbar>
 
       <div class="tapes-canvas">
-        <svg class="tapes-svg" [attr.viewBox]="tapesViewBox" preserveAspectRatio="xMinYMin meet" [attr.aria-label]="'simulator.tapesCanvasAria' | translate">
-          @for (tape of tapeRows; track tape.number) {
+        <svg class="tapes-svg" [attr.viewBox]="tapesViewBox()" preserveAspectRatio="xMinYMin meet" [attr.aria-label]="'simulator.tapesCanvasAria' | translate">
+          @for (tape of tapeRows(); track tape.id) {
             <g class="tape-row">
               <text x="5" [attr.y]="tape.y + tapeLabelBaselineOffset" class="tape-label">
                 {{ tape.number }}
@@ -113,7 +132,7 @@ interface TapeOption {
                 text-anchor="middle"
                 class="tape-marker-text"
               >
-                0
+                {{ tape.startPosition }}
               </text>
               <rect
                 [attr.x]="tapeTrackX"
@@ -124,9 +143,9 @@ interface TapeOption {
                 class="tape-track"
               ></rect>
 
-              @for (cell of tapeCells; track cell.x) {
+              @for (cell of tape.cells; track cell.position) {
                 <g>
-                  <title>{{ tape.number }}[{{ cell.index }}]</title>
+                  <title>{{ tape.number }}[{{ cell.position }}]</title>
                   <rect
                     [attr.x]="cell.x"
                     [attr.y]="tape.y"
@@ -143,7 +162,7 @@ interface TapeOption {
                 </g>
               }
 
-              @for (cell of activeTapeCells; track cell.x) {
+              @for (cell of tape.activeCells; track cell.position) {
                 <rect
                   [attr.x]="cell.x"
                   [attr.y]="tape.y"
@@ -168,7 +187,7 @@ interface TapeOption {
                 text-anchor="middle"
                 class="tape-marker-text"
               >
-                68
+                {{ tape.endPosition }}
               </text>
             </g>
           }
@@ -192,7 +211,7 @@ interface TapeOption {
       background: var(--p-surface-card);
     }
 
-    :host ::ng-deep .simulator-toolbar {
+    :host ::ng-deep .tapes-toolbar {
       border-radius: 0;
       border-left: 0;
       border-right: 0;
@@ -200,12 +219,12 @@ interface TapeOption {
       padding: 0.25rem;
     }
 
-    :host ::ng-deep .simulator-toolbar .p-toolbar-center {
+    :host ::ng-deep .tapes-toolbar .p-toolbar-center {
       flex: 1 1 auto;
       min-width: 0;
     }
 
-    :host ::ng-deep .simulator-toolbar .p-toolbar-end {
+    :host ::ng-deep .tapes-toolbar .p-toolbar-end {
       flex: 0 0 auto;
     }
 
@@ -215,7 +234,7 @@ interface TapeOption {
       background: transparent;
     }
 
-    .simulator-main-actions {
+    .tapes-main-actions {
       display: flex;
       align-items: center;
       gap: 0.375rem;
@@ -343,7 +362,11 @@ interface TapeOption {
 
   `],
 })
-export class SimulatorPanel {
+export class TapesPanel {
+  private readonly store = inject(JtvStore);
+  private readonly i18n = inject(TranslationService);
+  private readonly tapeViewStartPositions = signal(new Map<string, number>());
+
   readonly tapeCellCount = 86;
   readonly tapeBaseCellWidth = 32;
   readonly tapeCellWidth = this.tapeBaseCellWidth * 0.8;
@@ -362,60 +385,165 @@ export class SimulatorPanel {
   readonly tapeTrackWidth = this.tapeCellCount * this.tapeCellWidth + 8;
   readonly tapeEndMarkerX = this.tapeStartX + this.tapeCellCount * this.tapeCellWidth + 2;
   readonly tapeHeadIndex = 43;
-  readonly tapesViewBox = `0 0 ${this.tapeTrackX + 70 * this.tapeBaseCellWidth + 28} 230`;
+  readonly tapePageStep = this.tapeCellCount;
+  readonly tapesViewBox = computed(() => {
+    const rows = this.tapeRows();
+    const height = Math.max(1, rows.length) * this.tapeRowStep + 20;
 
-  readonly tapeButtons: SimulatorButton[] = [
+    return `0 0 ${this.tapeEndMarkerX + this.tapeMarkerWidth + 28} ${height}`;
+  });
+
+  readonly tapeOptions = computed<TapeOption[]>(() =>
+    this.store.tapes().map((_, index) => ({
+      value: index,
+      label: this.i18n.translate('simulator.tape', { number: index + 1 }),
+    })),
+  );
+
+  readonly tapeRows = computed<TapeRowView[]>(() =>
+    this.store.tapes().map((tapeState, tapeIndex) => {
+      const snapshot = tapeState.tape.getSnapshot();
+      const startPosition = this.getTapeViewStartPosition(tapeState.id, snapshot.headPosition);
+      const endPosition = startPosition + this.tapeCellCount - 1;
+      const cells = Array.from({ length: this.tapeCellCount }, (_, index) => {
+        const position = startPosition + index;
+
+        return {
+          index,
+          position,
+          x: this.tapeStartX + index * this.tapeCellWidth,
+          value: snapshot.cells[position] ?? '#',
+          active: position === snapshot.headPosition,
+          edge: index === 0 || index === this.tapeCellCount - 1,
+        };
+      });
+
+      return {
+        id: tapeState.id,
+        number: tapeIndex + 1,
+        y: 4 + tapeIndex * this.tapeRowStep,
+        startPosition,
+        endPosition,
+        cells,
+        activeCells: cells.filter((cell) => cell.active),
+      };
+    }),
+  );
+
+  readonly tapeButtons: TapeButton[] = [
     {
       labelKey: 'simulator.tapeActions.add',
       icon: 'assets/images/AddTape24.gif',
+      action: () => this.store.addTape(),
     },
     {
       labelKey: 'simulator.tapeActions.remove',
       icon: 'assets/images/RemoveTape24.gif',
+      action: () => this.store.removeSelectedTape(),
     },
     {
       labelKey: 'simulator.tapeActions.clearAll',
       icon: 'assets/images/ClearAllTape24.gif',
+      action: () => this.store.clearAllTapes(),
     },
     {
       labelKey: 'simulator.tapeActions.clear',
       icon: 'assets/images/ClearTape24.gif',
+      action: () => this.store.clearSelectedTape(),
     },
   ];
 
-  readonly tapeNavigationButtons: SimulatorButton[] = [
+  readonly tapeNavigationButtons: TapeButton[] = [
     {
       labelKey: 'simulator.tapeNavigation.backwardPage',
       icon: 'assets/images/BackwardTapePage24.gif',
+      action: () => this.moveSelectedTapePage(-1),
     },
     {
       labelKey: 'simulator.tapeNavigation.centerPage',
       icon: 'assets/images/CenterTapePage24.gif',
+      action: () => this.centerSelectedTapePage(),
     },
     {
       labelKey: 'simulator.tapeNavigation.forwardPage',
       icon: 'assets/images/ForwardTapePage24.gif',
+      action: () => this.moveSelectedTapePage(1),
     },
   ];
 
-  readonly tapeOptions: TapeOption[] = [
-    { value: 1, labelKey: 'simulator.tape', number: 1 },
-    { value: 2, labelKey: 'simulator.tape', number: 2 },
-  ];
-  readonly tapeRows = Array.from({ length: 5 }, (_, index) => ({
-    number: index + 1,
-    y: 4 + index * this.tapeRowStep,
-  }));
-  readonly tapeCells = Array.from({ length: this.tapeCellCount }, (_, index) => ({
-    index,
-    x: this.tapeStartX + index * this.tapeCellWidth,
-    value: index === 0 || index > 8 ? '#' : ['a', 'b', 'b', 'a', '1', '0', 'a', 'b'][index - 1],
-    active: index === this.tapeHeadIndex,
-    edge: index === 0 || index === this.tapeCellCount - 1,
-  }));
-  readonly activeTapeCells = this.tapeCells.filter((cell) => cell.active);
-
-  selectedTape = this.tapeOptions[0].value;
   tapeValue = '';
+
+  get selectedTapeIndex(): number {
+    return this.store.selectedTapeIndex();
+  }
+
+  set selectedTapeIndex(tapeIndex: number | string) {
+    this.store.selectTapeIndex(Number(tapeIndex));
+  }
+
+  sanitizeTapeValueInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const value = input.value.replace(/[^a-z0-9#]/g, '');
+
+    if (input.value !== value) {
+      input.value = value;
+    }
+
+    this.tapeValue = value;
+  }
+
+  loadSelectedTape(): void {
+    this.store.setSelectedTapeValue(this.tapeValue);
+    this.centerSelectedTapePage();
+  }
+
+  private moveSelectedTapePage(direction: -1 | 1): void {
+    const selectedTape = this.store.selectedTape();
+
+    if (!selectedTape) {
+      return;
+    }
+
+    const currentStartPosition = this.getTapeViewStartPosition(
+      selectedTape.id,
+      selectedTape.tape.getHeadPosition(),
+    );
+
+    this.setTapeViewStartPosition(
+      selectedTape.id,
+      Math.max(0, currentStartPosition + direction * this.tapePageStep),
+    );
+  }
+
+  private centerSelectedTapePage(): void {
+    const selectedTape = this.store.selectedTape();
+
+    if (!selectedTape) {
+      return;
+    }
+
+    this.setTapeViewStartPosition(
+      selectedTape.id,
+      this.getCenteredTapeViewStartPosition(selectedTape.tape.getHeadPosition()),
+    );
+  }
+
+  private getTapeViewStartPosition(tapeId: string, headPosition: number): number {
+    return this.tapeViewStartPositions().get(tapeId) ?? this.getCenteredTapeViewStartPosition(headPosition);
+  }
+
+  private setTapeViewStartPosition(tapeId: string, startPosition: number): void {
+    this.tapeViewStartPositions.update((positions) => {
+      const nextPositions = new Map(positions);
+
+      nextPositions.set(tapeId, startPosition);
+
+      return nextPositions;
+    });
+  }
+
+  private getCenteredTapeViewStartPosition(headPosition: number): number {
+    return Math.max(0, headPosition - this.tapeHeadIndex);
+  }
 
 }

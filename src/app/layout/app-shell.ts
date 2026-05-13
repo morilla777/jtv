@@ -4,7 +4,7 @@ import { Topbar } from './topbar';
 import { ExplorerPanel } from './explorer-panel';
 import { DesignerCanvasPanel } from './designer-canvas-panel';
 import { PropertiesPanel } from './properties-panel';
-import { SimulatorPanel } from './simulator-panel';
+import { TapesPanel } from './tapes-panel';
 
 @Component({
   selector: 'app-shell',
@@ -14,7 +14,7 @@ import { SimulatorPanel } from './simulator-panel';
     ExplorerPanel,
     DesignerCanvasPanel,
     PropertiesPanel,
-    SimulatorPanel,
+    TapesPanel,
   ],
   template: `
     <div class="app-shell">
@@ -48,7 +48,7 @@ import { SimulatorPanel } from './simulator-panel';
           </ng-template>
 
           <ng-template #panel>
-            <app-simulator-panel />
+            <app-tapes-panel />
           </ng-template>
         </p-splitter>
       </div>
