@@ -14,20 +14,12 @@ export class MachineGraphRunner {
       return false;
     }
 
-    const visited = new Set<string>();
-
     while (currentGroup) {
       const ok = this.sequenceRunner.run(currentGroup.entry, context);
 
       if (!ok) {
         return false;
       }
-
-      if (visited.has(currentGroup.id)) {
-        return false;
-      }
-
-      visited.add(currentGroup.id);
 
       const nextLink = this.findTraversableOutgoingLink(graph.links, currentGroup, context);
       currentGroup = nextLink?.targetGroup ?? undefined;
