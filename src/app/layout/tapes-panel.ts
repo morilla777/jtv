@@ -402,8 +402,10 @@ export class TapesPanel {
 
   readonly tapeRows = computed<TapeRowView[]>(() =>
     this.store.tapes().map((tapeState, tapeIndex) => {
-      const snapshot = tapeState.tape.getSnapshot();
-      const startPosition = this.getTapeViewStartPosition(tapeState.id, snapshot.headPosition);
+      const snapshot = this.store.tapeSnapshots()[tapeIndex] ?? tapeState.tape.getSnapshot();
+      const startPosition = this.store.selectedAteNode()
+        ? this.getCenteredTapeViewStartPosition(snapshot.headPosition)
+        : this.getTapeViewStartPosition(tapeState.id, snapshot.headPosition);
       const endPosition = startPosition + this.tapeCellCount - 1;
       const cells = Array.from({ length: this.tapeCellCount }, (_, index) => {
         const position = startPosition + index;
@@ -506,7 +508,7 @@ export class TapesPanel {
 
     const currentStartPosition = this.getTapeViewStartPosition(
       selectedTape.id,
-      selectedTape.tape.getHeadPosition(),
+      this.store.selectedTapeSnapshot()?.headPosition ?? selectedTape.tape.getHeadPosition(),
     );
 
     this.setTapeViewStartPosition(
@@ -524,7 +526,9 @@ export class TapesPanel {
 
     this.setTapeViewStartPosition(
       selectedTape.id,
-      this.getCenteredTapeViewStartPosition(selectedTape.tape.getHeadPosition()),
+      this.getCenteredTapeViewStartPosition(
+        this.store.selectedTapeSnapshot()?.headPosition ?? selectedTape.tape.getHeadPosition(),
+      ),
     );
   }
 

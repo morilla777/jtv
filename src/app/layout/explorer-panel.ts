@@ -1,8 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { TreeNode } from 'primeng/api';
 import { TabsModule } from 'primeng/tabs';
 import { TreeModule } from 'primeng/tree';
 import { TranslatePipe } from '../i18n/translate.pipe';
+import { AteNode } from '../models/ate';
+import { JtvStore } from '../stores/jtv.store';
 
 @Component({
   selector: 'app-explorer-panel',
@@ -18,20 +20,24 @@ import { TranslatePipe } from '../i18n/translate.pipe';
 
           <p-tabpanels>
             <p-tabpanel value="ate">
-              <p-tree
-                [value]="exampleNodes"
-                selectionMode="single"
-                [(selection)]="selectedExampleNode"
-                [style]="treeStyle"
-                [indentation]="0.25"
-              >
-                <ng-template pTemplate="default" let-node>
-                  <span class="ate-tree-node">
-                    <img class="ate-tree-icon" [src]="node.data.iconSrc" [alt]="node.label" />
-                    <span>{{ node.label }}</span>
-                  </span>
-                </ng-template>
-              </p-tree>
+              <div class="ate-tree-host" tabindex="0" (keydown)="handleAteKeydown($event)">
+                <p-tree
+                  [value]="ateNodes()"
+                  selectionMode="single"
+                  [(selection)]="selectedAteNode"
+                  (onNodeSelect)="selectAteNode($event.node)"
+                  (onNodeUnselect)="clearAteSelection()"
+                  [style]="treeStyle"
+                  [indentation]="0.25"
+                >
+                  <ng-template pTemplate="default" let-node>
+                    <span class="ate-tree-node">
+                      <img class="ate-tree-icon" [src]="node.data.iconSrc" [alt]="node.label" />
+                      <span>{{ node.label }}</span>
+                    </span>
+                  </ng-template>
+                </p-tree>
+              </div>
             </p-tabpanel>
 
             <p-tabpanel value="machines">
@@ -125,6 +131,11 @@ import { TranslatePipe } from '../i18n/translate.pipe';
       overflow-x: hidden;
     }
 
+    .ate-tree-host {
+      height: 100%;
+      outline: none;
+    }
+
     :host ::ng-deep .p-tree-root-children {
       margin: 0;
       padding: 0 !important;
@@ -171,70 +182,7 @@ import { TranslatePipe } from '../i18n/translate.pipe';
   `],
 })
 export class ExplorerPanel {
-  private readonly ateIconFiles = [
-    '#_ATE.gif',
-    '0_ATE.gif',
-    '1_ATE.gif',
-    '2_ATE.gif',
-    '3_ATE.gif',
-    '4_ATE.gif',
-    '5_ATE.gif',
-    '6_ATE.gif',
-    '7_ATE.gif',
-    '8_ATE.gif',
-    '9_ATE.gif',
-    'a_ATE.gif',
-    'b_ATE.gif',
-    'c_ATE.gif',
-    'd_ATE.gif',
-    'e_ATE.gif',
-    'f_ATE.gif',
-    'g_ATE.gif',
-    'h_ATE.gif',
-    'i_ATE.gif',
-    'j_ATE.gif',
-    'k_ATE.gif',
-    'l_ATE.gif',
-    'm_ATE.gif',
-    'n_ATE.gif',
-    'o_ATE.gif',
-    'p_ATE.gif',
-    'q_ATE.gif',
-    'r_ATE.gif',
-    's_ATE.gif',
-    't_ATE.gif',
-    'u_ATE.gif',
-    'v_ATE.gif',
-    'w_ATE.gif',
-    'x_ATE.gif',
-    'y_ATE.gif',
-    'z_ATE.gif',
-    'alpha_ATE.gif',
-    'beta_ATE.gif',
-    'gamma_ATE.gif',
-    'delta_ATE.gif',
-    'epsilon_ATE.gif',
-    'zeta_ATE.gif',
-    'eta_ATE.gif',
-    'theta_ATE.gif',
-    'iota_ATE.gif',
-    'kappa_ATE.gif',
-    'lambda_ATE.gif',
-    'mu_ATE.gif',
-    'nu_ATE.gif',
-    'xi_ATE.gif',
-    'omicron_ATE.gif',
-    'pi_ATE.gif',
-    'rho_ATE.gif',
-    'sigma_ATE.gif',
-    'varsigma_ATE.gif',
-    'tau_ATE.gif',
-    'upsilon_ATE.gif',
-    'phi_ATE.gif',
-    'chi_ATE.gif',
-    'psi_ATE.gif',
-    'omega_ATE.gif',
-  ];
+  private readonly store = inject(JtvStore);
 
   readonly tabsStyle = {
     width: '100%',
@@ -282,33 +230,64 @@ export class ExplorerPanel {
     },
   ];
 
-  readonly exampleNodes: TreeNode[] = [
-    {
-      key: 'examples-root',
-      label: 'ATE',
-      data: {
-        iconSrc: 'assets/images/ATE_ATE.gif',
-      },
-      expanded: true,
-      selectable: false,
-      children: this.ateIconFiles.map((fileName) => ({
-        key: `ate-${fileName}`,
-        label: this.getAteLabel(fileName),
-        data: {
-          iconSrc: this.getAteIconSrc(fileName),
-        },
-      })),
-    },
-  ];
+  readonly ateNodes = computed<TreeNode[]>(() => [this.toTreeNode(this.store.ate())]);
 
   selectedMachineNode: TreeNode | null = this.machineNodes[0].children?.[0] ?? null;
-  selectedExampleNode: TreeNode | null = null;
+  selectedAteNode: TreeNode | null = null;
 
-  private getAteLabel(fileName: string): string {
-    return fileName.replace('_ATE.gif', '');
+  private toTreeNode(node: AteNode): TreeNode {
+    return {
+      key: node.id,
+      label: node.label,
+      data: {
+        iconSrc: node.iconSrc,
+        ateNodeId: node.id,
+      },
+      expanded: true,
+      selectable: node.kind !== 'root',
+      children: node.children.map((child) => this.toTreeNode(child)),
+    };
   }
 
-  private getAteIconSrc(fileName: string): string {
-    return `assets/images/${encodeURIComponent(fileName)}`;
+  selectAteNode(node: TreeNode): void {
+    this.store.selectAteNode(node.data?.ateNodeId ?? null);
+  }
+
+  clearAteSelection(): void {
+    this.store.selectAteNode(null);
+  }
+
+  handleAteKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+      return;
+    }
+
+    const nodes = this.getSelectableAteNodes();
+
+    if (nodes.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const currentNodeId = this.selectedAteNode?.data?.ateNodeId ?? this.store.selectedAteNode()?.id ?? null;
+    const currentIndex = nodes.findIndex((node) => node.data?.ateNodeId === currentNodeId);
+    const nextIndex = event.key === 'ArrowDown'
+      ? Math.min(currentIndex + 1, nodes.length - 1)
+      : Math.max(currentIndex < 0 ? nodes.length - 1 : currentIndex - 1, 0);
+    const nextNode = nodes[nextIndex];
+
+    this.selectedAteNode = nextNode;
+    this.store.selectAteNode(nextNode.data?.ateNodeId ?? null);
+  }
+
+  private getSelectableAteNodes(): TreeNode[] {
+    return this.ateNodes().flatMap((node) => this.flattenSelectableTreeNodes(node));
+  }
+
+  private flattenSelectableTreeNodes(node: TreeNode): TreeNode[] {
+    const children = node.children?.flatMap((child) => this.flattenSelectableTreeNodes(child)) ?? [];
+
+    return node.selectable === false ? children : [node, ...children];
   }
 }

@@ -1,14 +1,18 @@
 import { Injectable, computed, signal } from '@angular/core';
 
+import { AteNode, AteTraceRecorder } from '../models/ate';
 import { LinearMachineGroup } from '../models/core/linear-machine-group';
 import { Link } from '../models/core/link';
+import { LinkCondition } from '../models/core/link-condition';
 import { MachineGraph } from '../models/core/machine-graph';
+import { MachineGraphRunner } from '../models/core/machine-graph-runner';
 import { MachineNode } from '../models/core/machine-node';
+import { MetaValueDictionary } from '../models/core/meta-value-dictionary';
 import { MoveLeftNode } from '../models/core/move-left-node';
 import { MoveRightNode } from '../models/core/move-right-node';
-import { Tape } from '../models/core/tape';
+import { Tape, TapeSnapshot } from '../models/core/tape';
 import { WriterNode } from '../models/core/writer-node';
-import { MachineGraphView } from '../models/view';
+import { AutolinkOrientation, MachineGraphView, MachineLinkKind, MachineLinkView, ViewPoint } from '../models/view';
 
 export type JtvToolId =
   | 'symbol-lowercase'
@@ -42,8 +46,10 @@ export interface JtvMachineState {
 
 export interface JtvState {
   readonly activeToolId: JtvToolId | null;
+  readonly ate: AteNode;
   readonly machineGraph: MachineGraph;
   readonly machineGraphView: MachineGraphView;
+  readonly selectedAteNodeId: string | null;
   readonly selectedMachine: JtvMachineState;
   readonly selectedTapeIndex: number;
   readonly tapes: JtvTapeState[];
@@ -60,15 +66,18 @@ function createTapeState(index: number): JtvTapeState {
 function createInitialState(): JtvState {
   const initialTape = createTapeState(1);
   const demoMachine = createDemoMachine();
+  const selectedMachine = {
+    id: 'new',
+    name: 'NUEVA',
+  };
 
   return {
     activeToolId: null,
+    ate: new AteTraceRecorder(selectedMachine.name).root,
     machineGraph: demoMachine.graph,
     machineGraphView: demoMachine.view,
-    selectedMachine: {
-      id: 'new',
-      name: 'NUEVA',
-    },
+    selectedAteNodeId: null,
+    selectedMachine,
     selectedTapeIndex: 0,
     tapes: [initialTape],
   };
@@ -101,11 +110,24 @@ function createDemoMachine(): { graph: MachineGraph; view: MachineGraphView } {
     rewindGroupNodes[0],
     rewindGroupNodes.at(-1) ?? null,
   );
+  const writeToRewindLink = new Link(
+    'write-to-rewind',
+    writeGroup,
+    rewindGroup,
+    new LinkCondition([{ tapeIndex: 0, acceptedValues: ['d'] }]),
+  );
+  // TODO: Re-enable when autolink execution semantics are represented in the graph.
+  // const rewindAutolink = new Link(
+  //   'rewind-autolink',
+  //   rewindGroup,
+  //   rewindGroup,
+  //   new LinkCondition([{ tapeIndex: 0, acceptedValues: ['q'], negated: true }]),
+  // );
 
   return {
     graph: {
       groups: [writeGroup, rewindGroup],
-      links: [new Link('write-to-rewind', writeGroup, rewindGroup)],
+      links: [writeToRewindLink],
       initialGroupId: writeGroup.id,
     },
     view: {
@@ -130,19 +152,61 @@ function createDemoMachine(): { graph: MachineGraph; view: MachineGraphView } {
         ...createLinearNodeViews(rewindGroup.id, rewindGroupNodes, 300, 72),
       ],
       links: [
-        {
-          linkId: 'write-to-rewind',
-          label: '[1]',
-          sourceGroupId: writeGroup.id,
-          targetGroupId: rewindGroup.id,
+        createLinkView(writeToRewindLink, {
+          kind: 'direct',
           points: [
             { x: 190, y: 62 },
             { x: 296, y: 62 },
           ],
-        },
+        }),
+        // TODO: Re-enable when autolink execution semantics are represented in the graph.
+        // createLinkView(rewindAutolink, {
+        //   kind: 'autolink',
+        //   autolinkOrientation: 'right',
+        //   points: [{ x: 370, y: 62 }],
+        // }),
       ],
     },
   };
+}
+
+function createLinkView(
+  link: Link,
+  layout: {
+    kind: MachineLinkKind;
+    autolinkOrientation?: AutolinkOrientation;
+    points: readonly ViewPoint[];
+  },
+): MachineLinkView {
+  return {
+    linkId: link.id,
+    label: formatLinkCondition(link.condition),
+    kind: layout.kind,
+    autolinkOrientation: layout.autolinkOrientation,
+    sourceGroupId: link.sourceGroup?.id ?? '',
+    targetGroupId: link.targetGroup?.id ?? '',
+    points: layout.points,
+  };
+}
+
+function formatLinkCondition(condition: LinkCondition | null): string {
+  if (!condition || condition.clauses.length === 0) {
+    return '[1]';
+  }
+
+  const [clause] = condition.clauses;
+
+  if (condition.clauses.length === 1 && clause.acceptedValues.length === 1) {
+    return clause.negated ? `[not ${clause.acceptedValues[0]}]` : `[${clause.acceptedValues[0]}]`;
+  }
+
+  return condition.clauses
+    .map((item) => {
+      const values = item.acceptedValues.join(',');
+
+      return item.negated ? `not ${values}` : values;
+    })
+    .join(' & ');
 }
 
 function createLinearNodeViews(
@@ -186,14 +250,45 @@ function getNextTapeIndex(tapes: readonly JtvTapeState[]): number {
 @Injectable({ providedIn: 'root' })
 export class JtvStore {
   private readonly state = signal<JtvState>(createInitialState());
+  private readonly machineGraphRunner = new MachineGraphRunner();
 
   readonly activeToolId = computed(() => this.state().activeToolId);
+  readonly ate = computed(() => this.state().ate);
+  readonly selectedAteNode = computed(() => this.findAteNode(this.state().ate, this.state().selectedAteNodeId));
+  readonly activeAteMachineNodeId = computed(() => this.selectedAteNode()?.machineNodeId ?? null);
+  readonly activeAteLinkId = computed(() => this.selectedAteNode()?.linkId ?? null);
   readonly machineGraph = computed(() => this.state().machineGraph);
-  readonly machineGraphView = computed(() => this.state().machineGraphView);
+  readonly machineGraphView = computed(() => {
+    const view = this.state().machineGraphView;
+    const activeNodeId = this.activeAteMachineNodeId();
+    const activeLinkId = this.activeAteLinkId();
+
+    return {
+      ...view,
+      nodes: view.nodes.map((node) => ({
+        ...node,
+        selected: node.nodeId === activeNodeId,
+      })),
+      links: view.links.map((link) => ({
+        ...link,
+        selected: link.linkId === activeLinkId,
+      })),
+    };
+  });
   readonly selectedMachine = computed(() => this.state().selectedMachine);
   readonly selectedTapeIndex = computed(() => this.state().selectedTapeIndex);
   readonly selectedTapeId = computed(() => this.selectedTape()?.id ?? null);
   readonly tapes = computed(() => this.state().tapes);
+  readonly tapeSnapshots = computed<readonly TapeSnapshot[]>(() => {
+    const traceSnapshots = this.selectedAteNode()?.tapeSnapshots;
+
+    if (traceSnapshots) {
+      return traceSnapshots;
+    }
+
+    return this.state().tapes.map((tapeState) => tapeState.tape.getSnapshot());
+  });
+  readonly selectedTapeSnapshot = computed(() => this.tapeSnapshots()[this.selectedTapeIndex()] ?? null);
   readonly selectedTape = computed(() => {
     const { selectedTapeIndex, tapes } = this.state();
 
@@ -232,6 +327,10 @@ export class JtvStore {
     this.patchState({ selectedTapeIndex });
   }
 
+  selectAteNode(nodeId: string | null): void {
+    this.patchState({ selectedAteNodeId: nodeId });
+  }
+
   setTapeValue(tapeId: string, value: string): void {
     this.mutateTape(tapeId, (tape) => {
       tape.load(value);
@@ -261,6 +360,7 @@ export class JtvStore {
 
       return {
         ...current,
+        selectedAteNodeId: null,
         tapes: [...current.tapes, tape],
       };
     });
@@ -278,6 +378,7 @@ export class JtvStore {
       return {
         ...current,
         selectedTapeIndex,
+        selectedAteNodeId: null,
         tapes,
       };
     });
@@ -298,12 +399,39 @@ export class JtvStore {
   clearAllTapes(): void {
     this.state.update((current) => ({
       ...current,
+      selectedAteNodeId: null,
       tapes: current.tapes.map((tapeState) => {
         tapeState.tape.clear();
 
         return { ...tapeState };
       }),
     }));
+  }
+
+  runMachineOnFirstTape(): boolean {
+    const firstTape = this.state().tapes[0];
+
+    if (!firstTape) {
+      return false;
+    }
+
+    const traceRecorder = new AteTraceRecorder(this.state().selectedMachine.name);
+    const context = {
+      tapes: [firstTape.tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const ok = this.machineGraphRunner.run(this.state().machineGraph, context, traceRecorder);
+
+    traceRecorder.recordStop(context);
+
+    this.state.update((current) => ({
+      ...current,
+      ate: traceRecorder.root,
+      selectedAteNodeId: null,
+      tapes: current.tapes.map((tapeState, index) => (index === 0 ? { ...tapeState } : tapeState)),
+    }));
+
+    return ok;
   }
 
   reset(): void {
@@ -320,6 +448,7 @@ export class JtvStore {
   private mutateTape(tapeId: string, mutate: (tape: Tape) => void): void {
     this.state.update((current) => ({
       ...current,
+      selectedAteNodeId: null,
       tapes: current.tapes.map((tapeState) => {
         if (tapeState.id !== tapeId) {
           return tapeState;
@@ -330,5 +459,25 @@ export class JtvStore {
         return { ...tapeState };
       }),
     }));
+  }
+
+  private findAteNode(node: AteNode, nodeId: string | null): AteNode | null {
+    if (!nodeId) {
+      return null;
+    }
+
+    if (node.id === nodeId) {
+      return node;
+    }
+
+    for (const child of node.children) {
+      const match = this.findAteNode(child, nodeId);
+
+      if (match) {
+        return match;
+      }
+    }
+
+    return null;
   }
 }

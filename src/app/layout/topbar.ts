@@ -7,6 +7,7 @@ import { MenubarModule } from 'primeng/menubar';
 import { SelectModule, type SelectChangeEvent } from 'primeng/select';
 import { TranslatePipe } from '../i18n/translate.pipe';
 import { TranslationService, type Language } from '../i18n/translation.service';
+import { JtvStore } from '../stores/jtv.store';
 
 interface LanguageOption {
   code: Language;
@@ -167,6 +168,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.execute' | translate"
               [title]="'topbar.execute' | translate"
+              (click)="executeMachine()"
             >
               <img src="assets/images/Play24.gif" alt="" />
             </button>
@@ -389,6 +391,7 @@ interface LanguageOption {
 })
 export class Topbar {
   readonly i18n = inject(TranslationService);
+  private readonly store = inject(JtvStore);
 
   readonly symbolOptions = [
     '#',
@@ -589,5 +592,9 @@ export class Topbar {
     if (selected) {
       this.i18n.setLanguage(selected.code);
     }
+  }
+
+  executeMachine(): void {
+    this.store.runMachineOnFirstTape();
   }
 }

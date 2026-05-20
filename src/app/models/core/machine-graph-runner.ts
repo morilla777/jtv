@@ -3,11 +3,12 @@ import { Link } from './link';
 import { MachineGraph } from './machine-graph';
 import { MachineGroup } from './machine-group';
 import { MachineSequenceRunner } from './machine-sequence-runner';
+import { type AteTraceRecorder } from '../ate';
 
 export class MachineGraphRunner {
   private readonly sequenceRunner = new MachineSequenceRunner();
 
-  run(graph: MachineGraph, context: ExecutionContext): boolean {
+  run(graph: MachineGraph, context: ExecutionContext, traceRecorder?: AteTraceRecorder): boolean {
     let currentGroup = this.findInitialGroup(graph);
 
     if (!currentGroup) {
@@ -15,13 +16,17 @@ export class MachineGraphRunner {
     }
 
     while (currentGroup) {
-      const ok = this.sequenceRunner.run(currentGroup.entry, context);
+      const ok = this.sequenceRunner.run(currentGroup.entry, context, traceRecorder);
 
       if (!ok) {
         return false;
       }
 
       const nextLink = this.findTraversableOutgoingLink(graph.links, currentGroup, context);
+      if (nextLink) {
+        traceRecorder?.recordLink(nextLink, context);
+      }
+
       currentGroup = nextLink?.targetGroup ?? undefined;
     }
 

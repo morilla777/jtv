@@ -21,6 +21,16 @@ import { MachineLinkView, ViewPoint } from '../models/view';
             >
               <polygon points="0 0, 8 3, 0 6" class="arrow-head"></polygon>
             </marker>
+            <marker
+              id="selected-arrowhead"
+              markerWidth="8"
+              markerHeight="6"
+              refX="7"
+              refY="3"
+              orient="auto"
+            >
+              <polygon points="0 0, 8 3, 0 6" class="selected-arrow-head"></polygon>
+            </marker>
           </defs>
 
           <rect x="0" y="0" [attr.width]="canvasWidth" [attr.height]="canvasHeight" class="canvas-background"></rect>
@@ -33,18 +43,44 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                 </text>
               }
 
-              <text [attr.x]="node.position.x" [attr.y]="node.position.y" class="machine-text">
+              <text
+                [attr.x]="node.position.x"
+                [attr.y]="node.position.y"
+                class="machine-text"
+                [class.machine-text-selected]="node.selected"
+              >
                 {{ node.label }}
               </text>
             }
 
             @for (link of machineGraphView().links; track link.linkId) {
-              <path [attr.d]="getLinkPath(link)" class="arrow-line" marker-end="url(#arrowhead)"></path>
+              <path
+                [attr.d]="getLinkPath(link)"
+                class="arrow-line"
+                [class.arrow-line-selected]="link.selected"
+                [attr.marker-end]="link.selected ? 'url(#selected-arrowhead)' : 'url(#arrowhead)'"
+              ></path>
 
               @if (link.label) {
-                <text [attr.x]="getLinkLabelPosition(link).x" [attr.y]="getLinkLabelPosition(link).y" class="edge-label">
-                  {{ link.label }}
-                </text>
+                @if (getNegatedSingleSymbolLabel(link.label); as symbol) {
+                  <text
+                    [attr.x]="getLinkLabelPosition(link).x"
+                    [attr.y]="getLinkLabelPosition(link).y"
+                    class="edge-label"
+                    [class.edge-label-selected]="link.selected"
+                  >
+                    <tspan class="overline-symbol">[{{ symbol }}]</tspan>
+                  </text>
+                } @else {
+                  <text
+                    [attr.x]="getLinkLabelPosition(link).x"
+                    [attr.y]="getLinkLabelPosition(link).y"
+                    class="edge-label"
+                    [class.edge-label-selected]="link.selected"
+                  >
+                    {{ link.label }}
+                  </text>
+                }
               }
             }
           </g>
@@ -89,6 +125,10 @@ import { MachineLinkView, ViewPoint } from '../models/view';
       fill: #000;
     }
 
+    .selected-arrow-head {
+      fill: red;
+    }
+
     .machine-text {
       font-family: 'Times New Roman', Times, serif;
       font-size: 26px;
@@ -96,11 +136,28 @@ import { MachineLinkView, ViewPoint } from '../models/view';
       fill: #000;
     }
 
+    .machine-text-selected {
+      fill: red;
+    }
+
+    .arrow-line-selected {
+      stroke: red;
+      stroke-width: 1.5;
+    }
+
     .edge-label {
       font-family: 'Times New Roman', Times, serif;
       font-size: 14px;
       font-style: italic;
       fill: #000;
+    }
+
+    .edge-label-selected {
+      fill: red;
+    }
+
+    .overline-symbol {
+      text-decoration: overline;
     }
   `],
 })
@@ -113,6 +170,10 @@ export class DesignerCanvasPanel {
   readonly viewBox = computed(() => `0 0 ${this.canvasWidth} ${this.canvasHeight}`);
 
   getLinkPath(link: MachineLinkView): string {
+    if (link.kind === 'autolink') {
+      return this.getAutolinkPath(link);
+    }
+
     const points = link.points ?? [];
 
     if (points.length === 0) {
@@ -128,6 +189,10 @@ export class DesignerCanvasPanel {
   }
 
   getLinkLabelPosition(link: MachineLinkView): ViewPoint {
+    if (link.kind === 'autolink') {
+      return this.getAutolinkLabelPosition(link);
+    }
+
     const points = link.points ?? [];
 
     if (points.length < 2) {
@@ -141,5 +206,55 @@ export class DesignerCanvasPanel {
       x: (startPoint.x + endPoint.x) / 2 - 8,
       y: (startPoint.y + endPoint.y) / 2 - 6,
     };
+  }
+
+  getNegatedSingleSymbolLabel(label: string): string | null {
+    return /^\[not ([a-z0-9#])\]$/.exec(label)?.[1] ?? null;
+  }
+
+  private getAutolinkPath(link: MachineLinkView): string {
+    const anchor = this.getAutolinkAnchor(link);
+
+    switch (link.autolinkOrientation ?? 'right') {
+      case 'top':
+        return [
+          `M ${anchor.x - 16} ${anchor.y - 12}`,
+          `C ${anchor.x - 34} ${anchor.y - 48}, ${anchor.x + 34} ${anchor.y - 48}, ${anchor.x + 16} ${anchor.y - 12}`,
+        ].join(' ');
+      case 'bottom':
+        return [
+          `M ${anchor.x + 16} ${anchor.y + 12}`,
+          `C ${anchor.x + 34} ${anchor.y + 48}, ${anchor.x - 34} ${anchor.y + 48}, ${anchor.x - 16} ${anchor.y + 12}`,
+        ].join(' ');
+      case 'left':
+        return [
+          `M ${anchor.x - 12} ${anchor.y + 16}`,
+          `C ${anchor.x - 48} ${anchor.y + 34}, ${anchor.x - 48} ${anchor.y - 34}, ${anchor.x - 12} ${anchor.y - 16}`,
+        ].join(' ');
+      case 'right':
+        return [
+          `M ${anchor.x + 3} ${anchor.y + 14}`,
+          `C ${anchor.x + 38} ${anchor.y + 28}, ${anchor.x + 38} ${anchor.y - 28}, ${anchor.x + 3} ${anchor.y - 14}`,
+        ].join(' ');
+    }
+  }
+
+  private getAutolinkLabelPosition(link: MachineLinkView): ViewPoint {
+    const anchor = this.getAutolinkAnchor(link);
+
+    switch (link.autolinkOrientation ?? 'right') {
+      case 'top':
+        return { x: anchor.x + 30, y: anchor.y - 36 };
+      case 'bottom':
+        return { x: anchor.x + 30, y: anchor.y + 42 };
+      case 'left':
+        return { x: anchor.x - 58, y: anchor.y + 4 };
+      case 'right':
+        return { x: anchor.x + 38, y: anchor.y + 4 };
+    }
+  }
+
+  private getAutolinkAnchor(link: MachineLinkView): ViewPoint {
+    return link.points?.[0] ?? { x: 0, y: 0 };
   }
 }

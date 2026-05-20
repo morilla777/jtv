@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { AteTraceRecorder } from '../ate';
 import { LinearMachineGroup } from './linear-machine-group';
 import { Link } from './link';
 import { LinkCondition } from './link-condition';
@@ -65,6 +66,63 @@ describe('MachineGraphRunner', () => {
         4: 'd',
       },
     });
+  });
+
+  it('records the deterministic execution trace', () => {
+    const tape = new Tape();
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const writeGroupNodes = linkNodes([
+      new MoveRightNode('move-right-a', 0, true),
+      new WriterNode('write-a', 'a', 0),
+    ]);
+    const rewindGroupNodes = linkNodes([
+      new MoveLeftNode('move-left-1', 0),
+    ]);
+    const writeGroup = new LinearMachineGroup(
+      'write-a',
+      writeGroupNodes[0],
+      writeGroupNodes.at(-1) ?? null,
+    );
+    const rewindGroup = new LinearMachineGroup(
+      'rewind',
+      rewindGroupNodes[0],
+      rewindGroupNodes.at(-1) ?? null,
+    );
+    const graph: MachineGraph = {
+      groups: [writeGroup, rewindGroup],
+      links: [new Link('write-to-rewind', writeGroup, rewindGroup)],
+      initialGroupId: writeGroup.id,
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA');
+
+    const ok = new MachineGraphRunner().run(graph, context, traceRecorder);
+    traceRecorder.recordStop(context);
+
+    expect(ok).toBe(true);
+    expect(traceRecorder.root.children.map((child) => child.label)).toEqual([
+      '',
+      'a',
+      '[1]',
+      '',
+      '',
+    ]);
+    expect(traceRecorder.root.children.map((child) => child.iconSrc)).toEqual([
+      'assets/images/R_ATE.gif',
+      'assets/images/a_ATE.gif',
+      'assets/images/link_ATE.gif',
+      'assets/images/L_ATE.gif',
+      'assets/images/stop_ATE.gif',
+    ]);
+    expect(traceRecorder.root.children.map((child) => child.tapeSnapshots?.[0].headPosition)).toEqual([
+      1,
+      1,
+      1,
+      0,
+      0,
+    ]);
   });
 
   it('runs the matching branch for conditional links', () => {
