@@ -51,6 +51,8 @@ export interface JtvState {
   readonly ate: AteNode;
   readonly machineGraph: MachineGraph;
   readonly machineGraphView: MachineGraphView;
+  readonly selectedCanvasLinkId: string | null;
+  readonly selectedCanvasNodeId: string | null;
   readonly selectedAteNodeId: string | null;
   readonly selectedMachine: JtvMachineState;
   readonly selectedTapeIndex: number;
@@ -78,6 +80,8 @@ function createInitialState(): JtvState {
     ate: new AteTraceRecorder(selectedMachine.name).root,
     machineGraph: demoMachine.graph,
     machineGraphView: demoMachine.view,
+    selectedCanvasLinkId: null,
+    selectedCanvasNodeId: null,
     selectedAteNodeId: null,
     selectedMachine,
     selectedTapeIndex: 0,
@@ -219,19 +223,19 @@ function createLinearNodeViews(
   startX: number,
   y: number,
 ) {
-  const nodeStep = 20;
-
   return nodes.map((node, index) => ({
     nodeId: node.id,
     groupId,
     label: node.name,
     initial: node.isInitial,
     position: {
-      x: startX + index * nodeStep,
+      x: startX + index * MACHINE_NODE_STEP,
       y,
     },
   }));
 }
+
+const MACHINE_NODE_STEP = 20;
 
 function linkNodes<T extends MachineNode>(nodes: T[]): T[] {
   for (let index = 0; index < nodes.length - 1; index++) {
@@ -266,16 +270,19 @@ export class JtvStore {
     const view = this.state().machineGraphView;
     const activeNodeId = this.activeAteMachineNodeId();
     const activeLinkId = this.activeAteLinkId();
+    const { selectedCanvasLinkId, selectedCanvasNodeId } = this.state();
 
     return {
       ...view,
       nodes: view.nodes.map((node) => ({
         ...node,
         selected: node.nodeId === activeNodeId,
+        canvasSelected: node.nodeId === selectedCanvasNodeId,
       })),
       links: view.links.map((link) => ({
         ...link,
         selected: link.linkId === activeLinkId,
+        canvasSelected: link.linkId === selectedCanvasLinkId,
       })),
     };
   });
@@ -304,12 +311,20 @@ export class JtvStore {
   });
 
   selectTool(toolId: JtvToolId | null): void {
-    this.patchState({ activeToolId: toolId });
+    this.patchState({
+      activeToolId: toolId,
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: null,
+    });
   }
 
   toggleTool(toolId: JtvToolId): void {
+    const nextToolId = this.state().activeToolId === toolId ? null : toolId;
+
     this.patchState({
-      activeToolId: this.state().activeToolId === toolId ? null : toolId,
+      activeToolId: nextToolId,
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: null,
     });
   }
 
@@ -337,6 +352,133 @@ export class JtvStore {
 
   selectAteNode(nodeId: string | null): void {
     this.patchState({ selectedAteNodeId: nodeId });
+  }
+
+  selectCanvasNode(nodeId: string): void {
+    if (this.state().activeToolId !== 'pointer') {
+      return;
+    }
+
+    this.patchState({
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: nodeId,
+    });
+  }
+
+  selectCanvasLink(linkId: string): void {
+    if (this.state().activeToolId !== 'pointer') {
+      return;
+    }
+
+    this.patchState({
+      selectedCanvasLinkId: linkId,
+      selectedCanvasNodeId: null,
+    });
+  }
+
+  insertActiveToolNodeNear(targetNodeId: string, side: 'left' | 'right'): void {
+    const activeToolId = this.state().activeToolId;
+
+    if (activeToolId !== 'move-left' && activeToolId !== 'move-right') {
+      return;
+    }
+
+    this.state.update((current) => {
+      const targetNodeView = current.machineGraphView.nodes.find((node) => node.nodeId === targetNodeId);
+      const targetGroup = targetNodeView
+        ? current.machineGraph.groups.find((group) => group.id === targetNodeView.groupId)
+        : null;
+      const targetNode = targetGroup ? this.findMachineNodeInGroup(targetGroup, targetNodeId) : null;
+
+      if (!targetNodeView || !targetGroup || !targetNode) {
+        return current;
+      }
+
+      const insertedNode = activeToolId === 'move-left'
+        ? new MoveLeftNode(this.createMachineNodeId(current.machineGraph, 'move-left'), targetNode.tapeIndex)
+        : new MoveRightNode(this.createMachineNodeId(current.machineGraph, 'move-right'), targetNode.tapeIndex);
+
+      if (side === 'left') {
+        this.insertMachineNodeBefore(targetGroup, targetNode, insertedNode);
+      } else {
+        this.insertMachineNodeAfter(targetGroup, targetNode, insertedNode);
+      }
+
+      const insertedNodePosition = {
+        x: targetNodeView.position.x + (side === 'left' ? 0 : MACHINE_NODE_STEP),
+        y: targetNodeView.position.y,
+      };
+      const shiftedNodes = current.machineGraphView.nodes.map((node) => {
+        const shouldShift = node.groupId === targetNodeView.groupId &&
+          (side === 'left'
+            ? node.position.x >= targetNodeView.position.x
+            : node.position.x > targetNodeView.position.x);
+
+        if (!shouldShift) {
+          return {
+            ...node,
+            initial: node.nodeId === targetNode.id ? targetNode.isInitial : node.initial,
+          };
+        }
+
+        return {
+          ...node,
+          initial: node.nodeId === targetNode.id ? targetNode.isInitial : node.initial,
+          position: {
+            ...node.position,
+            x: node.position.x + MACHINE_NODE_STEP,
+          },
+        };
+      });
+
+      return {
+        ...current,
+        machineGraph: {
+          ...current.machineGraph,
+          groups: [...current.machineGraph.groups],
+        },
+        machineGraphView: {
+          ...current.machineGraphView,
+          groups: current.machineGraphView.groups.map((groupView) => groupView.groupId === targetGroup.id
+            ? {
+              ...groupView,
+              label: formatGroupLabel(targetGroup),
+              width: (groupView.width ?? 0) + MACHINE_NODE_STEP,
+            }
+            : groupView),
+          nodes: [
+            ...shiftedNodes,
+            {
+              nodeId: insertedNode.id,
+              groupId: targetGroup.id,
+              label: insertedNode.name,
+              initial: insertedNode.isInitial,
+              position: insertedNodePosition,
+            },
+          ].sort((first, second) => first.position.x - second.position.x),
+          links: current.machineGraphView.links.map((link) => {
+            if (link.sourceGroupId !== targetGroup.id || !link.points?.length) {
+              return link;
+            }
+
+            const [sourcePoint, ...restPoints] = link.points;
+
+            return {
+              ...link,
+              points: [
+                {
+                  ...sourcePoint,
+                  x: sourcePoint.x + MACHINE_NODE_STEP,
+                },
+                ...restPoints,
+              ],
+            };
+          }),
+        },
+        selectedCanvasLinkId: null,
+        selectedCanvasNodeId: insertedNode.id,
+      };
+    });
   }
 
   setTapeValue(tapeId: string, value: string): void {
@@ -475,6 +617,90 @@ export class JtvStore {
         return { ...tapeState };
       }),
     }));
+  }
+
+  private findMachineNodeInGroup(group: MachineGroup, nodeId: string): MachineNode | null {
+    const visitedNodeIds = new Set<string>();
+    let current = group.entry;
+
+    while (current && !visitedNodeIds.has(current.id)) {
+      if (current.id === nodeId) {
+        return current;
+      }
+
+      visitedNodeIds.add(current.id);
+
+      if (current.id === group.exit?.id) {
+        break;
+      }
+
+      current = current.next;
+    }
+
+    return null;
+  }
+
+  private insertMachineNodeBefore(group: MachineGroup, targetNode: MachineNode, insertedNode: MachineNode): void {
+    const previousNode = targetNode.previous;
+
+    insertedNode.previous = previousNode;
+    insertedNode.next = targetNode;
+    targetNode.previous = insertedNode;
+
+    if (previousNode) {
+      previousNode.next = insertedNode;
+    } else {
+      group.entry = insertedNode;
+    }
+
+    if (targetNode.isInitial) {
+      targetNode.isInitial = false;
+      insertedNode.isInitial = true;
+    }
+  }
+
+  private insertMachineNodeAfter(group: MachineGroup, targetNode: MachineNode, insertedNode: MachineNode): void {
+    const nextNode = targetNode.next;
+
+    insertedNode.previous = targetNode;
+    insertedNode.next = nextNode;
+    targetNode.next = insertedNode;
+
+    if (nextNode) {
+      nextNode.previous = insertedNode;
+    } else {
+      group.exit = insertedNode;
+    }
+  }
+
+  private createMachineNodeId(graph: MachineGraph, prefix: string): string {
+    const usedNodeIds = new Set<string>();
+
+    for (const group of graph.groups) {
+      const visitedNodeIds = new Set<string>();
+      let current = group.entry;
+
+      while (current && !visitedNodeIds.has(current.id)) {
+        visitedNodeIds.add(current.id);
+        usedNodeIds.add(current.id);
+
+        if (current.id === group.exit?.id) {
+          break;
+        }
+
+        current = current.next;
+      }
+    }
+
+    let nextIndex = usedNodeIds.size + 1;
+    let id = `${prefix}-${nextIndex}`;
+
+    while (usedNodeIds.has(id)) {
+      nextIndex++;
+      id = `${prefix}-${nextIndex}`;
+    }
+
+    return id;
   }
 
   private findAteNode(node: AteNode, nodeId: string | null): AteNode | null {

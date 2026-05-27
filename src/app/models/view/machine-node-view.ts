@@ -9,4 +9,5 @@ export interface MachineNodeView {
   readonly width?: number;
   readonly height?: number;
   readonly selected?: boolean;
+  readonly canvasSelected?: boolean;
 }

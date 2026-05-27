@@ -12,4 +12,5 @@ export interface MachineLinkView {
   readonly targetGroupId: string;
   readonly points?: readonly ViewPoint[];
   readonly selected?: boolean;
+  readonly canvasSelected?: boolean;
 }
