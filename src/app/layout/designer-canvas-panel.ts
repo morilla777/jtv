@@ -232,9 +232,12 @@ export class DesignerCanvasPanel {
           `C ${anchor.x - 48} ${anchor.y + 34}, ${anchor.x - 48} ${anchor.y - 34}, ${anchor.x - 12} ${anchor.y - 16}`,
         ].join(' ');
       case 'right':
+        const x = anchor.x + 6;
+        const y = anchor.y - 8;
+
         return [
-          `M ${anchor.x + 3} ${anchor.y + 14}`,
-          `C ${anchor.x + 38} ${anchor.y + 28}, ${anchor.x + 38} ${anchor.y - 28}, ${anchor.x + 3} ${anchor.y - 14}`,
+          `M ${x + 3} ${y + 14}`,
+          `C ${x + 38} ${y + 28}, ${x + 38} ${y - 28}, ${x + 3} ${y - 14}`,
         ].join(' ');
     }
   }
@@ -250,7 +253,7 @@ export class DesignerCanvasPanel {
       case 'left':
         return { x: anchor.x - 58, y: anchor.y + 4 };
       case 'right':
-        return { x: anchor.x + 38, y: anchor.y + 4 };
+        return { x: anchor.x + 44, y: anchor.y - 4 };
     }
   }
 

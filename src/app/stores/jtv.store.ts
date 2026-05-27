@@ -1,11 +1,13 @@
 import { Injectable, computed, signal } from '@angular/core';
 
 import { AteNode, AteTraceRecorder } from '../models/ate';
+import { Autolink } from '../models/core/autolink';
 import { LinearMachineGroup } from '../models/core/linear-machine-group';
 import { Link } from '../models/core/link';
 import { LinkCondition } from '../models/core/link-condition';
 import { MachineGraph } from '../models/core/machine-graph';
 import { MachineGraphRunner } from '../models/core/machine-graph-runner';
+import { MachineGroup } from '../models/core/machine-group';
 import { MachineNode } from '../models/core/machine-node';
 import { MetaValueDictionary } from '../models/core/meta-value-dictionary';
 import { MoveLeftNode } from '../models/core/move-left-node';
@@ -96,9 +98,6 @@ function createDemoMachine(): { graph: MachineGraph; view: MachineGraphView } {
   ]);
   const rewindGroupNodes = linkNodes([
     new MoveLeftNode('move-left-1', 0),
-    new MoveLeftNode('move-left-2', 0),
-    new MoveLeftNode('move-left-3', 0),
-    new MoveLeftNode('move-left-4', 0),
   ]);
   const writeGroup = new LinearMachineGroup(
     'write-abcd',
@@ -116,34 +115,33 @@ function createDemoMachine(): { graph: MachineGraph; view: MachineGraphView } {
     rewindGroup,
     new LinkCondition([{ tapeIndex: 0, acceptedValues: ['d'] }]),
   );
-  // TODO: Re-enable when autolink execution semantics are represented in the graph.
-  // const rewindAutolink = new Link(
-  //   'rewind-autolink',
-  //   rewindGroup,
-  //   rewindGroup,
-  //   new LinkCondition([{ tapeIndex: 0, acceptedValues: ['q'], negated: true }]),
-  // );
+  const rewindAutolink = new Autolink(
+    'rewind-autolink',
+    rewindGroupNodes[0],
+    new LinkCondition([{ tapeIndex: 0, acceptedValues: ['#'], negated: true }]),
+  );
 
   return {
     graph: {
       groups: [writeGroup, rewindGroup],
       links: [writeToRewindLink],
+      autolinks: [rewindAutolink],
       initialGroupId: writeGroup.id,
     },
     view: {
       groups: [
         {
           groupId: writeGroup.id,
-          label: 'RaRbRcRd',
+          label: formatGroupLabel(writeGroup),
           position: { x: 32, y: 72 },
           width: 176,
           height: 32,
         },
         {
           groupId: rewindGroup.id,
-          label: 'LLLL',
+          label: formatGroupLabel(rewindGroup),
           position: { x: 300, y: 72 },
-          width: 78,
+          width: 28,
           height: 32,
         },
       ],
@@ -159,22 +157,25 @@ function createDemoMachine(): { graph: MachineGraph; view: MachineGraphView } {
             { x: 296, y: 62 },
           ],
         }),
-        // TODO: Re-enable when autolink execution semantics are represented in the graph.
-        // createLinkView(rewindAutolink, {
-        //   kind: 'autolink',
-        //   autolinkOrientation: 'right',
-        //   points: [{ x: 370, y: 62 }],
-        // }),
+        createLinkView(rewindAutolink, {
+          kind: 'autolink',
+          autolinkOrientation: 'right',
+          sourceGroupId: rewindGroup.id,
+          targetGroupId: rewindGroup.id,
+          points: [{ x: 300, y: 72 }],
+        }),
       ],
     },
   };
 }
 
 function createLinkView(
-  link: Link,
+  link: Link | Autolink,
   layout: {
     kind: MachineLinkKind;
     autolinkOrientation?: AutolinkOrientation;
+    sourceGroupId?: string;
+    targetGroupId?: string;
     points: readonly ViewPoint[];
   },
 ): MachineLinkView {
@@ -183,30 +184,33 @@ function createLinkView(
     label: formatLinkCondition(link.condition),
     kind: layout.kind,
     autolinkOrientation: layout.autolinkOrientation,
-    sourceGroupId: link.sourceGroup?.id ?? '',
-    targetGroupId: link.targetGroup?.id ?? '',
+    sourceGroupId: layout.sourceGroupId ?? (link instanceof Link ? link.sourceGroup?.id : '') ?? '',
+    targetGroupId: layout.targetGroupId ?? (link instanceof Link ? link.targetGroup?.id : '') ?? '',
     points: layout.points,
   };
 }
 
 function formatLinkCondition(condition: LinkCondition | null): string {
-  if (!condition || condition.clauses.length === 0) {
-    return '[1]';
+  return condition?.getAteLabel() ?? '[1]';
+}
+
+function formatGroupLabel(group: MachineGroup): string {
+  const labels: string[] = [];
+  const visitedNodeIds = new Set<string>();
+  let current = group.entry;
+
+  while (current && !visitedNodeIds.has(current.id)) {
+    visitedNodeIds.add(current.id);
+    labels.push(current.name);
+
+    if (current.id === group.exit?.id) {
+      break;
+    }
+
+    current = current.next;
   }
 
-  const [clause] = condition.clauses;
-
-  if (condition.clauses.length === 1 && clause.acceptedValues.length === 1) {
-    return clause.negated ? `[not ${clause.acceptedValues[0]}]` : `[${clause.acceptedValues[0]}]`;
-  }
-
-  return condition.clauses
-    .map((item) => {
-      const values = item.acceptedValues.join(',');
-
-      return item.negated ? `not ${values}` : values;
-    })
-    .join(' & ');
+  return labels.join('');
 }
 
 function createLinearNodeViews(
@@ -280,10 +284,14 @@ export class JtvStore {
   readonly selectedTapeId = computed(() => this.selectedTape()?.id ?? null);
   readonly tapes = computed(() => this.state().tapes);
   readonly tapeSnapshots = computed<readonly TapeSnapshot[]>(() => {
-    const traceSnapshots = this.selectedAteNode()?.tapeSnapshots;
+    const selectedAteNode = this.selectedAteNode();
 
-    if (traceSnapshots) {
-      return traceSnapshots;
+    if (selectedAteNode) {
+      const replayedSnapshots = this.replayTapeSnapshotsToAteNode(selectedAteNode);
+
+      if (replayedSnapshots) {
+        return replayedSnapshots;
+      }
     }
 
     return this.state().tapes.map((tapeState) => tapeState.tape.getSnapshot());
@@ -422,7 +430,7 @@ export class JtvStore {
     };
     const ok = this.machineGraphRunner.run(this.state().machineGraph, context, traceRecorder);
 
-    traceRecorder.recordStop(context);
+    traceRecorder.recordStop();
 
     this.state.update((current) => ({
       ...current,
@@ -432,6 +440,14 @@ export class JtvStore {
     }));
 
     return ok;
+  }
+
+  clearAte(): void {
+    this.state.update((current) => ({
+      ...current,
+      ate: new AteTraceRecorder(current.selectedMachine.name).root,
+      selectedAteNodeId: null,
+    }));
   }
 
   reset(): void {
@@ -479,5 +495,78 @@ export class JtvStore {
     }
 
     return null;
+  }
+
+  private replayTapeSnapshotsToAteNode(targetNode: AteNode): readonly TapeSnapshot[] | null {
+    const state = this.state();
+    const traceNodes = this.getAteTraceNodes(state.ate);
+    const targetIndex = traceNodes.findIndex((node) => node.id === targetNode.id);
+
+    if (targetIndex < 0) {
+      return null;
+    }
+
+    const tapes = state.tapes.map((tapeState) => Tape.fromInitialSnapshot(tapeState.tape.getInitialSnapshot()));
+    const context = {
+      tapes,
+      metaValues: new MetaValueDictionary(),
+    };
+    const machineNodes = this.getMachineNodesById(state.machineGraph);
+    const transitions = this.getTransitionsById(state.machineGraph);
+
+    for (let index = 0; index <= targetIndex; index++) {
+      const traceNode = traceNodes[index];
+
+      if (traceNode.machineNodeId) {
+        const machineNode = machineNodes.get(traceNode.machineNodeId);
+
+        if (!machineNode?.execute(context)) {
+          break;
+        }
+      }
+
+      if (traceNode.linkId) {
+        const transition = transitions.get(traceNode.linkId);
+
+        if (!transition?.canTraverse(context)) {
+          break;
+        }
+      }
+    }
+
+    return tapes.map((tape) => tape.getSnapshot());
+  }
+
+  private getAteTraceNodes(root: AteNode): AteNode[] {
+    return root.children.flatMap((child) => [child, ...this.getAteTraceNodes(child)]);
+  }
+
+  private getMachineNodesById(graph: MachineGraph): Map<string, MachineNode> {
+    const nodes = new Map<string, MachineNode>();
+
+    for (const group of graph.groups) {
+      const visitedNodeIds = new Set<string>();
+      let current = group.entry;
+
+      while (current && !visitedNodeIds.has(current.id)) {
+        visitedNodeIds.add(current.id);
+        nodes.set(current.id, current);
+
+        if (current.id === group.exit?.id) {
+          break;
+        }
+
+        current = current.next;
+      }
+    }
+
+    return nodes;
+  }
+
+  private getTransitionsById(graph: MachineGraph): Map<string, Link | Autolink> {
+    return new Map<string, Link | Autolink>([
+      ...graph.links.map((link) => [link.id, link] as const),
+      ...(graph.autolinks ?? []).map((autolink) => [autolink.id, autolink] as const),
+    ]);
   }
 }

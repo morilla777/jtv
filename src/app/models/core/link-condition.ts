@@ -51,4 +51,24 @@ export class LinkCondition {
 
     return { success: true };
   }
+
+  getAteLabel(): string {
+    if (this.clauses.length === 0) {
+      return '[1]';
+    }
+
+    const [clause] = this.clauses;
+
+    if (this.clauses.length === 1 && clause.acceptedValues.length === 1) {
+      return clause.negated ? `[not ${clause.acceptedValues[0]}]` : `[${clause.acceptedValues[0]}]`;
+    }
+
+    return this.clauses
+      .map((item) => {
+        const values = item.acceptedValues.join(',');
+
+        return item.negated ? `not ${values}` : values;
+      })
+      .join(' & ');
+  }
 }

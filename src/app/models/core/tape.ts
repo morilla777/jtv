@@ -17,6 +17,26 @@ export class Tape {
     this.blankSymbol = blankSymbol;
   }
 
+  static fromInitialSnapshot(snapshot: TapeSnapshot): Tape {
+    const tape = new Tape();
+
+    for (const [position, value] of Object.entries(snapshot.cells)) {
+      const symbol = SymbolValue.require(value);
+
+      if (!symbol.equals(tape.blankSymbol)) {
+        const numericPosition = Number(position);
+
+        tape.cells.set(numericPosition, symbol);
+        tape.initialCells.set(numericPosition, symbol);
+      }
+    }
+
+    tape.headPosition = snapshot.headPosition;
+    tape.initialHeadPosition = snapshot.headPosition;
+
+    return tape;
+  }
+
   read(): SymbolValue {
     return this.cells.get(this.headPosition) ?? this.blankSymbol;
   }

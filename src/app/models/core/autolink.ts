@@ -1,13 +1,12 @@
 import { AteTraceRenderable } from './ate-trace-renderable';
 import { ExecutionContext } from './execution-context';
 import { LinkCondition } from './link-condition';
-import { MachineGroup } from './machine-group';
+import { MachineNode } from './machine-node';
 
-export class Link implements AteTraceRenderable {
+export class Autolink implements AteTraceRenderable {
   constructor(
     public readonly id: string,
-    public sourceGroup: MachineGroup | null,
-    public targetGroup: MachineGroup | null,
+    public node: MachineNode | null,
     public condition: LinkCondition | null = null,
   ) {}
 
@@ -20,7 +19,7 @@ export class Link implements AteTraceRenderable {
   }
 
   getAteIconName(): string {
-    return 'link_ATE.gif';
+    return 'autolink_ATE.gif';
   }
 
   getAteLabel(): string {

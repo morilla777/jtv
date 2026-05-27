@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { SplitterModule } from 'primeng/splitter';
+import { ToastModule } from 'primeng/toast';
 import { Topbar } from './topbar';
 import { ExplorerPanel } from './explorer-panel';
 import { DesignerCanvasPanel } from './designer-canvas-panel';
@@ -10,6 +11,7 @@ import { TapesPanel } from './tapes-panel';
   selector: 'app-shell',
   imports: [
     SplitterModule,
+    ToastModule,
     Topbar,
     ExplorerPanel,
     DesignerCanvasPanel,
@@ -18,6 +20,7 @@ import { TapesPanel } from './tapes-panel';
   ],
   template: `
     <div class="app-shell">
+      <p-toast key="simulation" position="center" />
       <app-topbar />
 
       <div class="workspace">

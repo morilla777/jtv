@@ -39,4 +39,8 @@ export class WriterNode extends AbstractMachineNode {
       return false;
     }
   }
+
+  override getAteIconName(): string {
+    return this.name === '#' ? '#_ATE.gif' : 'a_ATE.gif';
+  }
 }

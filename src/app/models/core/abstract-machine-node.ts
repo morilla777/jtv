@@ -14,6 +14,14 @@ export abstract class AbstractMachineNode implements MachineNode {
 
   abstract execute(context: ExecutionContext): boolean;
 
+  getAteIconName(): string {
+    return 'a_ATE.gif';
+  }
+
+  getAteLabel(): string {
+    return this.name;
+  }
+
   setNext(node: MachineNode | null): void {
     this.next = node;
 

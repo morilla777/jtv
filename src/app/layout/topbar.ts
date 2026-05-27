@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { type MenuItem } from 'primeng/api';
+import { MessageService, type MenuItem } from 'primeng/api';
 import { ToolbarModule } from 'primeng/toolbar';
 import { ButtonModule } from 'primeng/button';
 import { MenubarModule } from 'primeng/menubar';
@@ -168,6 +168,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.execute' | translate"
               [title]="'topbar.execute' | translate"
+              [disabled]="executionFinished"
               (click)="executeMachine()"
             >
               <img src="assets/images/Play24.gif" alt="" />
@@ -178,6 +179,8 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.stop' | translate"
               [title]="'topbar.stop' | translate"
+              [disabled]="!executionFinished"
+              (click)="stopSimulation()"
             >
               <img src="assets/images/Stop24.gif" alt="" />
             </button>
@@ -391,6 +394,7 @@ interface LanguageOption {
 })
 export class Topbar {
   readonly i18n = inject(TranslationService);
+  private readonly messageService = inject(MessageService);
   private readonly store = inject(JtvStore);
 
   readonly symbolOptions = [
@@ -434,6 +438,7 @@ export class Topbar {
   selectedGreekLowercase = this.greekLowercaseOptions[0];
   selectedUppercase = this.uppercaseOptions[0];
   selectedMachine = this.machineOptions[0];
+  executionFinished = false;
 
   get menuItems(): MenuItem[] {
     return [
@@ -596,5 +601,27 @@ export class Topbar {
 
   executeMachine(): void {
     this.store.runMachineOnFirstTape();
+    this.executionFinished = true;
+    this.messageService.add({
+      key: 'simulation',
+      severity: 'info',
+      summary: 'JTV',
+      detail: 'ATE generado, simulación iniciada',
+      sticky: true,
+      closable: true,
+    });
+  }
+
+  stopSimulation(): void {
+    this.store.clearAte();
+    this.executionFinished = false;
+    this.messageService.add({
+      key: 'simulation',
+      severity: 'info',
+      summary: 'JTV',
+      detail: 'Simulación finalizada, ATE liberado',
+      sticky: true,
+      closable: true,
+    });
   }
 }

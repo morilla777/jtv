@@ -16,7 +16,12 @@ export class MachineGraphRunner {
     }
 
     while (currentGroup) {
-      const ok = this.sequenceRunner.run(currentGroup.entry, context, traceRecorder);
+      const ok = this.sequenceRunner.run(
+        currentGroup.entry,
+        context,
+        traceRecorder,
+        graph.autolinks ?? [],
+      );
 
       if (!ok) {
         return false;
@@ -24,7 +29,7 @@ export class MachineGraphRunner {
 
       const nextLink = this.findTraversableOutgoingLink(graph.links, currentGroup, context);
       if (nextLink) {
-        traceRecorder?.recordLink(nextLink, context);
+        traceRecorder?.recordLink(nextLink);
       }
 
       currentGroup = nextLink?.targetGroup ?? undefined;

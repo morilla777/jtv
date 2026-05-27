@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { AteTraceRecorder } from '../ate';
+import { Autolink } from './autolink';
 import { LinearMachineGroup } from './linear-machine-group';
 import { Link } from './link';
 import { LinkCondition } from './link-condition';
@@ -99,7 +100,7 @@ describe('MachineGraphRunner', () => {
     const traceRecorder = new AteTraceRecorder('NUEVA');
 
     const ok = new MachineGraphRunner().run(graph, context, traceRecorder);
-    traceRecorder.recordStop(context);
+    traceRecorder.recordStop();
 
     expect(ok).toBe(true);
     expect(traceRecorder.root.children.map((child) => child.label)).toEqual([
@@ -116,13 +117,7 @@ describe('MachineGraphRunner', () => {
       'assets/images/L_ATE.gif',
       'assets/images/stop_ATE.gif',
     ]);
-    expect(traceRecorder.root.children.map((child) => child.tapeSnapshots?.[0].headPosition)).toEqual([
-      1,
-      1,
-      1,
-      0,
-      0,
-    ]);
+    expect(traceRecorder.root.children.every((child) => !('tapeSnapshots' in child))).toBe(true);
   });
 
   it('runs the matching branch for conditional links', () => {
@@ -149,6 +144,36 @@ describe('MachineGraphRunner', () => {
         5: 'n',
       },
     });
+  });
+
+  it('repeats a node while its autolink condition can be traversed', () => {
+    const tape = new Tape();
+    tape.load('abcd');
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const rewindNode = new MoveLeftNode('rewind-left', 0, true);
+    const rewindGroup = new LinearMachineGroup('rewind', rewindNode, rewindNode);
+    const graph: MachineGraph = {
+      groups: [rewindGroup],
+      links: [],
+      autolinks: [
+        new Autolink(
+          'rewind-while-not-blank',
+          rewindNode,
+          new LinkCondition([{ tapeIndex: 0, acceptedValues: ['#'], negated: true }]),
+        ),
+      ],
+      initialGroupId: rewindGroup.id,
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA');
+
+    const ok = new MachineGraphRunner().run(graph, context, traceRecorder);
+
+    expect(ok).toBe(true);
+    expect(tape.getSnapshot().headPosition).toBe(0);
+    expect(traceRecorder.root.children.map((child) => child.iconSrc)).toContain('assets/images/autolink_ATE.gif');
   });
 });
 

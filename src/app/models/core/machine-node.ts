@@ -1,6 +1,7 @@
+import { AteTraceRenderable } from './ate-trace-renderable';
 import { ExecutionContext } from './execution-context';
 
-export interface MachineNode {
+export interface MachineNode extends AteTraceRenderable {
   readonly id: string;
   readonly name: string;
   readonly tapeIndex: number;

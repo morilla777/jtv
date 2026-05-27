@@ -19,4 +19,12 @@ export class MoveRightNode extends AbstractMachineNode {
 
     return tape.moveRight();
   }
+
+  override getAteIconName(): string {
+    return 'R_ATE.gif';
+  }
+
+  override getAteLabel(): string {
+    return '';
+  }
 }
