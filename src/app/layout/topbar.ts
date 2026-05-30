@@ -434,11 +434,18 @@ export class Topbar {
 
   readonly machineOptions = ['MAQUINA 1', 'MÁQUINA 2'];
 
-  selectedSymbol = this.symbolOptions[0];
   selectedGreekLowercase = this.greekLowercaseOptions[0];
   selectedUppercase = this.uppercaseOptions[0];
   selectedMachine = this.machineOptions[0];
   executionFinished = false;
+
+  get selectedSymbol(): string {
+    return this.store.selectedSymbol();
+  }
+
+  set selectedSymbol(symbol: string) {
+    this.store.selectSymbol(symbol);
+  }
 
   get menuItems(): MenuItem[] {
     return [
