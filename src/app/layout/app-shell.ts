@@ -1,6 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { MessageService, type ToastMessageOptions } from 'primeng/api';
 import { SplitterModule } from 'primeng/splitter';
 import { ToastModule } from 'primeng/toast';
+import { Subscription } from 'rxjs';
 import { Topbar } from './topbar';
 import { ExplorerPanel } from './explorer-panel';
 import { DesignerCanvasPanel } from './designer-canvas-panel';
@@ -20,7 +22,11 @@ import { TapesPanel } from './tapes-panel';
   ],
   template: `
     <div class="app-shell">
-      <p-toast key="simulation" position="center" />
+      @if (simulationToastModalVisible()) {
+        <div class="toast-modal-mask" aria-hidden="true"></div>
+      }
+
+      <p-toast key="simulation" position="center" (onClose)="hideSimulationToastModal()" />
       <app-topbar />
 
       <div class="workspace">
@@ -77,6 +83,18 @@ import { TapesPanel } from './tapes-panel';
       overflow: hidden;
     }
 
+    .toast-modal-mask {
+      position: fixed;
+      inset: 0;
+      z-index: 1099;
+      background: rgba(0, 0, 0, 0.35);
+      pointer-events: auto;
+    }
+
+    :host ::ng-deep .p-toast {
+      z-index: 1100;
+    }
+
     :host ::ng-deep .main-splitter,
     :host ::ng-deep .designer-splitter {
       height: 100%;
@@ -98,4 +116,40 @@ import { TapesPanel } from './tapes-panel';
     }
   `],
 })
-export class AppShell {}
+export class AppShell implements OnInit, OnDestroy {
+  private readonly messageService = inject(MessageService);
+  private readonly subscriptions = new Subscription();
+
+  readonly simulationToastModalVisible = signal(false);
+
+  ngOnInit(): void {
+    this.subscriptions.add(
+      this.messageService.messageObserver.subscribe((message) => {
+        const messages = Array.isArray(message) ? message : [message];
+
+        if (messages.some((item) => this.isSimulationToast(item))) {
+          this.simulationToastModalVisible.set(true);
+        }
+      }),
+    );
+    this.subscriptions.add(
+      this.messageService.clearObserver.subscribe((key) => {
+        if (key === null || key === 'simulation') {
+          this.hideSimulationToastModal();
+        }
+      }),
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
+  }
+
+  hideSimulationToastModal(): void {
+    this.simulationToastModalVisible.set(false);
+  }
+
+  private isSimulationToast(message: ToastMessageOptions): boolean {
+    return message.key === 'simulation';
+  }
+}

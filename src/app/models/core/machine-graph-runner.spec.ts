@@ -8,6 +8,7 @@ import { LinkCondition } from './link-condition';
 import { MachineGraph } from './machine-graph';
 import { MachineGraphRunner } from './machine-graph-runner';
 import { MachineNode } from './machine-node';
+import { HubNode } from './hub-node';
 import { MetaValueDictionary } from './meta-value-dictionary';
 import { MoveLeftNode } from './move-left-node';
 import { MoveRightNode } from './move-right-node';
@@ -69,6 +70,12 @@ describe('MachineGraphRunner', () => {
     });
   });
 
+  it('renders empty labels for unconditional links', () => {
+    expect(new Link('unconditional', null, null).getAteLabel()).toBe('');
+    expect(new Autolink('unconditional-autolink', null).getAteLabel()).toBe('');
+    expect(new LinkCondition([]).getAteLabel()).toBe('');
+  });
+
   it('records the deterministic execution trace', () => {
     const tape = new Tape();
     const context = {
@@ -106,7 +113,7 @@ describe('MachineGraphRunner', () => {
     expect(traceRecorder.root.children.map((child) => child.label)).toEqual([
       '',
       'a',
-      '[1]',
+      '',
       '',
       '',
     ]);
@@ -174,6 +181,84 @@ describe('MachineGraphRunner', () => {
     expect(ok).toBe(true);
     expect(tape.getSnapshot().headPosition).toBe(0);
     expect(traceRecorder.root.children.map((child) => child.iconSrc)).toContain('assets/images/autolink_ATE.gif');
+  });
+
+  it('starts at the node marked as initial inside the initial group', () => {
+    const tape = new Tape();
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const nodes = linkNodes([
+      new WriterNode('write-a', 'a', 0),
+      new MoveRightNode('move-right', 0, true),
+      new WriterNode('write-b', 'b', 0),
+    ]);
+    const group = new LinearMachineGroup('write-from-middle', nodes[0], nodes.at(-1) ?? null);
+    const graph: MachineGraph = {
+      groups: [group],
+      links: [],
+      initialGroupId: group.id,
+    };
+
+    const ok = new MachineGraphRunner().run(graph, context);
+
+    expect(ok).toBe(true);
+    expect(tape.getSnapshot()).toEqual({
+      headPosition: 1,
+      cells: {
+        1: 'b',
+      },
+    });
+  });
+
+  it('routes through a hub node without changing the tape', () => {
+    const tape = new Tape();
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const writeGroupNodes = linkNodes([
+      new MoveRightNode('move-right-before-hub', 0, true),
+      new WriterNode('write-a', 'a', 0),
+    ]);
+    const hubNode = new HubNode('hub-1', 0);
+    const doneGroupNodes = linkNodes([
+      new MoveRightNode('move-right-after-hub', 0),
+      new WriterNode('write-b', 'b', 0),
+    ]);
+    const writeGroup = new LinearMachineGroup('write-a', writeGroupNodes[0], writeGroupNodes.at(-1) ?? null);
+    const hubGroup = new LinearMachineGroup('hub', hubNode, hubNode);
+    const doneGroup = new LinearMachineGroup('write-b', doneGroupNodes[0], doneGroupNodes.at(-1) ?? null);
+    const graph: MachineGraph = {
+      groups: [writeGroup, hubGroup, doneGroup],
+      links: [
+        new Link('write-to-hub', writeGroup, hubGroup),
+        new Link('hub-to-done', hubGroup, doneGroup),
+      ],
+      initialGroupId: writeGroup.id,
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA');
+
+    const ok = new MachineGraphRunner().run(graph, context, traceRecorder);
+
+    expect(ok).toBe(true);
+    expect(tape.getSnapshot()).toEqual({
+      headPosition: 2,
+      cells: {
+        1: 'a',
+        2: 'b',
+      },
+    });
+    expect(traceRecorder.root.children).toContainEqual(
+      expect.objectContaining({
+        iconSrc: 'assets/images/hub_ATE.gif',
+        kind: 'machine-node',
+        label: '',
+        machineNodeId: hubNode.id,
+        children: [],
+      }),
+    );
   });
 });
 

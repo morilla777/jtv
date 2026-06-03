@@ -9,6 +9,7 @@ import { MachineGraph } from '../models/core/machine-graph';
 import { MachineGraphRunner } from '../models/core/machine-graph-runner';
 import { MachineGroup } from '../models/core/machine-group';
 import { MachineNode } from '../models/core/machine-node';
+import { HubNode } from '../models/core/hub-node';
 import { MetaValueDictionary } from '../models/core/meta-value-dictionary';
 import { MoveLeftNode } from '../models/core/move-left-node';
 import { MoveRightNode } from '../models/core/move-right-node';
@@ -44,6 +45,13 @@ export interface JtvTapeState {
 export interface JtvMachineState {
   readonly id: string;
   readonly name: string;
+}
+
+export interface JtvLinkEditState {
+  readonly mode: 'conditional-link' | 'autolink';
+  readonly clause: ReadConditionClause;
+  readonly nodeId?: string;
+  readonly autolinkOrientation?: AutolinkOrientation;
 }
 
 export interface JtvState {
@@ -198,7 +206,7 @@ function createLinkView(
 }
 
 function formatLinkCondition(condition: LinkCondition | null): string {
-  return condition?.getAteLabel() ?? '[1]';
+  return condition?.getAteLabel() ?? '';
 }
 
 function formatGroupLabel(group: MachineGroup): string {
@@ -229,6 +237,7 @@ function createLinearNodeViews(
   return nodes.map((node, index) => ({
     nodeId: node.id,
     groupId,
+    kind: node instanceof HubNode ? 'hub' as const : 'text' as const,
     label: node.name,
     initial: node.isInitial,
     position: {
@@ -479,7 +488,7 @@ export class JtvStore {
       return;
     }
 
-    this.createLinkBetweenNodes(sourceNodeId, targetNodeId, new LinkCondition([clause]));
+    this.createLinkBetweenNodes(sourceNodeId, targetNodeId, this.createLinkConditionFromClause(clause));
   }
 
   createConditionalAutolinkForNode(
@@ -498,14 +507,20 @@ export class JtvStore {
         : null;
       const node = group ? this.findMachineNodeInGroup(group, nodeId) : null;
 
-      if (!nodeView || !group || !node || group.exit?.id !== nodeId) {
+      if (
+        !nodeView ||
+        !group ||
+        !node ||
+        group.exit?.id !== nodeId ||
+        (current.machineGraph.autolinks ?? []).some((autolink) => autolink.node?.id === nodeId)
+      ) {
         return current;
       }
 
       const autolink = new Autolink(
         this.createMachineLinkId(current.machineGraph, 'autolink'),
         node,
-        new LinkCondition([clause]),
+        this.createLinkConditionFromClause(clause),
       );
 
       return {
@@ -528,6 +543,99 @@ export class JtvStore {
           ],
         },
         selectedCanvasLinkId: null,
+        selectedCanvasNodeId: null,
+      };
+    });
+  }
+
+  getCanvasLinkEditState(linkId: string): JtvLinkEditState | null {
+    const graphLink = this.state().machineGraph.links.find((link) => link.id === linkId);
+
+    if (graphLink) {
+      return {
+        mode: 'conditional-link',
+        clause: this.getFirstConditionClauseOrDefault(graphLink.condition),
+      };
+    }
+
+    const autolink = (this.state().machineGraph.autolinks ?? []).find((item) => item.id === linkId);
+    const autolinkView = this.state().machineGraphView.links.find((link) => link.linkId === linkId);
+
+    if (!autolink) {
+      return null;
+    }
+
+    return {
+      mode: 'autolink',
+      clause: this.getFirstConditionClauseOrDefault(autolink.condition),
+      nodeId: autolink.node?.id,
+      autolinkOrientation: autolinkView?.autolinkOrientation ?? 'right',
+    };
+  }
+
+  hasCanvasNodeLeftNeighbor(nodeId: string): boolean {
+    const nodeView = this.state().machineGraphView.nodes.find((node) => node.nodeId === nodeId);
+    const group = nodeView
+      ? this.state().machineGraph.groups.find((item) => item.id === nodeView.groupId)
+      : null;
+    const node = group ? this.findMachineNodeInGroup(group, nodeId) : null;
+
+    return !!node?.previous;
+  }
+
+  hasCanvasNodeAutolink(nodeId: string): boolean {
+    return (this.state().machineGraph.autolinks ?? []).some((autolink) => autolink.node?.id === nodeId);
+  }
+
+  updateCanvasLinkCondition(
+    linkId: string,
+    clause: ReadConditionClause,
+    autolinkOrientation?: AutolinkOrientation,
+  ): void {
+    if (this.state().activeToolId !== 'pointer') {
+      return;
+    }
+
+    this.state.update((current) => {
+      const link = current.machineGraph.links.find((item) => item.id === linkId);
+      const autolink = (current.machineGraph.autolinks ?? []).find((item) => item.id === linkId);
+
+      if (!link && !autolink) {
+        return current;
+      }
+
+      const condition = this.createLinkConditionFromClause(clause);
+
+      if (link) {
+        link.condition = condition;
+      }
+
+      if (autolink) {
+        autolink.condition = condition;
+      }
+
+      return {
+        ...current,
+        machineGraph: {
+          ...current.machineGraph,
+          links: [...current.machineGraph.links],
+          autolinks: [...(current.machineGraph.autolinks ?? [])],
+        },
+        machineGraphView: {
+          ...current.machineGraphView,
+          links: current.machineGraphView.links.map((viewLink) => {
+            if (viewLink.linkId !== linkId) {
+              return viewLink;
+            }
+
+            return {
+              ...viewLink,
+              label: formatLinkCondition(condition),
+              autolinkOrientation: autolink ? autolinkOrientation ?? viewLink.autolinkOrientation : viewLink.autolinkOrientation,
+            };
+          }),
+        },
+        selectedCanvasLinkId: linkId,
         selectedCanvasNodeId: null,
       };
     });
@@ -610,6 +718,7 @@ export class JtvStore {
             {
               nodeId: insertedNode.id,
               groupId: targetGroup.id,
+              kind: this.getMachineNodeViewKind(insertedNode),
               label: insertedNode.name,
               initial: insertedNode.isInitial,
               position: insertedNodePosition,
@@ -686,6 +795,7 @@ export class JtvStore {
             {
               nodeId: insertedNode.id,
               groupId: group.id,
+              kind: this.getMachineNodeViewKind(insertedNode),
               label: insertedNode.name,
               initial: insertedNode.isInitial,
               position,
@@ -730,6 +840,213 @@ export class JtvStore {
             : node),
           links: current.machineGraphView.links.map((link) => this.translateLinkForMovedGroup(link, groupId, delta)),
         },
+      };
+    });
+  }
+
+  makeCanvasNodeInitial(nodeId: string): void {
+    if (this.state().activeToolId !== 'pointer' || !this.canMakeCanvasNodeInitial(nodeId)) {
+      return;
+    }
+
+    this.state.update((current) => {
+      const nodeView = current.machineGraphView.nodes.find((node) => node.nodeId === nodeId);
+      const group = nodeView
+        ? current.machineGraph.groups.find((item) => item.id === nodeView.groupId)
+        : null;
+      const node = group ? this.findMachineNodeInGroup(group, nodeId) : null;
+
+      if (!nodeView || !group || !node) {
+        return current;
+      }
+
+      for (const graphGroup of current.machineGraph.groups) {
+        this.setInitialNodeInGroup(graphGroup, null);
+      }
+
+      node.isInitial = true;
+
+      return {
+        ...current,
+        machineGraph: {
+          ...current.machineGraph,
+          groups: [...current.machineGraph.groups],
+          initialGroupId: group.id,
+        },
+        machineGraphView: {
+          ...current.machineGraphView,
+          nodes: current.machineGraphView.nodes.map((viewNode) => ({
+            ...viewNode,
+            initial: viewNode.nodeId === nodeId,
+          })),
+        },
+        selectedCanvasLinkId: null,
+        selectedCanvasNodeId: nodeId,
+      };
+    });
+  }
+
+  canMakeCanvasNodeInitial(nodeId: string): boolean {
+    const nodeView = this.state().machineGraphView.nodes.find((node) => node.nodeId === nodeId);
+    const group = nodeView
+      ? this.state().machineGraph.groups.find((item) => item.id === nodeView.groupId)
+      : null;
+
+    return group?.entry?.id === nodeId;
+  }
+
+  deleteCanvasNode(nodeId: string): void {
+    if (this.state().activeToolId !== 'pointer') {
+      return;
+    }
+
+    this.state.update((current) => {
+      const nodeView = current.machineGraphView.nodes.find((node) => node.nodeId === nodeId);
+      const group = nodeView
+        ? current.machineGraph.groups.find((item) => item.id === nodeView.groupId)
+        : null;
+      const node = group ? this.findMachineNodeInGroup(group, nodeId) : null;
+
+      if (!nodeView || !group || !node) {
+        return current;
+      }
+
+      const replacementInitialNode = node.isInitial ? node.next ?? node.previous : null;
+
+      this.removeMachineNodeFromGroup(group, node);
+
+      if (replacementInitialNode) {
+        for (const graphGroup of current.machineGraph.groups) {
+          this.setInitialNodeInGroup(graphGroup, null);
+        }
+
+        replacementInitialNode.isInitial = true;
+      }
+
+      const groupIsEmpty = !group.entry && !group.exit;
+      const removedGroupIds = new Set(groupIsEmpty ? [group.id] : []);
+      const changedGroupIds = new Set([group.id]);
+      const shiftedNodes = current.machineGraphView.nodes
+        .filter((viewNode) => viewNode.nodeId !== nodeId)
+        .map((viewNode) => {
+          if (viewNode.groupId !== group.id || viewNode.position.x <= nodeView.position.x) {
+            return viewNode;
+          }
+
+          return {
+            ...viewNode,
+            position: {
+              ...viewNode.position,
+              x: viewNode.position.x - MACHINE_NODE_STEP,
+            },
+          };
+        });
+      const remainingGroups = current.machineGraph.groups.filter((item) => !removedGroupIds.has(item.id));
+      const initialGroupId = this.getInitialGroupIdAfterNodeDelete(
+        current.machineGraph.initialGroupId,
+        remainingGroups,
+        replacementInitialNode,
+        group,
+      );
+
+      if (!replacementInitialNode && initialGroupId) {
+        const initialGroup = remainingGroups.find((item) => item.id === initialGroupId);
+        const initialNode = initialGroup?.entry ?? null;
+
+        if (initialNode) {
+          for (const graphGroup of remainingGroups) {
+            this.setInitialNodeInGroup(graphGroup, null);
+          }
+
+          initialNode.isInitial = true;
+        }
+      }
+
+      const updatedGroups = current.machineGraphView.groups
+        .filter((groupView) => !removedGroupIds.has(groupView.groupId))
+        .map((groupView) => {
+          if (groupView.groupId !== group.id) {
+            return groupView;
+          }
+
+          return {
+            ...groupView,
+            label: formatGroupLabel(group),
+            width: Math.max(MACHINE_NODE_STEP, (groupView.width ?? MACHINE_NODE_STEP) - MACHINE_NODE_STEP),
+          };
+        });
+      const updatedNodes = shiftedNodes.map((viewNode) => ({
+        ...viewNode,
+        initial: this.isMachineNodeInitial(remainingGroups, viewNode.nodeId),
+      }));
+      const filteredLinks = current.machineGraph.links.filter(
+        (link) => !removedGroupIds.has(link.sourceGroup?.id ?? '') && !removedGroupIds.has(link.targetGroup?.id ?? ''),
+      );
+      const filteredAutolinks = (current.machineGraph.autolinks ?? []).filter(
+        (autolink) => autolink.node?.id !== nodeId && !removedGroupIds.has(this.getNodeGroupId(remainingGroups, autolink.node?.id ?? '')),
+      );
+      const updatedLinkViews = this.refreshLinkViewsForGroups(
+        current.machineGraphView.links.filter(
+          (link) =>
+            link.linkId !== nodeId &&
+            !removedGroupIds.has(link.sourceGroupId) &&
+            !removedGroupIds.has(link.targetGroupId) &&
+            !(link.kind === 'autolink' && !filteredAutolinks.some((autolink) => autolink.id === link.linkId)),
+        ),
+        [...changedGroupIds],
+        updatedNodes,
+        remainingGroups,
+        filteredAutolinks,
+      );
+
+      return {
+        ...current,
+        machineGraph: {
+          ...current.machineGraph,
+          groups: remainingGroups,
+          links: filteredLinks,
+          autolinks: filteredAutolinks,
+          initialGroupId,
+        },
+        machineGraphView: {
+          ...current.machineGraphView,
+          groups: updatedGroups,
+          nodes: updatedNodes,
+          links: updatedLinkViews,
+        },
+        selectedCanvasLinkId: null,
+        selectedCanvasNodeId: null,
+      };
+    });
+  }
+
+  deleteCanvasLink(linkId: string): void {
+    if (this.state().activeToolId !== 'pointer') {
+      return;
+    }
+
+    this.state.update((current) => {
+      const hasGraphLink = current.machineGraph.links.some((link) => link.id === linkId);
+      const hasAutolink = (current.machineGraph.autolinks ?? []).some((autolink) => autolink.id === linkId);
+      const hasViewLink = current.machineGraphView.links.some((link) => link.linkId === linkId);
+
+      if (!hasGraphLink && !hasAutolink && !hasViewLink) {
+        return current;
+      }
+
+      return {
+        ...current,
+        machineGraph: {
+          ...current.machineGraph,
+          links: current.machineGraph.links.filter((link) => link.id !== linkId),
+          autolinks: (current.machineGraph.autolinks ?? []).filter((autolink) => autolink.id !== linkId),
+        },
+        machineGraphView: {
+          ...current.machineGraphView,
+          links: current.machineGraphView.links.filter((link) => link.linkId !== linkId),
+        },
+        selectedCanvasLinkId: null,
+        selectedCanvasNodeId: null,
       };
     });
   }
@@ -872,6 +1189,25 @@ export class JtvStore {
     }));
   }
 
+  private getFirstConditionClauseOrDefault(condition: LinkCondition | null): ReadConditionClause {
+    return condition?.clauses[0]
+      ? {
+        tapeIndex: condition.clauses[0].tapeIndex,
+        acceptedValues: [...condition.clauses[0].acceptedValues],
+        negated: condition.clauses[0].negated,
+        assignToVariableName: condition.clauses[0].assignToVariableName,
+      }
+      : {
+        tapeIndex: 0,
+        acceptedValues: [],
+        negated: false,
+      };
+  }
+
+  private createLinkConditionFromClause(clause: ReadConditionClause): LinkCondition | null {
+    return clause.acceptedValues.length > 0 ? new LinkCondition([clause]) : null;
+  }
+
   private findMachineNodeInGroup(group: MachineGroup, nodeId: string): MachineNode | null {
     const visitedNodeIds = new Set<string>();
     let current = group.entry;
@@ -924,6 +1260,135 @@ export class JtvStore {
     } else {
       group.exit = insertedNode;
     }
+  }
+
+  private removeMachineNodeFromGroup(group: MachineGroup, node: MachineNode): void {
+    const previousNode = node.previous;
+    const nextNode = node.next;
+
+    if (previousNode) {
+      previousNode.next = nextNode;
+    } else {
+      group.entry = nextNode;
+    }
+
+    if (nextNode) {
+      nextNode.previous = previousNode;
+    } else {
+      group.exit = previousNode;
+    }
+
+    node.previous = null;
+    node.next = null;
+    node.isInitial = false;
+  }
+
+  private setInitialNodeInGroup(group: MachineGroup, initialNode: MachineNode | null): void {
+    const visitedNodeIds = new Set<string>();
+    let current = group.entry;
+
+    while (current && !visitedNodeIds.has(current.id)) {
+      visitedNodeIds.add(current.id);
+      current.isInitial = current.id === initialNode?.id;
+
+      if (current.id === group.exit?.id) {
+        break;
+      }
+
+      current = current.next;
+    }
+  }
+
+  private isMachineNodeInitial(groups: readonly MachineGroup[], nodeId: string): boolean {
+    const group = groups.find((item) => this.findMachineNodeInGroup(item, nodeId));
+    const node = group ? this.findMachineNodeInGroup(group, nodeId) : null;
+
+    return node?.isInitial ?? false;
+  }
+
+  private getNodeGroupId(groups: readonly MachineGroup[], nodeId: string): string {
+    return groups.find((group) => this.findMachineNodeInGroup(group, nodeId))?.id ?? '';
+  }
+
+  private getInitialGroupIdAfterNodeDelete(
+    currentInitialGroupId: string,
+    remainingGroups: readonly MachineGroup[],
+    replacementInitialNode: MachineNode | null,
+    deletedNodeGroup: MachineGroup,
+  ): string {
+    if (replacementInitialNode) {
+      return deletedNodeGroup.id;
+    }
+
+    if (remainingGroups.some((group) => group.id === currentInitialGroupId)) {
+      return currentInitialGroupId;
+    }
+
+    return remainingGroups[0]?.id ?? '';
+  }
+
+  private refreshLinkViewsForGroups(
+    links: readonly MachineLinkView[],
+    changedGroupIds: readonly string[],
+    nodes: readonly MachineGraphView['nodes'][number][],
+    groups: readonly MachineGroup[],
+    autolinks: readonly Autolink[],
+  ): MachineLinkView[] {
+    const changedGroupIdSet = new Set(changedGroupIds);
+
+    return links.map((link) => {
+      if (link.kind === 'autolink') {
+        const autolink = autolinks.find((item) => item.id === link.linkId);
+        const autolinkNode = autolink?.node
+          ? nodes.find((node) => node.nodeId === autolink.node?.id)
+          : null;
+
+        if (!autolinkNode || !changedGroupIdSet.has(autolinkNode.groupId)) {
+          return link;
+        }
+
+        return {
+          ...link,
+          points: [autolinkNode.position],
+        };
+      }
+
+      const sourceChanged = changedGroupIdSet.has(link.sourceGroupId);
+      const targetChanged = changedGroupIdSet.has(link.targetGroupId);
+
+      if (!sourceChanged && !targetChanged) {
+        return link;
+      }
+
+      const sourceGroup = groups.find((group) => group.id === link.sourceGroupId);
+      const targetGroup = groups.find((group) => group.id === link.targetGroupId);
+      const sourceNodeView = sourceGroup?.exit
+        ? nodes.find((node) => node.nodeId === sourceGroup.exit?.id)
+        : null;
+      const targetNodeView = targetGroup?.entry
+        ? nodes.find((node) => node.nodeId === targetGroup.entry?.id)
+        : null;
+      const points = link.points ?? [];
+
+      if (!points.length) {
+        return link;
+      }
+
+      return {
+        ...link,
+        points: points.map((point, index) => {
+          if (sourceChanged && index === 0 && sourceNodeView) {
+            return this.getNodeRightAnchor(sourceNodeView);
+          }
+
+          if (targetChanged && index === points.length - 1 && targetNodeView) {
+            return this.getNodeLeftAnchor(targetNodeView);
+          }
+
+          return point;
+        }),
+      };
+    });
   }
 
   private createMachineNodeId(graph: MachineGraph, prefix: string): string {
@@ -985,13 +1450,13 @@ export class JtvStore {
     return id;
   }
 
-  private isInsertableNodeTool(toolId: JtvToolId | null): toolId is 'move-left' | 'move-right' | 'symbol-lowercase' {
-    return toolId === 'move-left' || toolId === 'move-right' || toolId === 'symbol-lowercase';
+  private isInsertableNodeTool(toolId: JtvToolId | null): toolId is 'move-left' | 'move-right' | 'symbol-lowercase' | 'hub' {
+    return toolId === 'move-left' || toolId === 'move-right' || toolId === 'symbol-lowercase' || toolId === 'hub';
   }
 
   private createMachineNodeForTool(
     state: JtvState,
-    toolId: 'move-left' | 'move-right' | 'symbol-lowercase',
+    toolId: 'move-left' | 'move-right' | 'symbol-lowercase' | 'hub',
     tapeIndex: number,
   ): MachineNode | null {
     if (toolId === 'move-left') {
@@ -1002,11 +1467,19 @@ export class JtvStore {
       return new MoveRightNode(this.createMachineNodeId(state.machineGraph, 'move-right'), tapeIndex);
     }
 
+    if (toolId === 'hub') {
+      return new HubNode(this.createMachineNodeId(state.machineGraph, 'hub'), tapeIndex);
+    }
+
     return new WriterNode(
       this.createMachineNodeId(state.machineGraph, 'write-symbol'),
       state.selectedSymbol,
       tapeIndex,
     );
+  }
+
+  private getMachineNodeViewKind(node: MachineNode): 'text' | 'hub' {
+    return node instanceof HubNode ? 'hub' : 'text';
   }
 
   private createLinkBetweenNodes(
@@ -1098,7 +1571,14 @@ export class JtvStore {
     };
   }
 
-  private getNodeRightAnchor(node: { label: string; position: ViewPoint; width?: number }): ViewPoint {
+  private getNodeRightAnchor(node: { kind?: string; label: string; position: ViewPoint; width?: number }): ViewPoint {
+    if (node.kind === 'hub') {
+      return {
+        x: node.position.x + 6,
+        y: node.position.y,
+      };
+    }
+
     const width = node.width ?? Math.max(16, node.label.length * 14);
 
     return {
@@ -1107,7 +1587,14 @@ export class JtvStore {
     };
   }
 
-  private getNodeLeftAnchor(node: { position: ViewPoint }): ViewPoint {
+  private getNodeLeftAnchor(node: { kind?: string; position: ViewPoint }): ViewPoint {
+    if (node.kind === 'hub') {
+      return {
+        x: node.position.x - 6,
+        y: node.position.y,
+      };
+    }
+
     return {
       x: node.position.x - 5,
       y: node.position.y - 10,

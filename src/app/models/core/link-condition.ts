@@ -54,7 +54,7 @@ export class LinkCondition {
 
   getAteLabel(): string {
     if (this.clauses.length === 0) {
-      return '[1]';
+      return '';
     }
 
     const [clause] = this.clauses;

@@ -26,7 +26,7 @@ import { JtvStore } from '../stores/jtv.store';
                   selectionMode="single"
                   [(selection)]="selectedAteNode"
                   (onNodeSelect)="selectAteNode($event.node)"
-                  (onNodeUnselect)="clearAteSelection()"
+                  (onNodeUnselect)="restoreAteSelection()"
                   [style]="treeStyle"
                   [indentation]="0.25"
                 >
@@ -253,8 +253,16 @@ export class ExplorerPanel {
     this.store.selectAteNode(node.data?.ateNodeId ?? null);
   }
 
-  clearAteSelection(): void {
-    this.store.selectAteNode(null);
+  restoreAteSelection(): void {
+    const selectedNodeId = this.store.selectedAteNode()?.id ?? null;
+
+    if (!selectedNodeId) {
+      return;
+    }
+
+    queueMicrotask(() => {
+      this.selectedAteNode = this.findTreeNodeByAteNodeId(this.ateNodes(), selectedNodeId);
+    });
   }
 
   handleAteKeydown(event: KeyboardEvent): void {
@@ -283,6 +291,22 @@ export class ExplorerPanel {
 
   private getSelectableAteNodes(): TreeNode[] {
     return this.ateNodes().flatMap((node) => this.flattenSelectableTreeNodes(node));
+  }
+
+  private findTreeNodeByAteNodeId(nodes: readonly TreeNode[], ateNodeId: string): TreeNode | null {
+    for (const node of nodes) {
+      if (node.data?.ateNodeId === ateNodeId) {
+        return node;
+      }
+
+      const childMatch = this.findTreeNodeByAteNodeId(node.children ?? [], ateNodeId);
+
+      if (childMatch) {
+        return childMatch;
+      }
+    }
+
+    return null;
   }
 
   private flattenSelectableTreeNodes(node: TreeNode): TreeNode[] {

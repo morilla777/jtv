@@ -23,6 +23,6 @@ export class Autolink implements AteTraceRenderable {
   }
 
   getAteLabel(): string {
-    return this.condition?.getAteLabel() ?? '[1]';
+    return this.condition?.getAteLabel() ?? '';
   }
 }

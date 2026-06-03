@@ -1,6 +1,8 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MessageService, type MenuItem } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
+import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
 import { DialogModule } from 'primeng/dialog';
 
 import { JtvStore } from '../stores/jtv.store';
@@ -8,14 +10,32 @@ import { MachineLinkView, ViewPoint } from '../models/view';
 
 @Component({
   selector: 'app-designer-canvas-panel',
-  imports: [ButtonModule, DialogModule, FormsModule],
+  imports: [ButtonModule, ContextMenuModule, DialogModule, FormsModule],
   template: `
     <div class="panel">
+      <p-contextMenu #nodeContextMenu [model]="nodeContextMenuItems">
+        <ng-template #item let-item>
+          <div class="node-context-menu-item">
+            <img class="node-context-menu-icon" [src]="item.data.iconSrc" alt="" />
+            <span>{{ item.label }}</span>
+          </div>
+        </ng-template>
+      </p-contextMenu>
+      <p-contextMenu #linkContextMenu [model]="linkContextMenuItems">
+        <ng-template #item let-item>
+          <div class="node-context-menu-item">
+            <img class="node-context-menu-icon" [src]="item.data.iconSrc" alt="" />
+            <span>{{ item.label }}</span>
+          </div>
+        </ng-template>
+      </p-contextMenu>
+
       <div class="canvas-container">
         <svg
+          #designerSvg
           class="designer-svg"
           [attr.viewBox]="viewBox()"
-          preserveAspectRatio="xMinYMin meet"
+          preserveAspectRatio="xMinYMin slice"
           aria-label="Maquina de Turing modular"
           (pointermove)="handleCanvasPointerMove($event)"
           (pointerup)="stopDraggingNodeGroup()"
@@ -68,8 +88,8 @@ import { MachineLinkView, ViewPoint } from '../models/view';
           <rect
             x="0"
             y="0"
-            [attr.width]="canvasWidth"
-            [attr.height]="canvasHeight"
+            [attr.width]="canvasWidth()"
+            [attr.height]="canvasHeight()"
             class="canvas-background"
             (click)="insertNodeOnCanvas($event)"
           ></rect>
@@ -89,26 +109,46 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                   (mouseleave)="clearHoveredElement()"
                   (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
                   (click)="handleNodeClick(node.nodeId); $event.stopPropagation()"
+                  (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
                 >
                   &gt;
                 </text>
               }
 
-              <text
-                [attr.x]="node.position.x"
-                [attr.y]="node.position.y"
-                class="machine-text"
-                [class.machine-text-selected]="node.selected"
-                [class.machine-text-canvas-selected]="node.canvasSelected || isTransitionSourceNode(node.nodeId)"
-                [class.machine-text-hovered]="isHoveredNode(node.nodeId)"
-                (mouseenter)="hoverNode(node.nodeId, $event)"
-                (mousemove)="hoverNode(node.nodeId, $event)"
-                (mouseleave)="clearHoveredElement()"
-                (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
-                (click)="handleNodeClick(node.nodeId); $event.stopPropagation()"
-              >
-                {{ node.label }}
-              </text>
+              @if (node.kind === 'hub') {
+                <circle
+                  [attr.cx]="node.position.x"
+                  [attr.cy]="node.position.y"
+                  r="6"
+                  class="machine-hub"
+                  [class.machine-hub-selected]="node.selected"
+                  [class.machine-hub-canvas-selected]="node.canvasSelected || isTransitionSourceNode(node.nodeId)"
+                  [class.machine-hub-hovered]="isHoveredNode(node.nodeId)"
+                  (mouseenter)="hoverNode(node.nodeId, $event)"
+                  (mousemove)="hoverNode(node.nodeId, $event)"
+                  (mouseleave)="clearHoveredElement()"
+                  (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
+                  (click)="handleNodeClick(node.nodeId); $event.stopPropagation()"
+                  (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
+                ></circle>
+              } @else {
+                <text
+                  [attr.x]="node.position.x"
+                  [attr.y]="node.position.y"
+                  class="machine-text"
+                  [class.machine-text-selected]="node.selected"
+                  [class.machine-text-canvas-selected]="node.canvasSelected || isTransitionSourceNode(node.nodeId)"
+                  [class.machine-text-hovered]="isHoveredNode(node.nodeId)"
+                  (mouseenter)="hoverNode(node.nodeId, $event)"
+                  (mousemove)="hoverNode(node.nodeId, $event)"
+                  (mouseleave)="clearHoveredElement()"
+                  (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
+                  (click)="handleNodeClick(node.nodeId); $event.stopPropagation()"
+                  (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
+                >
+                  {{ node.label }}
+                </text>
+              }
             }
 
             @if (nodeInsertionCursor(); as cursor) {
@@ -124,6 +164,16 @@ import { MachineLinkView, ViewPoint } from '../models/view';
             @for (link of machineGraphView().links; track link.linkId) {
               <path
                 [attr.d]="getLinkPath(link)"
+                class="arrow-hit-area"
+                (mouseenter)="hoverLink(link.linkId)"
+                (mouseleave)="clearHoveredElement()"
+                (click)="selectLink(link.linkId); $event.stopPropagation()"
+                (dblclick)="editLink(link.linkId, $event)"
+                (contextmenu)="showLinkContextMenu(link.linkId, $event)"
+              ></path>
+
+              <path
+                [attr.d]="getLinkPath(link)"
                 class="arrow-line"
                 [class.arrow-line-selected]="link.selected"
                 [class.arrow-line-canvas-selected]="link.canvasSelected"
@@ -132,6 +182,8 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                 (mouseenter)="hoverLink(link.linkId)"
                 (mouseleave)="clearHoveredElement()"
                 (click)="selectLink(link.linkId); $event.stopPropagation()"
+                (dblclick)="editLink(link.linkId, $event)"
+                (contextmenu)="showLinkContextMenu(link.linkId, $event)"
               ></path>
 
               @if (link.label) {
@@ -146,6 +198,8 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                     (mouseenter)="hoverLink(link.linkId)"
                     (mouseleave)="clearHoveredElement()"
                     (click)="selectLink(link.linkId); $event.stopPropagation()"
+                    (dblclick)="editLink(link.linkId, $event)"
+                    (contextmenu)="showLinkContextMenu(link.linkId, $event)"
                   >
                     <tspan class="overline-symbol">[{{ symbol }}]</tspan>
                   </text>
@@ -160,6 +214,8 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                     (mouseenter)="hoverLink(link.linkId)"
                     (mouseleave)="clearHoveredElement()"
                     (click)="selectLink(link.linkId); $event.stopPropagation()"
+                    (dblclick)="editLink(link.linkId, $event)"
+                    (contextmenu)="showLinkContextMenu(link.linkId, $event)"
                   >
                     {{ link.label }}
                   </text>
@@ -237,6 +293,7 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                     icon="pi pi-chevron-left"
                     class="orientation-button orientation-left"
                     [class.orientation-button-active]="autolinkOrientation === 'left'"
+                    [disabled]="isAutolinkLeftOrientationDisabled()"
                     (click)="autolinkOrientation = 'left'"
                   ></button>
                   <button
@@ -302,6 +359,14 @@ import { MachineLinkView, ViewPoint } from '../models/view';
       stroke-linecap: square;
     }
 
+    .arrow-hit-area {
+      fill: none;
+      stroke: transparent;
+      stroke-width: 12;
+      stroke-linecap: round;
+      cursor: default;
+    }
+
     .arrow-head {
       fill: #000;
     }
@@ -334,6 +399,22 @@ import { MachineLinkView, ViewPoint } from '../models/view';
     }
 
     .machine-text-canvas-selected {
+      fill: rgb(255, 0, 255);
+    }
+
+    .machine-hub {
+      fill: #000;
+    }
+
+    .machine-hub-selected {
+      fill: red;
+    }
+
+    .machine-hub-hovered {
+      fill: rgb(255, 175, 175);
+    }
+
+    .machine-hub-canvas-selected {
       fill: rgb(255, 0, 255);
     }
 
@@ -490,10 +571,29 @@ import { MachineLinkView, ViewPoint } from '../models/view';
       border-color: rgb(255, 0, 255);
       background: color-mix(in srgb, rgb(255, 0, 255) 20%, transparent);
     }
+
+    .node-context-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 8rem;
+    }
+
+    .node-context-menu-icon {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+      image-rendering: pixelated;
+      flex: 0 0 auto;
+    }
   `],
 })
-export class DesignerCanvasPanel {
+export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private readonly store = inject(JtvStore);
+  private readonly messageService = inject(MessageService);
+  @ViewChild('nodeContextMenu') private nodeContextMenu?: ContextMenu;
+  @ViewChild('linkContextMenu') private linkContextMenu?: ContextMenu;
+  @ViewChild('designerSvg') private designerSvg?: ElementRef<SVGSVGElement>;
   private readonly hoveredNodeId = signal<string | null>(null);
   private readonly hoveredLinkId = signal<string | null>(null);
   private readonly hoveredNodeCursorSide = signal<'left' | 'right'>('right');
@@ -501,6 +601,8 @@ export class DesignerCanvasPanel {
   private readonly transitionDraftEndPoint = signal<ViewPoint | null>(null);
   private readonly conditionalTransitionTargetNodeId = signal<string | null>(null);
   private readonly autolinkTargetNodeId = signal<string | null>(null);
+  private readonly editingLinkId = signal<string | null>(null);
+  private resizeObserver: ResizeObserver | null = null;
   readonly conditionDialogMode = signal<'conditional-link' | 'autolink' | null>(null);
   readonly conditionDialogVisible = signal(false);
   private draggedNodeGroup: { nodeId: string; lastPoint: ViewPoint } | null = null;
@@ -510,15 +612,16 @@ export class DesignerCanvasPanel {
       this.transitionDraftEndPoint.set(null);
       this.conditionalTransitionTargetNodeId.set(null);
       this.autolinkTargetNodeId.set(null);
+      this.editingLinkId.set(null);
       this.conditionDialogMode.set(null);
       this.conditionDialogVisible.set(false);
     }
   });
 
-  readonly canvasWidth = 560;
-  readonly canvasHeight = 340;
+  readonly canvasWidth = signal(560);
+  readonly canvasHeight = signal(340);
   readonly machineGraphView = computed(() => this.store.machineGraphView());
-  readonly viewBox = computed(() => `0 0 ${this.canvasWidth} ${this.canvasHeight}`);
+  readonly viewBox = computed(() => `0 0 ${this.canvasWidth()} ${this.canvasHeight()}`);
   readonly isPointerToolActive = computed(() => this.store.activeToolId() === 'pointer');
   readonly isLinkInsertionToolActive = computed(() =>
     ['transition', 'conditional-transition'].includes(this.store.activeToolId() ?? ''),
@@ -526,7 +629,7 @@ export class DesignerCanvasPanel {
   readonly isAutolinkInsertionToolActive = computed(() => this.store.activeToolId() === 'loop-transition');
   readonly isTransitionToolActive = computed(() => this.isLinkInsertionToolActive());
   readonly isNodeInsertionToolActive = computed(() =>
-    ['move-left', 'move-right', 'symbol-lowercase'].includes(this.store.activeToolId() ?? ''),
+    ['move-left', 'move-right', 'symbol-lowercase', 'hub'].includes(this.store.activeToolId() ?? ''),
   );
   readonly isCanvasCursorActive = computed(
     () =>
@@ -547,12 +650,12 @@ export class DesignerCanvasPanel {
       return null;
     }
 
-    const width = node.width ?? Math.max(16, node.label.length * 14);
+    const width = node.kind === 'hub' ? 12 : node.width ?? Math.max(16, node.label.length * 14);
 
     return {
       x: this.hoveredNodeCursorSide() === 'left' ? node.position.x - 5 : node.position.x + width,
-      y1: node.position.y - 26,
-      y2: node.position.y + 6,
+      y1: node.kind === 'hub' ? node.position.y - 10 : node.position.y - 26,
+      y2: node.kind === 'hub' ? node.position.y + 10 : node.position.y + 6,
     };
   });
   readonly transitionDraftPath = computed(() => {
@@ -583,11 +686,66 @@ export class DesignerCanvasPanel {
     ...Array.from({ length: 26 }, (_, index) => String.fromCharCode(97 + index)),
     ...Array.from({ length: 10 }, (_, index) => index.toString()),
   ];
+  readonly isAutolinkLeftOrientationDisabled = computed(() => {
+    if (this.conditionDialogMode() !== 'autolink') {
+      return false;
+    }
+
+    const nodeId = this.autolinkTargetNodeId();
+
+    return nodeId ? this.store.hasCanvasNodeLeftNeighbor(nodeId) : false;
+  });
 
   conditionTapeIndex = 0;
   conditionNegated = false;
-  conditionSymbol = this.conditionSymbols[0];
+  conditionSymbol: string | null = this.conditionSymbols[0];
   autolinkOrientation: 'top' | 'bottom' | 'left' | 'right' = 'right';
+  private contextMenuNodeId: string | null = null;
+  private contextMenuLinkId: string | null = null;
+
+  readonly nodeContextMenuItems: MenuItem[] = [
+    {
+      label: 'Hacer Inicial',
+      data: {
+        iconSrc: 'assets/images/Start16.gif',
+      },
+      disabled: true,
+      command: () => this.makeContextNodeInitial(),
+    },
+    {
+      label: 'Eliminar',
+      data: {
+        iconSrc: 'assets/images/Delete16.gif',
+      },
+      command: () => this.deleteContextNode(),
+    },
+  ];
+  readonly linkContextMenuItems: MenuItem[] = [
+    {
+      label: 'Eliminar',
+      data: {
+        iconSrc: 'assets/images/Delete16.gif',
+      },
+      command: () => this.deleteContextLink(),
+    },
+  ];
+
+  ngAfterViewInit(): void {
+    this.updateCanvasSize();
+
+    const svg = this.designerSvg?.nativeElement;
+
+    if (!svg) {
+      return;
+    }
+
+    this.resizeObserver = new ResizeObserver(() => this.updateCanvasSize());
+    this.resizeObserver.observe(svg);
+  }
+
+  ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
+  }
 
   getLinkPath(link: MachineLinkView): string {
     if (link.kind === 'autolink') {
@@ -702,6 +860,33 @@ export class DesignerCanvasPanel {
     this.store.selectCanvasLink(linkId);
   }
 
+  editLink(linkId: string, event: MouseEvent): void {
+    if (!this.isPointerToolActive()) {
+      return;
+    }
+
+    const editState = this.store.getCanvasLinkEditState(linkId);
+
+    if (!editState) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.draggedNodeGroup = null;
+    this.clearTransitionDraft();
+    this.store.selectCanvasLink(linkId);
+    this.editingLinkId.set(linkId);
+    this.conditionTapeIndex = editState.clause.tapeIndex;
+    this.conditionNegated = editState.clause.negated ?? false;
+    this.conditionSymbol = editState.clause.acceptedValues[0] ?? null;
+    this.autolinkOrientation = editState.autolinkOrientation ?? 'right';
+    this.autolinkTargetNodeId.set(editState.nodeId ?? null);
+    this.conditionDialogMode.set(editState.mode);
+    this.normalizeAutolinkOrientation();
+    this.conditionDialogVisible.set(true);
+  }
+
   handleCanvasPointerMove(event: PointerEvent): void {
     this.dragSelectedNodeGroup(event);
     this.updateTransitionDraft(event);
@@ -769,6 +954,35 @@ export class DesignerCanvasPanel {
     this.draggedNodeGroup = null;
   }
 
+  showNodeContextMenu(nodeId: string, event: MouseEvent): void {
+    if (!this.isPointerToolActive()) {
+      this.cancelTransitionDraft(event);
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.draggedNodeGroup = null;
+    this.contextMenuNodeId = nodeId;
+    this.store.selectCanvasNode(nodeId);
+    this.nodeContextMenuItems[0].disabled = !this.canMakeContextNodeInitial();
+    this.nodeContextMenu?.show(event);
+  }
+
+  showLinkContextMenu(linkId: string, event: MouseEvent): void {
+    if (!this.isPointerToolActive()) {
+      this.cancelTransitionDraft(event);
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.draggedNodeGroup = null;
+    this.contextMenuLinkId = linkId;
+    this.store.selectCanvasLink(linkId);
+    this.linkContextMenu?.show(event);
+  }
+
   cancelTransitionDraft(event?: Event): void {
     if (!this.isTransitionToolActive() || !this.transitionSourceNodeId()) {
       return;
@@ -818,8 +1032,21 @@ export class DesignerCanvasPanel {
       return;
     }
 
+    if (this.store.hasCanvasNodeAutolink(nodeId)) {
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'warn',
+        summary: 'JTV',
+        detail: 'No se permite agregar más de un autoenlace a un nodo',
+        sticky: true,
+        closable: true,
+      });
+      return;
+    }
+
     this.autolinkTargetNodeId.set(nodeId);
     this.conditionDialogMode.set('autolink');
+    this.normalizeAutolinkOrientation();
     this.conditionDialogVisible.set(true);
     this.store.selectCanvasNodeForTransition(nodeId);
   }
@@ -875,7 +1102,14 @@ export class DesignerCanvasPanel {
     this.transitionDraftEndPoint.set(this.getSvgPoint(event.currentTarget as SVGSVGElement, event));
   }
 
-  private getNodeRightAnchor(node: { label: string; position: ViewPoint; width?: number }): ViewPoint {
+  private getNodeRightAnchor(node: { kind?: string; label: string; position: ViewPoint; width?: number }): ViewPoint {
+    if (node.kind === 'hub') {
+      return {
+        x: node.position.x + 6,
+        y: node.position.y,
+      };
+    }
+
     const width = node.width ?? Math.max(16, node.label.length * 14);
 
     return {
@@ -885,6 +1119,25 @@ export class DesignerCanvasPanel {
   }
 
   acceptConditionalTransition(): void {
+    const editingLinkId = this.editingLinkId();
+
+    if (editingLinkId) {
+      this.store.updateCanvasLinkCondition(
+        editingLinkId,
+        {
+          tapeIndex: this.conditionTapeIndex,
+          acceptedValues: this.conditionSymbol ? [this.conditionSymbol] : [],
+          negated: this.conditionNegated,
+        },
+        this.conditionDialogMode() === 'autolink' ? this.autolinkOrientation : undefined,
+      );
+      this.conditionDialogVisible.set(false);
+      this.conditionDialogMode.set(null);
+      this.editingLinkId.set(null);
+      this.autolinkTargetNodeId.set(null);
+      return;
+    }
+
     const sourceNodeId = this.transitionSourceNodeId();
     const targetNodeId = this.conditionalTransitionTargetNodeId();
 
@@ -900,7 +1153,7 @@ export class DesignerCanvasPanel {
 
     this.store.createConditionalLinkBetweenNodes(sourceNodeId, targetNodeId, {
       tapeIndex: this.conditionTapeIndex,
-      acceptedValues: [this.conditionSymbol],
+      acceptedValues: this.conditionSymbol ? [this.conditionSymbol] : [],
       negated: this.conditionNegated,
     });
     this.conditionDialogVisible.set(false);
@@ -913,6 +1166,7 @@ export class DesignerCanvasPanel {
     this.conditionDialogVisible.set(false);
     this.conditionalTransitionTargetNodeId.set(null);
     this.autolinkTargetNodeId.set(null);
+    this.editingLinkId.set(null);
     this.conditionDialogMode.set(null);
     this.clearTransitionDraft();
   }
@@ -920,7 +1174,7 @@ export class DesignerCanvasPanel {
   clearConditionDialog(): void {
     this.conditionTapeIndex = 0;
     this.conditionNegated = false;
-    this.conditionSymbol = this.conditionSymbols[0];
+    this.conditionSymbol = null;
     this.autolinkOrientation = 'right';
   }
 
@@ -936,7 +1190,7 @@ export class DesignerCanvasPanel {
       nodeId,
       {
         tapeIndex: this.conditionTapeIndex,
-        acceptedValues: [this.conditionSymbol],
+        acceptedValues: this.conditionSymbol ? [this.conditionSymbol] : [],
         negated: this.conditionNegated,
       },
       this.autolinkOrientation,
@@ -947,10 +1201,57 @@ export class DesignerCanvasPanel {
     this.clearTransitionDraft();
   }
 
+  private normalizeAutolinkOrientation(): void {
+    if (this.autolinkOrientation === 'left' && this.isAutolinkLeftOrientationDisabled()) {
+      this.autolinkOrientation = 'right';
+    }
+  }
+
   private clearTransitionDraft(): void {
     this.transitionSourceNodeId.set(null);
     this.transitionDraftEndPoint.set(null);
     this.store.clearCanvasSelection();
+  }
+
+  private makeContextNodeInitial(): void {
+    if (!this.contextMenuNodeId) {
+      return;
+    }
+
+    this.store.makeCanvasNodeInitial(this.contextMenuNodeId);
+  }
+
+  private deleteContextNode(): void {
+    if (!this.contextMenuNodeId) {
+      return;
+    }
+
+    this.store.deleteCanvasNode(this.contextMenuNodeId);
+    this.contextMenuNodeId = null;
+  }
+
+  private deleteContextLink(): void {
+    if (!this.contextMenuLinkId) {
+      return;
+    }
+
+    this.store.deleteCanvasLink(this.contextMenuLinkId);
+    this.contextMenuLinkId = null;
+  }
+
+  private canMakeContextNodeInitial(): boolean {
+    return this.contextMenuNodeId ? this.store.canMakeCanvasNodeInitial(this.contextMenuNodeId) : false;
+  }
+
+  private updateCanvasSize(): void {
+    const bounds = this.designerSvg?.nativeElement.getBoundingClientRect();
+
+    if (!bounds) {
+      return;
+    }
+
+    this.canvasWidth.set(Math.max(560, Math.ceil(bounds.width)));
+    this.canvasHeight.set(Math.max(340, Math.ceil(bounds.height)));
   }
 
   private getSvgPoint(svg: SVGSVGElement, event: MouseEvent | PointerEvent): ViewPoint {
