@@ -3,6 +3,7 @@ import { TreeNode } from 'primeng/api';
 import { TabsModule } from 'primeng/tabs';
 import { TreeModule } from 'primeng/tree';
 import { TranslatePipe } from '../i18n/translate.pipe';
+import { TranslationService } from '../i18n/translation.service';
 import { AteNode } from '../models/ate';
 import { JtvStore } from '../stores/jtv.store';
 
@@ -14,7 +15,7 @@ import { JtvStore } from '../stores/jtv.store';
       <div class="panel-body">
         <p-tabs value="ate" class="explorer-tabs" [style]="tabsStyle">
           <p-tablist>
-            <p-tab value="ate">ATE</p-tab>
+            <p-tab value="ate">{{ 'explorer.ett' | translate }}</p-tab>
             <p-tab value="machines">{{ 'explorer.machines' | translate }}</p-tab>
           </p-tablist>
 
@@ -183,6 +184,7 @@ import { JtvStore } from '../stores/jtv.store';
 })
 export class ExplorerPanel {
   private readonly store = inject(JtvStore);
+  private readonly i18n = inject(TranslationService);
 
   readonly tabsStyle = {
     width: '100%',
@@ -238,9 +240,9 @@ export class ExplorerPanel {
   private toTreeNode(node: AteNode): TreeNode {
     return {
       key: node.id,
-      label: node.label,
+      label: node.kind === 'root' ? this.i18n.translate('explorer.ateRootLabel') : node.label,
       data: {
-        iconSrc: node.iconSrc,
+        iconSrc: node.kind === 'root' ? this.getAteRootIconSrc() : node.iconSrc,
         ateNodeId: node.id,
       },
       expanded: true,
@@ -314,4 +316,11 @@ export class ExplorerPanel {
 
     return node.selectable === false ? children : [node, ...children];
   }
+
+  private getAteRootIconSrc(): string {
+    const fileName = this.i18n.currentLang() === 'en' ? 'ETT_ATE.gif' : 'ATE_ATE.gif';
+
+    return `assets/images/${fileName}`;
+  }
+
 }

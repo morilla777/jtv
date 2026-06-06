@@ -13,6 +13,8 @@ import { MetaValueDictionary } from './meta-value-dictionary';
 import { MoveLeftNode } from './move-left-node';
 import { MoveRightNode } from './move-right-node';
 import { Tape } from './tape';
+import { SymbolValue } from './symbol-value';
+import { VariableValue } from './variable-value';
 import { WriterNode } from './writer-node';
 
 describe('MachineGraphRunner', () => {
@@ -74,6 +76,146 @@ describe('MachineGraphRunner', () => {
     expect(new Link('unconditional', null, null).getAteLabel()).toBe('');
     expect(new Autolink('unconditional-autolink', null).getAteLabel()).toBe('');
     expect(new LinkCondition([]).getAteLabel()).toBe('');
+  });
+
+  it('evaluates multiple accepted symbols as an OR condition', () => {
+    const tape = new Tape();
+    tape.load('b');
+    tape.setHeadPosition(1);
+    const condition = new LinkCondition([{ tapeIndex: 0, acceptedValues: ['a', 'b', 'c'] }]);
+
+    expect(condition.getAteLabel()).toBe('[a,b,c]');
+    expect(condition.evaluate({ tapes: [tape], metaValues: new MetaValueDictionary() }).success).toBe(true);
+
+    tape.load('d');
+    tape.setHeadPosition(1);
+
+    expect(condition.evaluate({ tapes: [tape], metaValues: new MetaValueDictionary() }).success).toBe(false);
+  });
+
+  it('writes the current value of a variable node', () => {
+    const tape = new Tape();
+    const variable = new VariableValue('α');
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    variable.setValue(SymbolValue.require('b'));
+    context.metaValues.addVariable(variable);
+
+    const ok = new WriterNode('write-alpha', 'α', 0).execute(context);
+
+    expect(ok).toBe(true);
+    expect(tape.getSnapshot()).toEqual({
+      headPosition: 0,
+      cells: {
+        0: 'b',
+      },
+    });
+  });
+
+  it('assigns a read symbol to a variable when the condition passes', () => {
+    const tape = new Tape();
+    const sigma = '\u03c3';
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    tape.load('a');
+    tape.setHeadPosition(1);
+    const condition = new LinkCondition([{ tapeIndex: 0, acceptedValues: ['a'], assignToVariableName: sigma }]);
+
+    expect(condition.getAteLabel()).toBe(`[${sigma} = a]`);
+    expect(condition.evaluate(context).success).toBe(true);
+    expect(context.metaValues.getVariable(sigma)?.resolve().getName()).toBe('a');
+  });
+
+  it('records variable assignment links with the link icon in the execution trace', () => {
+    const tape = new Tape();
+    const sigma = '\u03c3';
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    tape.load('a');
+    tape.setHeadPosition(1);
+    const startNode = new HubNode('start', 0, true);
+    const doneNode = new WriterNode('done', 'b', 0);
+    const startGroup = new LinearMachineGroup('start-group', startNode, startNode);
+    const doneGroup = new LinearMachineGroup('done-group', doneNode, doneNode);
+    const graph: MachineGraph = {
+      groups: [startGroup, doneGroup],
+      links: [
+        new Link(
+          'assign-sigma',
+          startGroup,
+          doneGroup,
+          new LinkCondition([{ tapeIndex: 0, acceptedValues: ['a'], assignToVariableName: sigma }]),
+        ),
+      ],
+      initialGroupId: startGroup.id,
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA');
+
+    const ok = new MachineGraphRunner().run(graph, context, traceRecorder);
+
+    expect(ok).toBe(true);
+    expect(traceRecorder.root.children).toContainEqual(
+      expect.objectContaining({
+        label: `[${sigma} = a]`,
+        iconSrc: 'assets/images/link_ATE.gif',
+        kind: 'link',
+        linkId: 'assign-sigma',
+      }),
+    );
+  });
+
+  it('records variable writer nodes with the sigma icon and assigned value in the execution trace', () => {
+    const tape = new Tape();
+    const sigma = '\u03c3';
+    const variable = new VariableValue(sigma);
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    variable.setValue(SymbolValue.require('c'));
+    context.metaValues.addVariable(variable);
+    const writeVariable = new WriterNode('write-sigma', sigma, 0, true);
+    const graph: MachineGraph = {
+      groups: [new LinearMachineGroup('write-variable', writeVariable, writeVariable)],
+      links: [],
+      initialGroupId: 'write-variable',
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA');
+
+    const ok = new MachineGraphRunner().run(graph, context, traceRecorder);
+
+    expect(ok).toBe(true);
+    expect(traceRecorder.root.children).toContainEqual(
+      expect.objectContaining({
+        label: `[${sigma} = c]`,
+        iconSrc: 'assets/images/sigma_ATE.gif',
+        kind: 'machine-node',
+        machineNodeId: 'write-sigma',
+      }),
+    );
+  });
+
+  it('uses variable values as accepted condition operands', () => {
+    const tape = new Tape();
+    const variable = new VariableValue('β');
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    tape.load('b');
+    tape.setHeadPosition(1);
+    variable.setValue(SymbolValue.require('b'));
+    context.metaValues.addVariable(variable);
+    const condition = new LinkCondition([{ tapeIndex: 0, acceptedValues: ['β'] }]);
+
+    expect(condition.getAteLabel()).toBe('[β]');
+    expect(condition.evaluate(context).success).toBe(true);
   });
 
   it('records the deterministic execution trace', () => {

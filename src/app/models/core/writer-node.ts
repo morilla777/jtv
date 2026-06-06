@@ -3,6 +3,8 @@ import { ExecutionContext } from './execution-context';
 import { SymbolValue } from './symbol-value';
 
 export class WriterNode extends AbstractMachineNode {
+  private lastVariableWrite: { variableName: string; valueName: string } | null = null;
+
   constructor(
     id: string,
     name: string,
@@ -13,6 +15,7 @@ export class WriterNode extends AbstractMachineNode {
   }
 
   execute(context: ExecutionContext): boolean {
+    this.lastVariableWrite = null;
     const tape = context.tapes[this.tapeIndex];
 
     if (!tape) {
@@ -33,7 +36,16 @@ export class WriterNode extends AbstractMachineNode {
     }
 
     try {
-      tape.write(metaValue.resolve());
+      const resolvedValue = metaValue.resolve();
+      tape.write(resolvedValue);
+
+      if (context.metaValues.getVariable(this.name)) {
+        this.lastVariableWrite = {
+          variableName: this.name,
+          valueName: resolvedValue.getName(),
+        };
+      }
+
       return true;
     } catch {
       return false;
@@ -41,6 +53,18 @@ export class WriterNode extends AbstractMachineNode {
   }
 
   override getAteIconName(): string {
+    if (this.lastVariableWrite) {
+      return 'sigma_ATE.gif';
+    }
+
     return this.name === '#' ? '#_ATE.gif' : 'a_ATE.gif';
+  }
+
+  override getAteLabel(): string {
+    if (this.lastVariableWrite) {
+      return `[${this.lastVariableWrite.variableName} = ${this.lastVariableWrite.valueName}]`;
+    }
+
+    return super.getAteLabel();
   }
 }

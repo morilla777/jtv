@@ -434,7 +434,6 @@ export class Topbar {
 
   readonly machineOptions = ['MAQUINA 1', 'MÁQUINA 2'];
 
-  selectedGreekLowercase = this.greekLowercaseOptions[0];
   selectedUppercase = this.uppercaseOptions[0];
   selectedMachine = this.machineOptions[0];
   executionFinished = false;
@@ -445,6 +444,14 @@ export class Topbar {
 
   set selectedSymbol(symbol: string) {
     this.store.selectSymbol(symbol);
+  }
+
+  get selectedGreekLowercase(): string {
+    return this.store.selectedVariable();
+  }
+
+  set selectedGreekLowercase(variable: string) {
+    this.store.selectVariable(variable);
   }
 
   get menuItems(): MenuItem[] {
@@ -613,7 +620,7 @@ export class Topbar {
       key: 'simulation',
       severity: 'info',
       summary: 'JTV',
-      detail: 'ATE generado, simulación iniciada',
+      detail: this.i18n.translate('toast.simulationStarted'),
       sticky: true,
       closable: true,
     });
@@ -626,7 +633,7 @@ export class Topbar {
       key: 'simulation',
       severity: 'info',
       summary: 'JTV',
-      detail: 'Simulación finalizada, ATE liberado',
+      detail: this.i18n.translate('toast.simulationStopped'),
       sticky: true,
       closable: true,
     });

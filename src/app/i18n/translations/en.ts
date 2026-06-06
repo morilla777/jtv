@@ -42,6 +42,8 @@ export const en: Record<string, string> = {
 
   // Explorer
   'explorer.title': 'Explorer',
+  'explorer.ett': 'ETT',
+  'explorer.ateRootLabel': 'NEW',
   'explorer.machines': 'Machines',
   'explorer.examples': 'Examples',
 
@@ -50,6 +52,18 @@ export const en: Record<string, string> = {
   'designer.state': 'State',
   'designer.transition': 'Transition',
   'designer.center': 'Center',
+
+  // Condition Dialog
+  'conditionDialog.title': 'Transition Conditions',
+  'conditionDialog.tape': 'Tape',
+  'conditionDialog.variable': 'Variable',
+  'conditionDialog.not': 'Not',
+  'conditionDialog.symbols': 'Symbols',
+  'conditionDialog.variables': 'Variables',
+  'conditionDialog.orientation': 'Orientation',
+  'conditionDialog.accept': 'Accept',
+  'conditionDialog.clearAll': 'Clear All',
+  'conditionDialog.cancel': 'Cancel',
 
   // Properties
   'properties.tool': 'Tool',
@@ -94,4 +108,9 @@ export const en: Record<string, string> = {
   'simulator.tapeNavigation.backwardPage': 'Previous tape page',
   'simulator.tapeNavigation.centerPage': 'Center tape page',
   'simulator.tapeNavigation.forwardPage': 'Next tape page',
+
+  // Toasts
+  'toast.simulationStarted': 'ETT generated, simulation started',
+  'toast.simulationStopped': 'Simulation finished, ETT released',
+  'toast.duplicateAutolink': 'Adding more than one self-link to a node is not allowed',
 };

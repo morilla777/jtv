@@ -64,6 +64,7 @@ export interface JtvState {
   readonly selectedAteNodeId: string | null;
   readonly selectedMachine: JtvMachineState;
   readonly selectedSymbol: string;
+  readonly selectedVariable: string;
   readonly selectedTapeIndex: number;
   readonly tapes: JtvTapeState[];
 }
@@ -94,6 +95,7 @@ function createInitialState(): JtvState {
     selectedAteNodeId: null,
     selectedMachine,
     selectedSymbol: '#',
+    selectedVariable: 'α',
     selectedTapeIndex: 0,
     tapes: [initialTape],
   };
@@ -300,6 +302,7 @@ export class JtvStore {
   });
   readonly selectedMachine = computed(() => this.state().selectedMachine);
   readonly selectedSymbol = computed(() => this.state().selectedSymbol);
+  readonly selectedVariable = computed(() => this.state().selectedVariable);
   readonly selectedTapeIndex = computed(() => this.state().selectedTapeIndex);
   readonly selectedTapeId = computed(() => this.selectedTape()?.id ?? null);
   readonly tapes = computed(() => this.state().tapes);
@@ -347,6 +350,10 @@ export class JtvStore {
 
   selectSymbol(symbol: string): void {
     this.patchState({ selectedSymbol: symbol });
+  }
+
+  selectVariable(variable: string): void {
+    this.patchState({ selectedVariable: variable });
   }
 
   selectTape(tapeId: string): void {
@@ -428,7 +435,11 @@ export class JtvStore {
     return group?.exit?.id ?? null;
   }
 
-  createUnconditionalLinkBetweenNodes(sourceNodeId: string, targetNodeId: string): void {
+  createUnconditionalLinkBetweenNodes(
+    sourceNodeId: string,
+    targetNodeId: string,
+    vertices: readonly ViewPoint[] = [],
+  ): void {
     if (this.state().activeToolId !== 'transition' || sourceNodeId === targetNodeId) {
       return;
     }
@@ -468,6 +479,7 @@ export class JtvStore {
               label: '',
               points: [
                 this.getNodeRightAnchor(sourceNodeView),
+                ...vertices,
                 this.getNodeLeftAnchor(targetNodeView),
               ],
             }),
@@ -483,12 +495,13 @@ export class JtvStore {
     sourceNodeId: string,
     targetNodeId: string,
     clause: ReadConditionClause,
+    vertices: readonly ViewPoint[] = [],
   ): void {
     if (this.state().activeToolId !== 'conditional-transition' || sourceNodeId === targetNodeId) {
       return;
     }
 
-    this.createLinkBetweenNodes(sourceNodeId, targetNodeId, this.createLinkConditionFromClause(clause));
+    this.createLinkBetweenNodes(sourceNodeId, targetNodeId, this.createLinkConditionFromClause(clause), vertices);
   }
 
   createConditionalAutolinkForNode(
@@ -1051,6 +1064,38 @@ export class JtvStore {
     });
   }
 
+  moveCanvasLinkVertex(linkId: string, pointIndex: number, delta: ViewPoint): void {
+    if (this.state().activeToolId !== 'pointer') {
+      return;
+    }
+
+    this.state.update((current) => ({
+      ...current,
+      machineGraphView: {
+        ...current.machineGraphView,
+        links: current.machineGraphView.links.map((link) => {
+          const points = link.points ?? [];
+
+          if (
+            link.linkId !== linkId ||
+            link.kind === 'autolink' ||
+            pointIndex <= 0 ||
+            pointIndex >= points.length - 1
+          ) {
+            return link;
+          }
+
+          return {
+            ...link,
+            points: points.map((point, index) => (index === pointIndex ? this.translatePoint(point, delta) : point)),
+          };
+        }),
+      },
+      selectedCanvasLinkId: linkId,
+      selectedCanvasNodeId: null,
+    }));
+  }
+
   setTapeValue(tapeId: string, value: string): void {
     this.mutateTape(tapeId, (tape) => {
       tape.load(value);
@@ -1450,13 +1495,21 @@ export class JtvStore {
     return id;
   }
 
-  private isInsertableNodeTool(toolId: JtvToolId | null): toolId is 'move-left' | 'move-right' | 'symbol-lowercase' | 'hub' {
-    return toolId === 'move-left' || toolId === 'move-right' || toolId === 'symbol-lowercase' || toolId === 'hub';
+  private isInsertableNodeTool(
+    toolId: JtvToolId | null,
+  ): toolId is 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'hub' {
+    return (
+      toolId === 'move-left' ||
+      toolId === 'move-right' ||
+      toolId === 'symbol-lowercase' ||
+      toolId === 'symbol-variable' ||
+      toolId === 'hub'
+    );
   }
 
   private createMachineNodeForTool(
     state: JtvState,
-    toolId: 'move-left' | 'move-right' | 'symbol-lowercase' | 'hub',
+    toolId: 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'hub',
     tapeIndex: number,
   ): MachineNode | null {
     if (toolId === 'move-left') {
@@ -1469,6 +1522,14 @@ export class JtvStore {
 
     if (toolId === 'hub') {
       return new HubNode(this.createMachineNodeId(state.machineGraph, 'hub'), tapeIndex);
+    }
+
+    if (toolId === 'symbol-variable') {
+      return new WriterNode(
+        this.createMachineNodeId(state.machineGraph, 'write-variable'),
+        state.selectedVariable,
+        tapeIndex,
+      );
     }
 
     return new WriterNode(
@@ -1486,6 +1547,7 @@ export class JtvStore {
     sourceNodeId: string,
     targetNodeId: string,
     condition: LinkCondition | null,
+    vertices: readonly ViewPoint[] = [],
   ): void {
     this.state.update((current) => {
       const sourceNodeView = current.machineGraphView.nodes.find((node) => node.nodeId === sourceNodeId);
@@ -1523,6 +1585,7 @@ export class JtvStore {
               label: condition ? undefined : '',
               points: [
                 this.getNodeRightAnchor(sourceNodeView),
+                ...vertices,
                 this.getNodeLeftAnchor(targetNodeView),
               ],
             }),

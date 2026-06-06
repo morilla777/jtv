@@ -1,5 +1,6 @@
-import { ConditionEvaluationResult } from './condition-evaluation-result';
+import { ConditionAssignmentResult, ConditionEvaluationResult } from './condition-evaluation-result';
 import { ExecutionContext } from './execution-context';
+import { SymbolValue } from './symbol-value';
 
 export interface ReadConditionClause {
   tapeIndex: number;
@@ -9,11 +10,15 @@ export interface ReadConditionClause {
 }
 
 export class LinkCondition {
+  private lastAssignment: ConditionAssignmentResult | null = null;
+
   constructor(
     public readonly clauses: ReadConditionClause[] = [],
   ) {}
 
   evaluate(context: ExecutionContext): ConditionEvaluationResult {
+    this.lastAssignment = null;
+
     for (const clause of this.clauses) {
       const tape = context.tapes[clause.tapeIndex];
 
@@ -26,20 +31,7 @@ export class LinkCondition {
 
       const readSymbol = tape.read();
 
-      if (clause.assignToVariableName) {
-        const variable = context.metaValues.getVariable(clause.assignToVariableName);
-
-        if (!variable) {
-          return {
-            success: false,
-            error: `Variable "${clause.assignToVariableName}" does not exist.`,
-          };
-        }
-
-        variable.setValue(readSymbol);
-      }
-
-      const matches = clause.acceptedValues.includes(readSymbol.getName());
+      const matches = clause.acceptedValues.some((acceptedValue) => this.matchesAcceptedValue(readSymbol, acceptedValue, context));
       const clausePassed = clause.negated ? !matches : matches;
 
       if (!clausePassed) {
@@ -47,9 +39,21 @@ export class LinkCondition {
           success: false,
         };
       }
+
+      if (clause.assignToVariableName) {
+        context.metaValues.getOrCreateVariable(clause.assignToVariableName).setValue(readSymbol);
+        this.lastAssignment = {
+          variableName: clause.assignToVariableName,
+          valueName: readSymbol.getName(),
+        };
+      }
     }
 
-    return { success: true };
+    return { success: true, assignment: this.lastAssignment ?? undefined };
+  }
+
+  getLastAssignment(): ConditionAssignmentResult | null {
+    return this.lastAssignment;
   }
 
   getAteLabel(): string {
@@ -59,16 +63,36 @@ export class LinkCondition {
 
     const [clause] = this.clauses;
 
-    if (this.clauses.length === 1 && clause.acceptedValues.length === 1) {
-      return clause.negated ? `[not ${clause.acceptedValues[0]}]` : `[${clause.acceptedValues[0]}]`;
+    if (this.clauses.length === 1) {
+      const values = clause.acceptedValues.join(',');
+      const content = clause.assignToVariableName ? `${clause.assignToVariableName} = ${values}` : values;
+
+      return values ? (clause.negated ? `[not ${content}]` : `[${content}]`) : '';
     }
 
     return this.clauses
       .map((item) => {
         const values = item.acceptedValues.join(',');
+        const content = item.assignToVariableName ? `${item.assignToVariableName} = ${values}` : values;
 
-        return item.negated ? `not ${values}` : values;
+        return item.negated ? `not ${content}` : content;
       })
       .join(' & ');
+  }
+
+  private matchesAcceptedValue(readSymbol: SymbolValue, acceptedValue: string, context: ExecutionContext): boolean {
+    const metaValue = context.metaValues.getMetaValue(acceptedValue);
+
+    if (metaValue) {
+      try {
+        return readSymbol.equals(metaValue);
+      } catch {
+        return false;
+      }
+    }
+
+    const symbol = SymbolValue.of(acceptedValue);
+
+    return symbol ? readSymbol.equals(symbol) : false;
   }
 }

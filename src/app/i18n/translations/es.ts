@@ -42,6 +42,8 @@ export const es: Record<string, string> = {
 
   // Explorer
   'explorer.title': 'Explorador',
+  'explorer.ett': 'ATE',
+  'explorer.ateRootLabel': 'NUEVA',
   'explorer.machines': 'Máquinas',
   'explorer.examples': 'Ejemplos',
 
@@ -50,6 +52,18 @@ export const es: Record<string, string> = {
   'designer.state': 'Estado',
   'designer.transition': 'Transición',
   'designer.center': 'Centrar',
+
+  // Dialogo de Condicion
+  'conditionDialog.title': 'Condiciones de Transición',
+  'conditionDialog.tape': 'Cinta',
+  'conditionDialog.variable': 'Variable',
+  'conditionDialog.not': 'Not',
+  'conditionDialog.symbols': 'Símbolos',
+  'conditionDialog.variables': 'Variables',
+  'conditionDialog.orientation': 'Orientación',
+  'conditionDialog.accept': 'Aceptar',
+  'conditionDialog.clearAll': 'Limpiar Todo',
+  'conditionDialog.cancel': 'Cancelar',
 
   // Properties
   'properties.tool': 'Herramienta',
@@ -94,4 +108,10 @@ export const es: Record<string, string> = {
   'simulator.tapeNavigation.backwardPage': 'Retroceder página de cinta',
   'simulator.tapeNavigation.centerPage': 'Centrar página de cinta',
   'simulator.tapeNavigation.forwardPage': 'Avanzar página de cinta',
+
+  // Toasts
+  'toast.simulationStarted': 'ATE generado, simulación iniciada',
+  'toast.simulationStopped': 'Simulación finalizada, ATE liberado',
+  'toast.duplicateAutolink': 'No se permite agregar más de un autoenlace a un nodo',
 };
+

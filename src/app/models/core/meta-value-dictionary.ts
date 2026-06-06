@@ -21,6 +21,17 @@ export class MetaValueDictionary {
     return this.variables.get(name);
   }
 
+  getOrCreateVariable(name: string): VariableValue {
+    let variable = this.variables.get(name);
+
+    if (!variable) {
+      variable = new VariableValue(name);
+      this.addVariable(variable);
+    }
+
+    return variable;
+  }
+
   getParameter(name: string): ParameterValue | undefined {
     return this.parameters.get(name);
   }

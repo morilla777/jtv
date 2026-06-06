@@ -5,12 +5,14 @@ import { ButtonModule } from 'primeng/button';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
 import { DialogModule } from 'primeng/dialog';
 
+import { TranslatePipe } from '../i18n/translate.pipe';
+import { TranslationService } from '../i18n/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 import { MachineLinkView, ViewPoint } from '../models/view';
 
 @Component({
   selector: 'app-designer-canvas-panel',
-  imports: [ButtonModule, ContextMenuModule, DialogModule, FormsModule],
+  imports: [ButtonModule, ContextMenuModule, DialogModule, FormsModule, TranslatePipe],
   template: `
     <div class="panel">
       <p-contextMenu #nodeContextMenu [model]="nodeContextMenuItems">
@@ -38,8 +40,8 @@ import { MachineLinkView, ViewPoint } from '../models/view';
           preserveAspectRatio="xMinYMin slice"
           aria-label="Maquina de Turing modular"
           (pointermove)="handleCanvasPointerMove($event)"
-          (pointerup)="stopDraggingNodeGroup()"
-          (pointerleave)="stopDraggingNodeGroup()"
+          (pointerup)="stopDragging()"
+          (pointerleave)="stopDragging()"
           (contextmenu)="cancelTransitionDraft($event)"
         >
           <defs>
@@ -91,7 +93,7 @@ import { MachineLinkView, ViewPoint } from '../models/view';
             [attr.width]="canvasWidth()"
             [attr.height]="canvasHeight()"
             class="canvas-background"
-            (click)="insertNodeOnCanvas($event)"
+            (click)="handleCanvasClick($event)"
           ></rect>
 
           <g class="machine-diagram">
@@ -187,7 +189,7 @@ import { MachineLinkView, ViewPoint } from '../models/view';
               ></path>
 
               @if (link.label) {
-                @if (getNegatedSingleSymbolLabel(link.label); as symbol) {
+                @if (getNegatedSymbolLabel(link.label); as symbol) {
                   <text
                     [attr.x]="getLinkLabelPosition(link).x"
                     [attr.y]="getLinkLabelPosition(link).y"
@@ -221,6 +223,23 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                   </text>
                 }
               }
+
+              @if (isPointerToolActive() && link.kind !== 'autolink') {
+                @for (vertex of getLinkVertices(link); track vertex.pointIndex) {
+                  <circle
+                    [attr.cx]="vertex.point.x"
+                    [attr.cy]="vertex.point.y"
+                    r="4"
+                    class="link-vertex"
+                    [class.link-vertex-selected]="link.canvasSelected"
+                    (pointerdown)="startDraggingLinkVertex(link.linkId, vertex.pointIndex, $event)"
+                    (mouseenter)="hoverLink(link.linkId)"
+                    (mouseleave)="clearHoveredElement()"
+                    (click)="selectLink(link.linkId); $event.stopPropagation()"
+                    (contextmenu)="showLinkContextMenu(link.linkId, $event)"
+                  ></circle>
+                }
+              }
             }
 
             @if (transitionDraftPath(); as draftPath) {
@@ -230,12 +249,21 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                 marker-end="url(#canvas-selected-arrowhead)"
               ></path>
             }
+
+            @for (vertex of transitionDraftVertices(); track $index) {
+              <circle
+                [attr.cx]="vertex.x"
+                [attr.cy]="vertex.y"
+                r="3"
+                class="link-vertex link-vertex-draft"
+              ></circle>
+            }
           </g>
         </svg>
       </div>
 
       <p-dialog
-        header="Condiciones de Transición"
+        [header]="'conditionDialog.title' | translate"
         [visible]="conditionDialogVisible()"
         [modal]="true"
         [closable]="true"
@@ -245,15 +273,15 @@ import { MachineLinkView, ViewPoint } from '../models/view';
         <div class="condition-dialog">
           <div class="condition-summary">
             @if (conditionNegated) {
-              <span class="condition-overline-symbol">[{{ conditionSymbol }}]</span>
+              <span class="condition-overline-symbol">[{{ conditionSymbolLabel() }}]</span>
             } @else {
-              <span>[{{ conditionSymbol }}]</span>
+              <span>[{{ conditionSymbolLabel() }}]</span>
             }
           </div>
 
           <div class="condition-grid">
             <fieldset class="condition-fieldset">
-              <legend>Cinta</legend>
+              <legend>{{ 'conditionDialog.tape' | translate }}</legend>
               <select [(ngModel)]="conditionTapeIndex" class="condition-select">
                 @for (tape of tapeOptions(); track tape.value) {
                   <option [ngValue]="tape.value">{{ tape.label }}</option>
@@ -262,22 +290,43 @@ import { MachineLinkView, ViewPoint } from '../models/view';
             </fieldset>
 
             <label class="condition-not">
-              <span>Not</span>
+              <span>{{ 'conditionDialog.not' | translate }}</span>
               <input type="checkbox" [(ngModel)]="conditionNegated" />
             </label>
 
             <fieldset class="condition-fieldset symbols-fieldset">
-              <legend>Símbolos</legend>
-              <select [(ngModel)]="conditionSymbol" size="5" class="condition-list">
+              <legend>{{ 'conditionDialog.symbols' | translate }}</legend>
+              <select [(ngModel)]="conditionSymbolsSelected" multiple size="5" class="condition-list">
                 @for (symbol of conditionSymbols; track symbol) {
                   <option [ngValue]="symbol">{{ symbol }}</option>
                 }
               </select>
             </fieldset>
 
+            <fieldset class="condition-fieldset">
+              <legend>{{ 'conditionDialog.variable' | translate }}</legend>
+              <select [(ngModel)]="conditionAssignToVariable" class="condition-select">
+                <option [ngValue]="null"></option>
+                @for (variable of conditionVariables; track variable) {
+                  <option [ngValue]="variable">{{ variable }}</option>
+                }
+              </select>
+            </fieldset>
+
+            <div></div>
+
+            <fieldset class="condition-fieldset symbols-fieldset">
+              <legend>{{ 'conditionDialog.variables' | translate }}</legend>
+              <select [(ngModel)]="conditionVariablesSelected" multiple size="5" class="condition-list">
+                @for (variable of conditionVariables; track variable) {
+                  <option [ngValue]="variable">{{ variable }}</option>
+                }
+              </select>
+            </fieldset>
+
             @if (conditionDialogMode() === 'autolink') {
               <fieldset class="condition-fieldset orientation-fieldset">
-                <legend>Orientación</legend>
+                <legend>{{ 'conditionDialog.orientation' | translate }}</legend>
                 <div class="orientation-grid">
                   <button
                     pButton
@@ -319,9 +368,9 @@ import { MachineLinkView, ViewPoint } from '../models/view';
         </div>
 
         <ng-template #footer>
-          <button pButton type="button" label="Aceptar" (click)="acceptConditionalTransition()"></button>
-          <button pButton type="button" label="Limpiar Todo" severity="secondary" (click)="clearConditionDialog()"></button>
-          <button pButton type="button" label="Cancelar" severity="secondary" (click)="cancelConditionalTransition()"></button>
+          <button pButton type="button" [label]="'conditionDialog.accept' | translate" (click)="acceptConditionalTransition()"></button>
+          <button pButton type="button" [label]="'conditionDialog.clearAll' | translate" severity="secondary" (click)="clearConditionDialog()"></button>
+          <button pButton type="button" [label]="'conditionDialog.cancel' | translate" severity="secondary" (click)="cancelConditionalTransition()"></button>
         </ng-template>
       </p-dialog>
     </div>
@@ -464,6 +513,21 @@ import { MachineLinkView, ViewPoint } from '../models/view';
       pointer-events: none;
     }
 
+    .link-vertex {
+      fill: #fff;
+      stroke: rgb(255, 0, 255);
+      stroke-width: 1.25;
+      cursor: move;
+    }
+
+    .link-vertex-selected {
+      fill: rgb(255, 230, 255);
+    }
+
+    .link-vertex-draft {
+      pointer-events: none;
+    }
+
     .overline-symbol {
       text-decoration: overline;
     }
@@ -591,6 +655,7 @@ import { MachineLinkView, ViewPoint } from '../models/view';
 export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private readonly store = inject(JtvStore);
   private readonly messageService = inject(MessageService);
+  private readonly i18n = inject(TranslationService);
   @ViewChild('nodeContextMenu') private nodeContextMenu?: ContextMenu;
   @ViewChild('linkContextMenu') private linkContextMenu?: ContextMenu;
   @ViewChild('designerSvg') private designerSvg?: ElementRef<SVGSVGElement>;
@@ -599,6 +664,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private readonly hoveredNodeCursorSide = signal<'left' | 'right'>('right');
   private readonly transitionSourceNodeId = signal<string | null>(null);
   private readonly transitionDraftEndPoint = signal<ViewPoint | null>(null);
+  readonly transitionDraftVertices = signal<ViewPoint[]>([]);
   private readonly conditionalTransitionTargetNodeId = signal<string | null>(null);
   private readonly autolinkTargetNodeId = signal<string | null>(null);
   private readonly editingLinkId = signal<string | null>(null);
@@ -610,6 +676,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     if (!this.isLinkInsertionToolActive() && !this.isAutolinkInsertionToolActive()) {
       this.transitionSourceNodeId.set(null);
       this.transitionDraftEndPoint.set(null);
+      this.transitionDraftVertices.set([]);
       this.conditionalTransitionTargetNodeId.set(null);
       this.autolinkTargetNodeId.set(null);
       this.editingLinkId.set(null);
@@ -629,7 +696,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   readonly isAutolinkInsertionToolActive = computed(() => this.store.activeToolId() === 'loop-transition');
   readonly isTransitionToolActive = computed(() => this.isLinkInsertionToolActive());
   readonly isNodeInsertionToolActive = computed(() =>
-    ['move-left', 'move-right', 'symbol-lowercase', 'hub'].includes(this.store.activeToolId() ?? ''),
+    ['move-left', 'move-right', 'symbol-lowercase', 'symbol-variable', 'hub'].includes(this.store.activeToolId() ?? ''),
   );
   readonly isCanvasCursorActive = computed(
     () =>
@@ -672,8 +739,9 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     }
 
     const sourcePoint = this.getNodeRightAnchor(sourceNode);
+    const points = [sourcePoint, ...this.transitionDraftVertices(), endPoint];
 
-    return `M ${sourcePoint.x} ${sourcePoint.y} L ${endPoint.x} ${endPoint.y}`;
+    return this.getPolylinePath(points);
   });
   readonly tapeOptions = computed(() =>
     this.store.tapes().map((_, index) => ({
@@ -685,6 +753,32 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     '#',
     ...Array.from({ length: 26 }, (_, index) => String.fromCharCode(97 + index)),
     ...Array.from({ length: 10 }, (_, index) => index.toString()),
+  ];
+  readonly conditionVariables = [
+    'α',
+    'β',
+    'γ',
+    'δ',
+    'ε',
+    'ζ',
+    'η',
+    'θ',
+    'ι',
+    'κ',
+    'λ',
+    'μ',
+    'ν',
+    'ξ',
+    'ο',
+    'π',
+    'ρ',
+    'σ',
+    'τ',
+    'υ',
+    'φ',
+    'χ',
+    'ψ',
+    'ω',
   ];
   readonly isAutolinkLeftOrientationDisabled = computed(() => {
     if (this.conditionDialogMode() !== 'autolink') {
@@ -698,10 +792,13 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
   conditionTapeIndex = 0;
   conditionNegated = false;
-  conditionSymbol: string | null = this.conditionSymbols[0];
+  conditionAssignToVariable: string | null = null;
+  conditionSymbolsSelected: string[] = [this.conditionSymbols[0]];
+  conditionVariablesSelected: string[] = [];
   autolinkOrientation: 'top' | 'bottom' | 'left' | 'right' = 'right';
   private contextMenuNodeId: string | null = null;
   private contextMenuLinkId: string | null = null;
+  private draggedLinkVertex: { linkId: string; pointIndex: number; lastPoint: ViewPoint } | null = null;
 
   readonly nodeContextMenuItems: MenuItem[] = [
     {
@@ -758,12 +855,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       return '';
     }
 
-    const [startPoint, ...restPoints] = points;
-
-    return [
-      `M ${startPoint.x} ${startPoint.y}`,
-      ...restPoints.map((point) => `L ${point.x} ${point.y}`),
-    ].join(' ');
+    return this.getPolylinePath(points);
   }
 
   getLinkLabelPosition(link: MachineLinkView): ViewPoint {
@@ -777,8 +869,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       return points[0] ?? { x: 0, y: 0 };
     }
 
-    const startPoint = points[0];
-    const endPoint = points[points.length - 1];
+    const { startPoint, endPoint } = this.getLongestSegment(points);
 
     return {
       x: (startPoint.x + endPoint.x) / 2 - 8,
@@ -786,8 +877,23 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     };
   }
 
-  getNegatedSingleSymbolLabel(label: string): string | null {
-    return /^\[not ([a-z0-9#])\]$/.exec(label)?.[1] ?? null;
+  getNegatedSymbolLabel(label: string): string | null {
+    return /^\[not (.+)\]$/.exec(label)?.[1] ?? null;
+  }
+
+  getLinkVertices(link: MachineLinkView): { point: ViewPoint; pointIndex: number }[] {
+    const points = link.points ?? [];
+
+    return points.slice(1, -1).map((point, index) => ({
+      point,
+      pointIndex: index + 1,
+    }));
+  }
+
+  conditionSymbolLabel(): string {
+    const values = this.getAcceptedConditionValues().join(',');
+
+    return this.conditionAssignToVariable ? `${this.conditionAssignToVariable} = ${values}` : values;
   }
 
   getLinkMarkerEnd(link: MachineLinkView): string {
@@ -879,7 +985,9 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.editingLinkId.set(linkId);
     this.conditionTapeIndex = editState.clause.tapeIndex;
     this.conditionNegated = editState.clause.negated ?? false;
-    this.conditionSymbol = editState.clause.acceptedValues[0] ?? null;
+    this.conditionAssignToVariable = editState.clause.assignToVariableName ?? null;
+    this.conditionSymbolsSelected = editState.clause.acceptedValues.filter((value) => this.conditionSymbols.includes(value));
+    this.conditionVariablesSelected = editState.clause.acceptedValues.filter((value) => this.conditionVariables.includes(value));
     this.autolinkOrientation = editState.autolinkOrientation ?? 'right';
     this.autolinkTargetNodeId.set(editState.nodeId ?? null);
     this.conditionDialogMode.set(editState.mode);
@@ -889,7 +997,16 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
   handleCanvasPointerMove(event: PointerEvent): void {
     this.dragSelectedNodeGroup(event);
+    this.dragLinkVertex(event);
     this.updateTransitionDraft(event);
+  }
+
+  handleCanvasClick(event: MouseEvent): void {
+    if (this.addTransitionDraftVertex(event)) {
+      return;
+    }
+
+    this.insertNodeOnCanvas(event);
   }
 
   insertNodeOnCanvas(event: MouseEvent): void {
@@ -950,8 +1067,72 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     };
   }
 
-  stopDraggingNodeGroup(): void {
+  startDraggingLinkVertex(linkId: string, pointIndex: number, event: PointerEvent): void {
+    if (!this.isPointerToolActive()) {
+      return;
+    }
+
+    const svg = (event.currentTarget as SVGGraphicsElement).ownerSVGElement;
+    const point = svg ? this.getSvgPoint(svg, event) : null;
+
+    if (!point) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
     this.draggedNodeGroup = null;
+    this.store.selectCanvasLink(linkId);
+    this.draggedLinkVertex = {
+      linkId,
+      pointIndex,
+      lastPoint: point,
+    };
+  }
+
+  dragLinkVertex(event: PointerEvent): void {
+    if (!this.draggedLinkVertex) {
+      return;
+    }
+
+    const point = this.getSvgPoint(event.currentTarget as SVGSVGElement, event);
+    const delta = {
+      x: point.x - this.draggedLinkVertex.lastPoint.x,
+      y: point.y - this.draggedLinkVertex.lastPoint.y,
+    };
+
+    if (delta.x === 0 && delta.y === 0) {
+      return;
+    }
+
+    this.store.moveCanvasLinkVertex(this.draggedLinkVertex.linkId, this.draggedLinkVertex.pointIndex, delta);
+    this.draggedLinkVertex = {
+      ...this.draggedLinkVertex,
+      lastPoint: point,
+    };
+  }
+
+  stopDragging(): void {
+    this.draggedNodeGroup = null;
+    this.draggedLinkVertex = null;
+  }
+
+  addTransitionDraftVertex(event: MouseEvent): boolean {
+    if (!this.isTransitionToolActive() || !this.transitionSourceNodeId()) {
+      return false;
+    }
+
+    const svg = (event.currentTarget as SVGGraphicsElement).ownerSVGElement;
+
+    if (!svg) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.transitionDraftVertices.update((vertices) => [...vertices, this.getSvgPoint(svg, event)]);
+
+    return true;
   }
 
   showNodeContextMenu(nodeId: string, event: MouseEvent): void {
@@ -1037,7 +1218,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
         key: 'simulation',
         severity: 'warn',
         summary: 'JTV',
-        detail: 'No se permite agregar más de un autoenlace a un nodo',
+        detail: this.i18n.translate('toast.duplicateAutolink'),
         sticky: true,
         closable: true,
       });
@@ -1090,7 +1271,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       return;
     }
 
-    this.store.createUnconditionalLinkBetweenNodes(sourceNodeId, nodeId);
+    this.store.createUnconditionalLinkBetweenNodes(sourceNodeId, nodeId, this.transitionDraftVertices());
     this.clearTransitionDraft();
   }
 
@@ -1126,7 +1307,8 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
         editingLinkId,
         {
           tapeIndex: this.conditionTapeIndex,
-          acceptedValues: this.conditionSymbol ? [this.conditionSymbol] : [],
+          assignToVariableName: this.conditionAssignToVariable ?? undefined,
+          acceptedValues: this.getAcceptedConditionValues(),
           negated: this.conditionNegated,
         },
         this.conditionDialogMode() === 'autolink' ? this.autolinkOrientation : undefined,
@@ -1153,9 +1335,10 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
     this.store.createConditionalLinkBetweenNodes(sourceNodeId, targetNodeId, {
       tapeIndex: this.conditionTapeIndex,
-      acceptedValues: this.conditionSymbol ? [this.conditionSymbol] : [],
+      assignToVariableName: this.conditionAssignToVariable ?? undefined,
+      acceptedValues: this.getAcceptedConditionValues(),
       negated: this.conditionNegated,
-    });
+    }, this.transitionDraftVertices());
     this.conditionDialogVisible.set(false);
     this.conditionalTransitionTargetNodeId.set(null);
     this.conditionDialogMode.set(null);
@@ -1174,7 +1357,9 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   clearConditionDialog(): void {
     this.conditionTapeIndex = 0;
     this.conditionNegated = false;
-    this.conditionSymbol = null;
+    this.conditionAssignToVariable = null;
+    this.conditionSymbolsSelected = [];
+    this.conditionVariablesSelected = [];
     this.autolinkOrientation = 'right';
   }
 
@@ -1190,7 +1375,8 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       nodeId,
       {
         tapeIndex: this.conditionTapeIndex,
-        acceptedValues: this.conditionSymbol ? [this.conditionSymbol] : [],
+        assignToVariableName: this.conditionAssignToVariable ?? undefined,
+        acceptedValues: this.getAcceptedConditionValues(),
         negated: this.conditionNegated,
       },
       this.autolinkOrientation,
@@ -1207,9 +1393,14 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     }
   }
 
+  private getAcceptedConditionValues(): string[] {
+    return [...this.conditionSymbolsSelected, ...this.conditionVariablesSelected];
+  }
+
   private clearTransitionDraft(): void {
     this.transitionSourceNodeId.set(null);
     this.transitionDraftEndPoint.set(null);
+    this.transitionDraftVertices.set([]);
     this.store.clearCanvasSelection();
   }
 
@@ -1266,6 +1457,43 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       x: transformedPoint.x,
       y: transformedPoint.y,
     };
+  }
+
+  private getPolylinePath(points: readonly ViewPoint[]): string {
+    const [startPoint, ...restPoints] = points;
+
+    if (!startPoint) {
+      return '';
+    }
+
+    return [
+      `M ${startPoint.x} ${startPoint.y}`,
+      ...restPoints.map((point) => `L ${point.x} ${point.y}`),
+    ].join(' ');
+  }
+
+  private getLongestSegment(points: readonly ViewPoint[]): { startPoint: ViewPoint; endPoint: ViewPoint } {
+    let startPoint = points[0];
+    let endPoint = points[1];
+    let maxDistance = this.getSquaredDistance(startPoint, endPoint);
+
+    for (let index = 1; index < points.length - 1; index++) {
+      const currentStart = points[index];
+      const currentEnd = points[index + 1];
+      const distance = this.getSquaredDistance(currentStart, currentEnd);
+
+      if (distance > maxDistance) {
+        startPoint = currentStart;
+        endPoint = currentEnd;
+        maxDistance = distance;
+      }
+    }
+
+    return { startPoint, endPoint };
+  }
+
+  private getSquaredDistance(first: ViewPoint, second: ViewPoint): number {
+    return (second.x - first.x) ** 2 + (second.y - first.y) ** 2;
   }
 
   private getAutolinkPath(link: MachineLinkView): string {
