@@ -3,7 +3,7 @@ import { ViewPoint } from './view-point';
 export interface MachineNodeView {
   readonly nodeId: string;
   readonly groupId: string;
-  readonly kind?: 'text' | 'hub';
+  readonly kind?: 'text' | 'parameter' | 'hub';
   readonly label: string;
   readonly initial?: boolean;
   readonly position: ViewPoint;

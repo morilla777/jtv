@@ -27,7 +27,7 @@ export class ParameterValue implements MetaValue {
   }
 
   getName(): string {
-    return this.isSet() ? this.value!.getName() : this.name;
+    return this.name;
   }
 
   getAssignment(): string {

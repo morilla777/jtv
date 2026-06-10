@@ -13,6 +13,8 @@ import { HubNode } from '../models/core/hub-node';
 import { MetaValueDictionary } from '../models/core/meta-value-dictionary';
 import { MoveLeftNode } from '../models/core/move-left-node';
 import { MoveRightNode } from '../models/core/move-right-node';
+import { ParameterValue } from '../models/core/parameter-value';
+import { SymbolValue } from '../models/core/symbol-value';
 import { Tape, TapeSnapshot } from '../models/core/tape';
 import { WriterNode } from '../models/core/writer-node';
 import { AutolinkOrientation, MachineGraphView, MachineLinkKind, MachineLinkView, ViewPoint } from '../models/view';
@@ -59,10 +61,12 @@ export interface JtvState {
   readonly ate: AteNode;
   readonly machineGraph: MachineGraph;
   readonly machineGraphView: MachineGraphView;
+  readonly parameterAssignments: Readonly<Record<string, string>>;
   readonly selectedCanvasLinkId: string | null;
   readonly selectedCanvasNodeId: string | null;
   readonly selectedAteNodeId: string | null;
   readonly selectedMachine: JtvMachineState;
+  readonly selectedParameter: string;
   readonly selectedSymbol: string;
   readonly selectedVariable: string;
   readonly selectedTapeIndex: number;
@@ -90,10 +94,12 @@ function createInitialState(): JtvState {
     ate: new AteTraceRecorder(selectedMachine.name).root,
     machineGraph: demoMachine.graph,
     machineGraphView: demoMachine.view,
+    parameterAssignments: {},
     selectedCanvasLinkId: null,
     selectedCanvasNodeId: null,
     selectedAteNodeId: null,
     selectedMachine,
+    selectedParameter: 'A',
     selectedSymbol: '#',
     selectedVariable: 'α',
     selectedTapeIndex: 0,
@@ -239,7 +245,7 @@ function createLinearNodeViews(
   return nodes.map((node, index) => ({
     nodeId: node.id,
     groupId,
-    kind: node instanceof HubNode ? 'hub' as const : 'text' as const,
+    kind: getMachineNodeViewKind(node),
     label: node.name,
     initial: node.isInitial,
     position: {
@@ -258,6 +264,18 @@ function linkNodes<T extends MachineNode>(nodes: T[]): T[] {
   }
 
   return nodes;
+}
+
+function getMachineNodeViewKind(node: MachineNode): 'text' | 'parameter' | 'hub' {
+  if (node instanceof HubNode) {
+    return 'hub';
+  }
+
+  if (node instanceof WriterNode && /^[A-Z]$/.test(node.name)) {
+    return 'parameter';
+  }
+
+  return 'text';
 }
 
 function getNextTapeIndex(tapes: readonly JtvTapeState[]): number {
@@ -280,6 +298,8 @@ export class JtvStore {
   readonly activeAteMachineNodeId = computed(() => this.selectedAteNode()?.machineNodeId ?? null);
   readonly activeAteLinkId = computed(() => this.selectedAteNode()?.linkId ?? null);
   readonly machineGraph = computed(() => this.state().machineGraph);
+  readonly insertedParameters = computed(() => this.getInsertedParameterNames(this.state().machineGraph));
+  readonly parameterAssignments = computed(() => this.state().parameterAssignments);
   readonly machineGraphView = computed(() => {
     const view = this.state().machineGraphView;
     const activeNodeId = this.activeAteMachineNodeId();
@@ -301,6 +321,7 @@ export class JtvStore {
     };
   });
   readonly selectedMachine = computed(() => this.state().selectedMachine);
+  readonly selectedParameter = computed(() => this.state().selectedParameter);
   readonly selectedSymbol = computed(() => this.state().selectedSymbol);
   readonly selectedVariable = computed(() => this.state().selectedVariable);
   readonly selectedTapeIndex = computed(() => this.state().selectedTapeIndex);
@@ -346,6 +367,14 @@ export class JtvStore {
 
   selectMachine(machine: JtvMachineState): void {
     this.patchState({ selectedMachine: machine });
+  }
+
+  selectParameter(parameter: string): void {
+    this.patchState({ selectedParameter: parameter });
+  }
+
+  assignParameters(assignments: Readonly<Record<string, string>>): void {
+    this.patchState({ parameterAssignments: { ...assignments } });
   }
 
   selectSymbol(symbol: string): void {
@@ -1183,7 +1212,7 @@ export class JtvStore {
     const traceRecorder = new AteTraceRecorder(this.state().selectedMachine.name);
     const context = {
       tapes: [firstTape.tape],
-      metaValues: new MetaValueDictionary(),
+      metaValues: this.createExecutionMetaValues(),
     };
     const ok = this.machineGraphRunner.run(this.state().machineGraph, context, traceRecorder);
 
@@ -1497,19 +1526,20 @@ export class JtvStore {
 
   private isInsertableNodeTool(
     toolId: JtvToolId | null,
-  ): toolId is 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'hub' {
+  ): toolId is 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'symbol-uppercase' | 'hub' {
     return (
       toolId === 'move-left' ||
       toolId === 'move-right' ||
       toolId === 'symbol-lowercase' ||
       toolId === 'symbol-variable' ||
+      toolId === 'symbol-uppercase' ||
       toolId === 'hub'
     );
   }
 
   private createMachineNodeForTool(
     state: JtvState,
-    toolId: 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'hub',
+    toolId: 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'symbol-uppercase' | 'hub',
     tapeIndex: number,
   ): MachineNode | null {
     if (toolId === 'move-left') {
@@ -1532,6 +1562,14 @@ export class JtvStore {
       );
     }
 
+    if (toolId === 'symbol-uppercase') {
+      return new WriterNode(
+        this.createMachineNodeId(state.machineGraph, 'write-parameter'),
+        state.selectedParameter,
+        tapeIndex,
+      );
+    }
+
     return new WriterNode(
       this.createMachineNodeId(state.machineGraph, 'write-symbol'),
       state.selectedSymbol,
@@ -1539,8 +1577,8 @@ export class JtvStore {
     );
   }
 
-  private getMachineNodeViewKind(node: MachineNode): 'text' | 'hub' {
-    return node instanceof HubNode ? 'hub' : 'text';
+  private getMachineNodeViewKind(node: MachineNode): 'text' | 'parameter' | 'hub' {
+    return getMachineNodeViewKind(node);
   }
 
   private createLinkBetweenNodes(
@@ -1696,7 +1734,7 @@ export class JtvStore {
     const tapes = state.tapes.map((tapeState) => Tape.fromInitialSnapshot(tapeState.tape.getInitialSnapshot()));
     const context = {
       tapes,
-      metaValues: new MetaValueDictionary(),
+      metaValues: this.createExecutionMetaValues(),
     };
     const machineNodes = this.getMachineNodesById(state.machineGraph);
     const transitions = this.getTransitionsById(state.machineGraph);
@@ -1748,6 +1786,46 @@ export class JtvStore {
     }
 
     return nodes;
+  }
+
+  private getInsertedParameterNames(graph: MachineGraph): string[] {
+    const parameters = new Set<string>();
+
+    for (const node of this.getMachineNodesById(graph).values()) {
+      if (node instanceof WriterNode && /^[A-Z]$/.test(node.name)) {
+        parameters.add(node.name);
+      }
+    }
+
+    for (const transition of [...graph.links, ...(graph.autolinks ?? [])]) {
+      for (const clause of transition.condition?.clauses ?? []) {
+        for (const acceptedValue of clause.acceptedValues) {
+          if (/^[A-Z]$/.test(acceptedValue)) {
+            parameters.add(acceptedValue);
+          }
+        }
+      }
+    }
+
+    return Array.from(parameters).sort((left, right) => left.localeCompare(right));
+  }
+
+  private createExecutionMetaValues(): MetaValueDictionary {
+    const metaValues = new MetaValueDictionary();
+
+    for (const [parameterName, symbolName] of Object.entries(this.state().parameterAssignments)) {
+      const symbol = SymbolValue.of(symbolName);
+
+      if (!symbol) {
+        continue;
+      }
+
+      const parameter = new ParameterValue(parameterName);
+      parameter.setValue(symbol);
+      metaValues.addParameter(parameter);
+    }
+
+    return metaValues;
   }
 
   private getTransitionsById(graph: MachineGraph): Map<string, Link | Autolink> {

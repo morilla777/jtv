@@ -5,6 +5,7 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { ButtonModule } from 'primeng/button';
 import { MenubarModule } from 'primeng/menubar';
 import { SelectModule, type SelectChangeEvent } from 'primeng/select';
+import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
 import { TranslatePipe } from '../i18n/translate.pipe';
 import { TranslationService, type Language } from '../i18n/translation.service';
 import { JtvStore } from '../stores/jtv.store';
@@ -18,7 +19,7 @@ interface LanguageOption {
 
 @Component({
   selector: 'app-topbar',
-  imports: [FormsModule, MenubarModule, ToolbarModule, ButtonModule, SelectModule, TranslatePipe],
+  imports: [FormsModule, MenubarModule, ToolbarModule, ButtonModule, SelectModule, ParameterAssignmentDialog, TranslatePipe],
   template: `
     <div class="topbar-shell">
       <p-menubar [model]="menuItems" class="jtv-menubar">
@@ -161,6 +162,7 @@ interface LanguageOption {
               [attr.aria-label]="'topbar.parameterAssignment' | translate"
               [title]="'topbar.parameterAssignment' | translate"
               severity="secondary"
+              (onClick)="openParameterAssignmentDialog()"
             />
             <button
               pButton
@@ -223,6 +225,14 @@ interface LanguageOption {
           </div>
         </ng-template>
       </p-toolbar>
+
+      <app-parameter-assignment-dialog
+        [(visible)]="parameterAssignmentDialogVisible"
+        [parameters]="insertedParameters"
+        [symbolOptions]="symbolOptions"
+        [assignments]="parameterAssignments"
+        (assignmentsChange)="saveParameterAssignments($event)"
+      />
     </div>
   `,
   styles: [`
@@ -434,9 +444,9 @@ export class Topbar {
 
   readonly machineOptions = ['MAQUINA 1', 'MÁQUINA 2'];
 
-  selectedUppercase = this.uppercaseOptions[0];
   selectedMachine = this.machineOptions[0];
   executionFinished = false;
+  parameterAssignmentDialogVisible = false;
 
   get selectedSymbol(): string {
     return this.store.selectedSymbol();
@@ -452,6 +462,30 @@ export class Topbar {
 
   set selectedGreekLowercase(variable: string) {
     this.store.selectVariable(variable);
+  }
+
+  get selectedUppercase(): string {
+    return this.store.selectedParameter();
+  }
+
+  set selectedUppercase(parameter: string) {
+    this.store.selectParameter(parameter);
+  }
+
+  get insertedParameters(): readonly string[] {
+    return this.store.insertedParameters();
+  }
+
+  get parameterAssignments(): Readonly<Record<string, string>> {
+    return this.store.parameterAssignments();
+  }
+
+  openParameterAssignmentDialog(): void {
+    this.parameterAssignmentDialogVisible = true;
+  }
+
+  saveParameterAssignments(assignments: Record<string, string>): void {
+    this.store.assignParameters(assignments);
   }
 
   get menuItems(): MenuItem[] {
@@ -614,6 +648,20 @@ export class Topbar {
   }
 
   executeMachine(): void {
+    const hasUnassignedParameters = this.insertedParameters.some((parameter) => !this.parameterAssignments[parameter]);
+
+    if (hasUnassignedParameters) {
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'warn',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.unassignedParameters'),
+        sticky: true,
+        closable: true,
+      });
+      return;
+    }
+
     this.store.runMachineOnFirstTape();
     this.executionFinished = true;
     this.messageService.add({

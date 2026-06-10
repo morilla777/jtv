@@ -60,10 +60,19 @@ export const es: Record<string, string> = {
   'conditionDialog.not': 'Not',
   'conditionDialog.symbols': 'Símbolos',
   'conditionDialog.variables': 'Variables',
+  'conditionDialog.parameters': 'Parámetros',
   'conditionDialog.orientation': 'Orientación',
   'conditionDialog.accept': 'Aceptar',
   'conditionDialog.clearAll': 'Limpiar Todo',
   'conditionDialog.cancel': 'Cancelar',
+
+  // Dialogo de Parametros
+  'parameterDialog.title': 'Asignaci\u00f3n de Par\u00e1metros',
+  'parameterDialog.parameter': 'Par\u00e1metro',
+  'parameterDialog.value': 'Valor',
+  'parameterDialog.accept': 'Aceptar',
+  'parameterDialog.cancel': 'Cancelar',
+  'parameterDialog.empty': 'Sin par\u00e1metros',
 
   // Properties
   'properties.tool': 'Herramienta',
@@ -113,5 +122,6 @@ export const es: Record<string, string> = {
   'toast.simulationStarted': 'ATE generado, simulación iniciada',
   'toast.simulationStopped': 'Simulación finalizada, ATE liberado',
   'toast.duplicateAutolink': 'No se permite agregar más de un autoenlace a un nodo',
+  'toast.unassignedParameters': 'No puede ejecutar la máquina ya que existen parámetros sin valor',
 };
 

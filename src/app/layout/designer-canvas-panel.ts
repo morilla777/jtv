@@ -1,18 +1,16 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, computed, effect, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { MessageService, type MenuItem } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
-import { DialogModule } from 'primeng/dialog';
 
-import { TranslatePipe } from '../i18n/translate.pipe';
+import { ConditionDialog, ConditionDialogValue } from '../components/condition-dialog';
 import { TranslationService } from '../i18n/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 import { MachineLinkView, ViewPoint } from '../models/view';
 
 @Component({
   selector: 'app-designer-canvas-panel',
-  imports: [ButtonModule, ContextMenuModule, DialogModule, FormsModule, TranslatePipe],
+  imports: [ButtonModule, ContextMenuModule, ConditionDialog],
   template: `
     <div class="panel">
       <p-contextMenu #nodeContextMenu [model]="nodeContextMenuItems">
@@ -138,6 +136,7 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                   [attr.x]="node.position.x"
                   [attr.y]="node.position.y"
                   class="machine-text"
+                  [class.machine-text-parameter]="node.kind === 'parameter'"
                   [class.machine-text-selected]="node.selected"
                   [class.machine-text-canvas-selected]="node.canvasSelected || isTransitionSourceNode(node.nodeId)"
                   [class.machine-text-hovered]="isHoveredNode(node.nodeId)"
@@ -262,117 +261,18 @@ import { MachineLinkView, ViewPoint } from '../models/view';
         </svg>
       </div>
 
-      <p-dialog
-        [header]="'conditionDialog.title' | translate"
+      <app-condition-dialog
         [visible]="conditionDialogVisible()"
-        [modal]="true"
-        [closable]="true"
-        [style]="{ width: '25rem' }"
-        (onHide)="cancelConditionalTransition()"
-      >
-        <div class="condition-dialog">
-          <div class="condition-summary">
-            @if (conditionNegated) {
-              <span class="condition-overline-symbol">[{{ conditionSymbolLabel() }}]</span>
-            } @else {
-              <span>[{{ conditionSymbolLabel() }}]</span>
-            }
-          </div>
-
-          <div class="condition-grid">
-            <fieldset class="condition-fieldset">
-              <legend>{{ 'conditionDialog.tape' | translate }}</legend>
-              <select [(ngModel)]="conditionTapeIndex" class="condition-select">
-                @for (tape of tapeOptions(); track tape.value) {
-                  <option [ngValue]="tape.value">{{ tape.label }}</option>
-                }
-              </select>
-            </fieldset>
-
-            <label class="condition-not">
-              <span>{{ 'conditionDialog.not' | translate }}</span>
-              <input type="checkbox" [(ngModel)]="conditionNegated" />
-            </label>
-
-            <fieldset class="condition-fieldset symbols-fieldset">
-              <legend>{{ 'conditionDialog.symbols' | translate }}</legend>
-              <select [(ngModel)]="conditionSymbolsSelected" multiple size="5" class="condition-list">
-                @for (symbol of conditionSymbols; track symbol) {
-                  <option [ngValue]="symbol">{{ symbol }}</option>
-                }
-              </select>
-            </fieldset>
-
-            <fieldset class="condition-fieldset">
-              <legend>{{ 'conditionDialog.variable' | translate }}</legend>
-              <select [(ngModel)]="conditionAssignToVariable" class="condition-select">
-                <option [ngValue]="null"></option>
-                @for (variable of conditionVariables; track variable) {
-                  <option [ngValue]="variable">{{ variable }}</option>
-                }
-              </select>
-            </fieldset>
-
-            <div></div>
-
-            <fieldset class="condition-fieldset symbols-fieldset">
-              <legend>{{ 'conditionDialog.variables' | translate }}</legend>
-              <select [(ngModel)]="conditionVariablesSelected" multiple size="5" class="condition-list">
-                @for (variable of conditionVariables; track variable) {
-                  <option [ngValue]="variable">{{ variable }}</option>
-                }
-              </select>
-            </fieldset>
-
-            @if (conditionDialogMode() === 'autolink') {
-              <fieldset class="condition-fieldset orientation-fieldset">
-                <legend>{{ 'conditionDialog.orientation' | translate }}</legend>
-                <div class="orientation-grid">
-                  <button
-                    pButton
-                    type="button"
-                    icon="pi pi-chevron-up"
-                    class="orientation-button orientation-top"
-                    [class.orientation-button-active]="autolinkOrientation === 'top'"
-                    (click)="autolinkOrientation = 'top'"
-                  ></button>
-                  <button
-                    pButton
-                    type="button"
-                    icon="pi pi-chevron-left"
-                    class="orientation-button orientation-left"
-                    [class.orientation-button-active]="autolinkOrientation === 'left'"
-                    [disabled]="isAutolinkLeftOrientationDisabled()"
-                    (click)="autolinkOrientation = 'left'"
-                  ></button>
-                  <button
-                    pButton
-                    type="button"
-                    icon="pi pi-chevron-right"
-                    class="orientation-button orientation-right"
-                    [class.orientation-button-active]="autolinkOrientation === 'right'"
-                    (click)="autolinkOrientation = 'right'"
-                  ></button>
-                  <button
-                    pButton
-                    type="button"
-                    icon="pi pi-chevron-down"
-                    class="orientation-button orientation-bottom"
-                    [class.orientation-button-active]="autolinkOrientation === 'bottom'"
-                    (click)="autolinkOrientation = 'bottom'"
-                  ></button>
-                </div>
-              </fieldset>
-            }
-          </div>
-        </div>
-
-        <ng-template #footer>
-          <button pButton type="button" [label]="'conditionDialog.accept' | translate" (click)="acceptConditionalTransition()"></button>
-          <button pButton type="button" [label]="'conditionDialog.clearAll' | translate" severity="secondary" (click)="clearConditionDialog()"></button>
-          <button pButton type="button" [label]="'conditionDialog.cancel' | translate" severity="secondary" (click)="cancelConditionalTransition()"></button>
-        </ng-template>
-      </p-dialog>
+        [showOrientation]="conditionDialogMode() === 'autolink'"
+        [leftOrientationDisabled]="isAutolinkLeftOrientationDisabled()"
+        [tapeOptions]="tapeOptions()"
+        [symbols]="conditionSymbols"
+        [variables]="conditionVariables"
+        [parameters]="conditionParameters"
+        [value]="conditionDialogDraft"
+        (accept)="acceptConditionalTransition($event)"
+        (cancel)="cancelConditionalTransition()"
+      />
     </div>
   `,
   styles: [`
@@ -437,6 +337,10 @@ import { MachineLinkView, ViewPoint } from '../models/view';
       font-size: 26px;
       font-style: italic;
       fill: #000;
+    }
+
+    .machine-text-parameter {
+      fill: rgb(0, 204, 0);
     }
 
     .machine-text-selected {
@@ -532,110 +436,6 @@ import { MachineLinkView, ViewPoint } from '../models/view';
       text-decoration: overline;
     }
 
-    .condition-dialog {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      font-size: 0.875rem;
-    }
-
-    .condition-summary {
-      min-height: 1.5rem;
-      font-family: 'Times New Roman', Times, serif;
-      font-style: italic;
-    }
-
-    .condition-overline-symbol {
-      display: inline-block;
-      border-top: 1px solid currentColor;
-      line-height: 0.9;
-      padding-top: 0.125rem;
-    }
-
-    .condition-grid {
-      display: grid;
-      grid-template-columns: 1fr auto 1.25fr;
-      gap: 0.5rem;
-      align-items: stretch;
-    }
-
-    .condition-fieldset {
-      border: 1px solid var(--p-content-border-color);
-      padding: 0.75rem 0.5rem;
-      min-width: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .symbols-fieldset {
-      align-items: stretch;
-      justify-content: stretch;
-    }
-
-    .condition-not {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.75rem;
-      padding-top: 0.375rem;
-    }
-
-    .condition-select {
-      width: 4rem;
-    }
-
-    .condition-list {
-      width: 100%;
-      min-height: 7rem;
-      font-family: 'Times New Roman', Times, serif;
-      font-style: italic;
-    }
-
-    .orientation-fieldset {
-      grid-column: 1;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .orientation-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1.5rem);
-      grid-template-rows: repeat(3, 1.5rem);
-      gap: 0.125rem;
-    }
-
-    :host ::ng-deep .orientation-button {
-      width: 1.5rem;
-      height: 1.5rem;
-      padding: 0;
-    }
-
-    .orientation-top {
-      grid-column: 2;
-      grid-row: 1;
-    }
-
-    .orientation-left {
-      grid-column: 1;
-      grid-row: 2;
-    }
-
-    .orientation-right {
-      grid-column: 3;
-      grid-row: 2;
-    }
-
-    .orientation-bottom {
-      grid-column: 2;
-      grid-row: 3;
-    }
-
-    :host ::ng-deep .orientation-button-active {
-      border-color: rgb(255, 0, 255);
-      background: color-mix(in srgb, rgb(255, 0, 255) 20%, transparent);
-    }
-
     .node-context-menu-item {
       display: flex;
       align-items: center;
@@ -696,7 +496,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   readonly isAutolinkInsertionToolActive = computed(() => this.store.activeToolId() === 'loop-transition');
   readonly isTransitionToolActive = computed(() => this.isLinkInsertionToolActive());
   readonly isNodeInsertionToolActive = computed(() =>
-    ['move-left', 'move-right', 'symbol-lowercase', 'symbol-variable', 'hub'].includes(this.store.activeToolId() ?? ''),
+    ['move-left', 'move-right', 'symbol-lowercase', 'symbol-variable', 'symbol-uppercase', 'hub'].includes(this.store.activeToolId() ?? ''),
   );
   readonly isCanvasCursorActive = computed(
     () =>
@@ -780,6 +580,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     'ψ',
     'ω',
   ];
+  readonly conditionParameters = Array.from({ length: 26 }, (_, index) => String.fromCharCode(65 + index));
   readonly isAutolinkLeftOrientationDisabled = computed(() => {
     if (this.conditionDialogMode() !== 'autolink') {
       return false;
@@ -795,7 +596,9 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   conditionAssignToVariable: string | null = null;
   conditionSymbolsSelected: string[] = [this.conditionSymbols[0]];
   conditionVariablesSelected: string[] = [];
+  conditionParametersSelected: string[] = [];
   autolinkOrientation: 'top' | 'bottom' | 'left' | 'right' = 'right';
+  conditionDialogDraft: ConditionDialogValue = this.createConditionDialogValue();
   private contextMenuNodeId: string | null = null;
   private contextMenuLinkId: string | null = null;
   private draggedLinkVertex: { linkId: string; pointIndex: number; lastPoint: ViewPoint } | null = null;
@@ -890,12 +693,6 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     }));
   }
 
-  conditionSymbolLabel(): string {
-    const values = this.getAcceptedConditionValues().join(',');
-
-    return this.conditionAssignToVariable ? `${this.conditionAssignToVariable} = ${values}` : values;
-  }
-
   getLinkMarkerEnd(link: MachineLinkView): string {
     if (link.canvasSelected) {
       return 'url(#canvas-selected-arrowhead)';
@@ -988,10 +785,12 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.conditionAssignToVariable = editState.clause.assignToVariableName ?? null;
     this.conditionSymbolsSelected = editState.clause.acceptedValues.filter((value) => this.conditionSymbols.includes(value));
     this.conditionVariablesSelected = editState.clause.acceptedValues.filter((value) => this.conditionVariables.includes(value));
+    this.conditionParametersSelected = editState.clause.acceptedValues.filter((value) => this.conditionParameters.includes(value));
     this.autolinkOrientation = editState.autolinkOrientation ?? 'right';
     this.autolinkTargetNodeId.set(editState.nodeId ?? null);
     this.conditionDialogMode.set(editState.mode);
     this.normalizeAutolinkOrientation();
+    this.refreshConditionDialogDraft();
     this.conditionDialogVisible.set(true);
   }
 
@@ -1228,6 +1027,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.autolinkTargetNodeId.set(nodeId);
     this.conditionDialogMode.set('autolink');
     this.normalizeAutolinkOrientation();
+    this.refreshConditionDialogDraft();
     this.conditionDialogVisible.set(true);
     this.store.selectCanvasNodeForTransition(nodeId);
   }
@@ -1267,6 +1067,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     if (this.store.activeToolId() === 'conditional-transition') {
       this.conditionalTransitionTargetNodeId.set(nodeId);
       this.conditionDialogMode.set('conditional-link');
+      this.refreshConditionDialogDraft();
       this.conditionDialogVisible.set(true);
       return;
     }
@@ -1299,7 +1100,24 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     };
   }
 
-  acceptConditionalTransition(): void {
+  private createConditionDialogValue(): ConditionDialogValue {
+    return {
+      tapeIndex: this.conditionTapeIndex,
+      negated: this.conditionNegated,
+      assignToVariable: this.conditionAssignToVariable,
+      selectedSymbols: [...this.conditionSymbolsSelected],
+      selectedVariables: [...this.conditionVariablesSelected],
+      selectedParameters: [...this.conditionParametersSelected],
+      orientation: this.autolinkOrientation,
+    };
+  }
+
+  private refreshConditionDialogDraft(): void {
+    this.conditionDialogDraft = this.createConditionDialogValue();
+  }
+
+  acceptConditionalTransition(value: ConditionDialogValue): void {
+    this.applyConditionDialogValue(value);
     const editingLinkId = this.editingLinkId();
 
     if (editingLinkId) {
@@ -1354,15 +1172,6 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.clearTransitionDraft();
   }
 
-  clearConditionDialog(): void {
-    this.conditionTapeIndex = 0;
-    this.conditionNegated = false;
-    this.conditionAssignToVariable = null;
-    this.conditionSymbolsSelected = [];
-    this.conditionVariablesSelected = [];
-    this.autolinkOrientation = 'right';
-  }
-
   private acceptAutolinkCondition(): void {
     const nodeId = this.autolinkTargetNodeId();
 
@@ -1394,7 +1203,17 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   }
 
   private getAcceptedConditionValues(): string[] {
-    return [...this.conditionSymbolsSelected, ...this.conditionVariablesSelected];
+    return [...this.conditionSymbolsSelected, ...this.conditionVariablesSelected, ...this.conditionParametersSelected];
+  }
+
+  private applyConditionDialogValue(value: ConditionDialogValue): void {
+    this.conditionTapeIndex = value.tapeIndex;
+    this.conditionNegated = value.negated;
+    this.conditionAssignToVariable = value.assignToVariable;
+    this.conditionSymbolsSelected = [...value.selectedSymbols];
+    this.conditionVariablesSelected = [...value.selectedVariables];
+    this.conditionParametersSelected = [...value.selectedParameters];
+    this.autolinkOrientation = value.orientation;
   }
 
   private clearTransitionDraft(): void {

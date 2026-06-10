@@ -12,6 +12,7 @@ import { HubNode } from './hub-node';
 import { MetaValueDictionary } from './meta-value-dictionary';
 import { MoveLeftNode } from './move-left-node';
 import { MoveRightNode } from './move-right-node';
+import { ParameterValue } from './parameter-value';
 import { Tape } from './tape';
 import { SymbolValue } from './symbol-value';
 import { VariableValue } from './variable-value';
@@ -112,6 +113,56 @@ describe('MachineGraphRunner', () => {
         0: 'b',
       },
     });
+  });
+
+  it('writes the current value of a parameter node', () => {
+    const tape = new Tape();
+    const parameter = new ParameterValue('A');
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    parameter.setValue(SymbolValue.require('c'));
+    context.metaValues.addParameter(parameter);
+
+    const ok = new WriterNode('write-parameter-a', 'A', 0).execute(context);
+
+    expect(ok).toBe(true);
+    expect(tape.getSnapshot()).toEqual({
+      headPosition: 0,
+      cells: {
+        0: 'c',
+      },
+    });
+  });
+
+  it('records parameter writer nodes with the assigned value in the execution trace', () => {
+    const tape = new Tape();
+    const parameter = new ParameterValue('A');
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    parameter.setValue(SymbolValue.require('3'));
+    context.metaValues.addParameter(parameter);
+    const writeParameter = new WriterNode('write-parameter-a', 'A', 0, true);
+    const graph: MachineGraph = {
+      groups: [new LinearMachineGroup('write-parameter', writeParameter, writeParameter)],
+      links: [],
+      initialGroupId: 'write-parameter',
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA');
+
+    const ok = new MachineGraphRunner().run(graph, context, traceRecorder);
+
+    expect(ok).toBe(true);
+    expect(traceRecorder.root.children).toContainEqual(
+      expect.objectContaining({
+        label: 'A = 3',
+        kind: 'machine-node',
+        machineNodeId: 'write-parameter-a',
+      }),
+    );
   });
 
   it('assigns a read symbol to a variable when the condition passes', () => {
@@ -215,6 +266,23 @@ describe('MachineGraphRunner', () => {
     const condition = new LinkCondition([{ tapeIndex: 0, acceptedValues: ['β'] }]);
 
     expect(condition.getAteLabel()).toBe('[β]');
+    expect(condition.evaluate(context).success).toBe(true);
+  });
+
+  it('uses parameter values as accepted condition operands', () => {
+    const tape = new Tape();
+    const parameter = new ParameterValue('A');
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    tape.load('d');
+    tape.setHeadPosition(1);
+    parameter.setValue(SymbolValue.require('d'));
+    context.metaValues.addParameter(parameter);
+    const condition = new LinkCondition([{ tapeIndex: 0, acceptedValues: ['A'] }]);
+
+    expect(condition.getAteLabel()).toBe('[A]');
     expect(condition.evaluate(context).success).toBe(true);
   });
 

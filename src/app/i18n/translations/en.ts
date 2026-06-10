@@ -60,10 +60,19 @@ export const en: Record<string, string> = {
   'conditionDialog.not': 'Not',
   'conditionDialog.symbols': 'Symbols',
   'conditionDialog.variables': 'Variables',
+  'conditionDialog.parameters': 'Parameters',
   'conditionDialog.orientation': 'Orientation',
   'conditionDialog.accept': 'Accept',
   'conditionDialog.clearAll': 'Clear All',
   'conditionDialog.cancel': 'Cancel',
+
+  // Parameter Dialog
+  'parameterDialog.title': 'Parameter Assignment',
+  'parameterDialog.parameter': 'Parameter',
+  'parameterDialog.value': 'Value',
+  'parameterDialog.accept': 'Accept',
+  'parameterDialog.cancel': 'Cancel',
+  'parameterDialog.empty': 'No parameters',
 
   // Properties
   'properties.tool': 'Tool',
@@ -113,4 +122,5 @@ export const en: Record<string, string> = {
   'toast.simulationStarted': 'ETT generated, simulation started',
   'toast.simulationStopped': 'Simulation finished, ETT released',
   'toast.duplicateAutolink': 'Adding more than one self-link to a node is not allowed',
+  'toast.unassignedParameters': 'The machine cannot be executed because there are parameters without values',
 };

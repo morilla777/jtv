@@ -3,7 +3,7 @@ import { ExecutionContext } from './execution-context';
 import { SymbolValue } from './symbol-value';
 
 export class WriterNode extends AbstractMachineNode {
-  private lastVariableWrite: { variableName: string; valueName: string } | null = null;
+  private lastMetaValueWrite: { kind: 'variable' | 'parameter'; name: string; valueName: string } | null = null;
 
   constructor(
     id: string,
@@ -15,7 +15,7 @@ export class WriterNode extends AbstractMachineNode {
   }
 
   execute(context: ExecutionContext): boolean {
-    this.lastVariableWrite = null;
+    this.lastMetaValueWrite = null;
     const tape = context.tapes[this.tapeIndex];
 
     if (!tape) {
@@ -40,8 +40,15 @@ export class WriterNode extends AbstractMachineNode {
       tape.write(resolvedValue);
 
       if (context.metaValues.getVariable(this.name)) {
-        this.lastVariableWrite = {
-          variableName: this.name,
+        this.lastMetaValueWrite = {
+          kind: 'variable',
+          name: this.name,
+          valueName: resolvedValue.getName(),
+        };
+      } else if (context.metaValues.getParameter(this.name)) {
+        this.lastMetaValueWrite = {
+          kind: 'parameter',
+          name: this.name,
           valueName: resolvedValue.getName(),
         };
       }
@@ -53,7 +60,7 @@ export class WriterNode extends AbstractMachineNode {
   }
 
   override getAteIconName(): string {
-    if (this.lastVariableWrite) {
+    if (this.lastMetaValueWrite?.kind === 'variable') {
       return 'sigma_ATE.gif';
     }
 
@@ -61,8 +68,12 @@ export class WriterNode extends AbstractMachineNode {
   }
 
   override getAteLabel(): string {
-    if (this.lastVariableWrite) {
-      return `[${this.lastVariableWrite.variableName} = ${this.lastVariableWrite.valueName}]`;
+    if (this.lastMetaValueWrite?.kind === 'variable') {
+      return `[${this.lastMetaValueWrite.name} = ${this.lastMetaValueWrite.valueName}]`;
+    }
+
+    if (this.lastMetaValueWrite?.kind === 'parameter') {
+      return `${this.lastMetaValueWrite.name} = ${this.lastMetaValueWrite.valueName}`;
     }
 
     return super.getAteLabel();
