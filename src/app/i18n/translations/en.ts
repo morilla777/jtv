@@ -118,9 +118,19 @@ export const en: Record<string, string> = {
   'simulator.tapeNavigation.centerPage': 'Center tape page',
   'simulator.tapeNavigation.forwardPage': 'Next tape page',
 
+  // Status bar
+  'status.file.label': 'File:',
+  'status.file.empty': 'No file',
+
   // Toasts
   'toast.simulationStarted': 'ETT generated, simulation started',
   'toast.simulationStopped': 'Simulation finished, ETT released',
   'toast.duplicateAutolink': 'Adding more than one self-link to a node is not allowed',
   'toast.unassignedParameters': 'The machine cannot be executed because there are parameters without values',
+  'toast.machineNew': 'New machine created',
+  'toast.machineOpened': 'Machine opened from {{fileName}}',
+  'toast.machineOpenError': 'The machine file could not be opened',
+  'toast.machineSaved': 'Machine saved to {{fileName}}',
+  'toast.machineExported': 'Machine exported to {{fileName}}',
+  'toast.machineSaveError': 'The machine file could not be saved',
 };

@@ -118,10 +118,20 @@ export const es: Record<string, string> = {
   'simulator.tapeNavigation.centerPage': 'Centrar página de cinta',
   'simulator.tapeNavigation.forwardPage': 'Avanzar página de cinta',
 
+  // Barra de estado
+  'status.file.label': 'Archivo:',
+  'status.file.empty': 'Sin archivo',
+
   // Toasts
   'toast.simulationStarted': 'ATE generado, simulación iniciada',
   'toast.simulationStopped': 'Simulación finalizada, ATE liberado',
   'toast.duplicateAutolink': 'No se permite agregar más de un autoenlace a un nodo',
   'toast.unassignedParameters': 'No puede ejecutar la máquina ya que existen parámetros sin valor',
+  'toast.machineNew': 'Nueva m\u00e1quina creada',
+  'toast.machineOpened': 'M\u00e1quina abierta desde {{fileName}}',
+  'toast.machineOpenError': 'No se pudo abrir el archivo de m\u00e1quina',
+  'toast.machineSaved': 'M\u00e1quina guardada en {{fileName}}',
+  'toast.machineExported': 'M\u00e1quina exportada a {{fileName}}',
+  'toast.machineSaveError': 'No se pudo guardar el archivo de m\u00e1quina',
 };
 

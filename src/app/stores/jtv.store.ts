@@ -1,4 +1,4 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { AteNode, AteTraceRecorder } from '../models/ate';
 import { Autolink } from '../models/core/autolink';
@@ -18,6 +18,8 @@ import { SymbolValue } from '../models/core/symbol-value';
 import { Tape, TapeSnapshot } from '../models/core/tape';
 import { WriterNode } from '../models/core/writer-node';
 import { AutolinkOrientation, MachineGraphView, MachineLinkKind, MachineLinkView, ViewPoint } from '../models/view';
+import { createJtvFileFromState, restoreMachineFromJtvFile, type JtvFile } from '../services/jtv-file-serializer';
+import { JtvFileService } from '../services/jtv-file.service';
 
 export type JtvToolId =
   | 'symbol-lowercase'
@@ -289,10 +291,28 @@ function getNextTapeIndex(tapes: readonly JtvTapeState[]): number {
 
 @Injectable({ providedIn: 'root' })
 export class JtvStore {
+  private static readonly MAX_HISTORY_SIZE = 50;
+
   private readonly state = signal<JtvState>(createInitialState());
+  private readonly fileService = inject(JtvFileService);
   private readonly machineGraphRunner = new MachineGraphRunner();
+  private readonly historyRevision = signal(0);
+  private undoStack: JtvFile[] = [];
+  private redoStack: JtvFile[] = [];
+  private lastHistorySnapshot: JtvFile | null = null;
+  private historyTransactionStart: JtvFile | null = null;
 
   readonly activeToolId = computed(() => this.state().activeToolId);
+  readonly canUndo = computed(() => {
+    this.historyRevision();
+
+    return this.undoStack.length > 0;
+  });
+  readonly canRedo = computed(() => {
+    this.historyRevision();
+
+    return this.redoStack.length > 0;
+  });
   readonly ate = computed(() => this.state().ate);
   readonly selectedAteNode = computed(() => this.findAteNode(this.state().ate, this.state().selectedAteNodeId));
   readonly activeAteMachineNodeId = computed(() => this.selectedAteNode()?.machineNodeId ?? null);
@@ -347,6 +367,10 @@ export class JtvStore {
     return tapes[selectedTapeIndex] ?? tapes[0] ?? null;
   });
 
+  constructor() {
+    this.resetHistory();
+  }
+
   selectTool(toolId: JtvToolId | null): void {
     this.patchState({
       activeToolId: toolId,
@@ -369,12 +393,28 @@ export class JtvStore {
     this.patchState({ selectedMachine: machine });
   }
 
+  renameSelectedMachine(name: string): void {
+    this.state.update((current) => ({
+      ...current,
+      ate: {
+        ...current.ate,
+        label: name,
+      },
+      selectedMachine: {
+        ...current.selectedMachine,
+        name,
+      },
+    }));
+    this.lastHistorySnapshot = this.captureHistorySnapshot();
+  }
+
   selectParameter(parameter: string): void {
     this.patchState({ selectedParameter: parameter });
   }
 
   assignParameters(assignments: Readonly<Record<string, string>>): void {
     this.patchState({ parameterAssignments: { ...assignments } });
+    this.markMachineDirty();
   }
 
   selectSymbol(symbol: string): void {
@@ -518,6 +558,7 @@ export class JtvStore {
         selectedCanvasNodeId: null,
       };
     });
+    this.markMachineDirty();
   }
 
   createConditionalLinkBetweenNodes(
@@ -588,6 +629,7 @@ export class JtvStore {
         selectedCanvasNodeId: null,
       };
     });
+    this.markMachineDirty();
   }
 
   getCanvasLinkEditState(linkId: string): JtvLinkEditState | null {
@@ -681,6 +723,7 @@ export class JtvStore {
         selectedCanvasNodeId: null,
       };
     });
+    this.markMachineDirty();
   }
 
   insertActiveToolNodeNear(targetNodeId: string, side: 'left' | 'right'): void {
@@ -789,6 +832,7 @@ export class JtvStore {
         selectedCanvasNodeId: insertedNode.id,
       };
     });
+    this.markMachineDirty();
   }
 
   insertActiveToolNodeAt(position: ViewPoint): void {
@@ -848,6 +892,7 @@ export class JtvStore {
         selectedCanvasNodeId: insertedNode.id,
       };
     });
+    this.markMachineDirty();
   }
 
   moveCanvasGroupContainingNode(nodeId: string, delta: ViewPoint): void {
@@ -884,6 +929,7 @@ export class JtvStore {
         },
       };
     });
+    this.markMachineDirty();
   }
 
   makeCanvasNodeInitial(nodeId: string): void {
@@ -926,6 +972,7 @@ export class JtvStore {
         selectedCanvasNodeId: nodeId,
       };
     });
+    this.markMachineDirty();
   }
 
   canMakeCanvasNodeInitial(nodeId: string): boolean {
@@ -1060,6 +1107,7 @@ export class JtvStore {
         selectedCanvasNodeId: null,
       };
     });
+    this.markMachineDirty();
   }
 
   deleteCanvasLink(linkId: string): void {
@@ -1091,6 +1139,7 @@ export class JtvStore {
         selectedCanvasNodeId: null,
       };
     });
+    this.markMachineDirty();
   }
 
   moveCanvasLinkVertex(linkId: string, pointIndex: number, delta: ViewPoint): void {
@@ -1123,6 +1172,7 @@ export class JtvStore {
       selectedCanvasLinkId: linkId,
       selectedCanvasNodeId: null,
     }));
+    this.markMachineDirty();
   }
 
   setTapeValue(tapeId: string, value: string): void {
@@ -1236,8 +1286,118 @@ export class JtvStore {
     }));
   }
 
+  undo(): void {
+    if (this.undoStack.length === 0) {
+      return;
+    }
+
+    const currentSnapshot = this.captureHistorySnapshot();
+    const previousSnapshot = this.undoStack.pop()!;
+
+    this.redoStack.push(currentSnapshot);
+    this.applyHistorySnapshot(previousSnapshot);
+    this.lastHistorySnapshot = previousSnapshot;
+    this.bumpHistoryRevision();
+    this.markMachineDirty();
+  }
+
+  redo(): void {
+    if (this.redoStack.length === 0) {
+      return;
+    }
+
+    const currentSnapshot = this.captureHistorySnapshot();
+    const nextSnapshot = this.redoStack.pop()!;
+
+    this.undoStack.push(currentSnapshot);
+    this.applyHistorySnapshot(nextSnapshot);
+    this.lastHistorySnapshot = nextSnapshot;
+    this.bumpHistoryRevision();
+    this.markMachineDirty();
+  }
+
+  beginMachineHistoryTransaction(): void {
+    if (this.historyTransactionStart) {
+      return;
+    }
+
+    this.historyTransactionStart = this.lastHistorySnapshot ?? this.captureHistorySnapshot();
+  }
+
+  commitMachineHistoryTransaction(): void {
+    if (!this.historyTransactionStart) {
+      return;
+    }
+
+    const transactionStart = this.historyTransactionStart;
+    const currentSnapshot = this.captureHistorySnapshot();
+
+    this.historyTransactionStart = null;
+
+    if (!this.areHistorySnapshotsEqual(transactionStart, currentSnapshot)) {
+      this.pushUndoSnapshot(transactionStart);
+      this.redoStack = [];
+      this.lastHistorySnapshot = currentSnapshot;
+      this.bumpHistoryRevision();
+      this.fileService.markDirty();
+    }
+  }
+
+  exportMachineFile(): JtvFile {
+    return createJtvFileFromState(this.state());
+  }
+
+  importMachineFile(file: JtvFile): void {
+    const restored = restoreMachineFromJtvFile(file);
+
+    this.state.update((current) => ({
+      ...current,
+      activeToolId: null,
+      ate: new AteTraceRecorder(restored.selectedMachine.name).root,
+      machineGraph: restored.machineGraph,
+      machineGraphView: restored.machineGraphView,
+      parameterAssignments: restored.parameterAssignments,
+      selectedAteNodeId: null,
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: null,
+      selectedMachine: restored.selectedMachine,
+    }));
+    this.resetHistory();
+  }
+
+  createNewMachine(): void {
+    const selectedMachine = {
+      id: this.createUuid(),
+      name: 'NUEVA',
+    };
+
+    this.state.update((current) => ({
+      ...current,
+      activeToolId: null,
+      ate: new AteTraceRecorder(selectedMachine.name).root,
+      machineGraph: {
+        groups: [],
+        links: [],
+        autolinks: [],
+        initialGroupId: '',
+      },
+      machineGraphView: {
+        groups: [],
+        nodes: [],
+        links: [],
+      },
+      parameterAssignments: {},
+      selectedAteNodeId: null,
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: null,
+      selectedMachine,
+    }));
+    this.resetHistory();
+  }
+
   reset(): void {
     this.state.set(createInitialState());
+    this.resetHistory();
   }
 
   private patchState(patch: Partial<JtvState>): void {
@@ -1245,6 +1405,69 @@ export class JtvStore {
       ...current,
       ...patch,
     }));
+  }
+
+  private markMachineDirty(): void {
+    if (this.historyTransactionStart) {
+      this.fileService.markDirty();
+      return;
+    }
+
+    const currentSnapshot = this.captureHistorySnapshot();
+
+    if (this.lastHistorySnapshot && !this.areHistorySnapshotsEqual(this.lastHistorySnapshot, currentSnapshot)) {
+      this.pushUndoSnapshot(this.lastHistorySnapshot);
+      this.redoStack = [];
+      this.lastHistorySnapshot = currentSnapshot;
+      this.bumpHistoryRevision();
+    }
+
+    this.fileService.markDirty();
+  }
+
+  private resetHistory(): void {
+    this.undoStack = [];
+    this.redoStack = [];
+    this.historyTransactionStart = null;
+    this.lastHistorySnapshot = this.captureHistorySnapshot();
+    this.bumpHistoryRevision();
+  }
+
+  private pushUndoSnapshot(snapshot: JtvFile): void {
+    this.undoStack.push(snapshot);
+
+    if (this.undoStack.length > JtvStore.MAX_HISTORY_SIZE) {
+      this.undoStack.shift();
+    }
+  }
+
+  private captureHistorySnapshot(): JtvFile {
+    return createJtvFileFromState(this.state(), { preserveIds: true });
+  }
+
+  private applyHistorySnapshot(snapshot: JtvFile): void {
+    const restored = restoreMachineFromJtvFile(snapshot);
+
+    this.state.update((current) => ({
+      ...current,
+      activeToolId: null,
+      ate: new AteTraceRecorder(restored.selectedMachine.name).root,
+      machineGraph: restored.machineGraph,
+      machineGraphView: restored.machineGraphView,
+      parameterAssignments: restored.parameterAssignments,
+      selectedAteNodeId: null,
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: null,
+      selectedMachine: restored.selectedMachine,
+    }));
+  }
+
+  private areHistorySnapshotsEqual(left: JtvFile, right: JtvFile): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+
+  private bumpHistoryRevision(): void {
+    this.historyRevision.update((revision) => revision + 1);
   }
 
   private mutateTape(tapeId: string, mutate: (tape: Tape) => void): void {
@@ -1466,62 +1689,24 @@ export class JtvStore {
   }
 
   private createMachineNodeId(graph: MachineGraph, prefix: string): string {
-    const usedNodeIds = new Set<string>();
-
-    for (const group of graph.groups) {
-      const visitedNodeIds = new Set<string>();
-      let current = group.entry;
-
-      while (current && !visitedNodeIds.has(current.id)) {
-        visitedNodeIds.add(current.id);
-        usedNodeIds.add(current.id);
-
-        if (current.id === group.exit?.id) {
-          break;
-        }
-
-        current = current.next;
-      }
-    }
-
-    let nextIndex = usedNodeIds.size + 1;
-    let id = `${prefix}-${nextIndex}`;
-
-    while (usedNodeIds.has(id)) {
-      nextIndex++;
-      id = `${prefix}-${nextIndex}`;
-    }
-
-    return id;
+    return this.createUuid();
   }
 
   private createMachineGroupId(graph: MachineGraph, prefix: string): string {
-    const usedGroupIds = new Set(graph.groups.map((group) => group.id));
-    let nextIndex = usedGroupIds.size + 1;
-    let id = `${prefix}-${nextIndex}`;
-
-    while (usedGroupIds.has(id)) {
-      nextIndex++;
-      id = `${prefix}-${nextIndex}`;
-    }
-
-    return id;
+    return this.createUuid();
   }
 
   private createMachineLinkId(graph: MachineGraph, prefix: string): string {
-    const usedLinkIds = new Set([
-      ...graph.links.map((link) => link.id),
-      ...(graph.autolinks ?? []).map((autolink) => autolink.id),
-    ]);
-    let nextIndex = usedLinkIds.size + 1;
-    let id = `${prefix}-${nextIndex}`;
+    return this.createUuid();
+  }
 
-    while (usedLinkIds.has(id)) {
-      nextIndex++;
-      id = `${prefix}-${nextIndex}`;
-    }
+  private createUuid(): string {
+    return globalThis.crypto?.randomUUID?.() ?? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (placeholder) => {
+      const value = Math.floor(Math.random() * 16);
+      const digit = placeholder === 'x' ? value : (value & 0x3) | 0x8;
 
-    return id;
+      return digit.toString(16);
+    });
   }
 
   private isInsertableNodeTool(
@@ -1633,6 +1818,7 @@ export class JtvStore {
         selectedCanvasNodeId: null,
       };
     });
+    this.markMachineDirty();
   }
 
   private translateLinkForMovedGroup(link: MachineLinkView, groupId: string, delta: ViewPoint): MachineLinkView {

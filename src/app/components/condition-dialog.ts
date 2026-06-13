@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 
-import { TranslatePipe } from '../i18n/translate.pipe';
+import { TranslatePipe } from '../pipes/translate.pipe';
 import { AutolinkOrientation } from '../models/view';
 
 export interface ConditionDialogTapeOption {

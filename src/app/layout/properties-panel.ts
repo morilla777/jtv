@@ -1,6 +1,6 @@
 import { Component, computed, inject } from '@angular/core';
 import { ButtonModule } from 'primeng/button';
-import { TranslatePipe } from '../i18n/translate.pipe';
+import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvStore, type JtvToolId } from '../stores/jtv.store';
 
 interface ToolButton {

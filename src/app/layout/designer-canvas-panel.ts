@@ -4,7 +4,7 @@ import { ButtonModule } from 'primeng/button';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
 
 import { ConditionDialog, ConditionDialogValue } from '../components/condition-dialog';
-import { TranslationService } from '../i18n/translation.service';
+import { TranslationService } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 import { MachineLinkView, ViewPoint } from '../models/view';
 
@@ -837,7 +837,9 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     }
 
     event.preventDefault();
+    this.stopDragging();
     this.store.selectCanvasNode(nodeId);
+    this.store.beginMachineHistoryTransaction();
     this.draggedNodeGroup = {
       nodeId,
       lastPoint: point,
@@ -880,7 +882,8 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
     event.preventDefault();
     event.stopPropagation();
-    this.draggedNodeGroup = null;
+    this.stopDragging();
+    this.store.beginMachineHistoryTransaction();
     this.store.selectCanvasLink(linkId);
     this.draggedLinkVertex = {
       linkId,
@@ -912,8 +915,14 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   }
 
   stopDragging(): void {
+    const hadDrag = !!this.draggedNodeGroup || !!this.draggedLinkVertex;
+
     this.draggedNodeGroup = null;
     this.draggedLinkVertex = null;
+
+    if (hadDrag) {
+      this.store.commitMachineHistoryTransaction();
+    }
   }
 
   addTransitionDraftVertex(event: MouseEvent): boolean {

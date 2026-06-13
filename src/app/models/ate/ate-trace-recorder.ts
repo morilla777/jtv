@@ -11,7 +11,7 @@ export class AteTraceRecorder {
   constructor(machineName: string) {
     this.root = {
       id: 'ate-root',
-      label: `ATE ${machineName}`,
+      label: machineName,
       iconSrc: this.getIconSrc('ATE_ATE.gif'),
       kind: 'root',
       children: [],

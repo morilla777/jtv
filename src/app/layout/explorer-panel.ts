@@ -2,8 +2,8 @@ import { Component, computed, inject } from '@angular/core';
 import { TreeNode } from 'primeng/api';
 import { TabsModule } from 'primeng/tabs';
 import { TreeModule } from 'primeng/tree';
-import { TranslatePipe } from '../i18n/translate.pipe';
-import { TranslationService } from '../i18n/translation.service';
+import { TranslatePipe } from '../pipes/translate.pipe';
+import { TranslationService } from '../services/translation.service';
 import { AteNode } from '../models/ate';
 import { JtvStore } from '../stores/jtv.store';
 
@@ -240,7 +240,7 @@ export class ExplorerPanel {
   private toTreeNode(node: AteNode): TreeNode {
     return {
       key: node.id,
-      label: node.kind === 'root' ? this.i18n.translate('explorer.ateRootLabel') : node.label,
+      label: node.kind === 'root' ? node.label || this.i18n.translate('explorer.ateRootLabel') : node.label,
       data: {
         iconSrc: node.kind === 'root' ? this.getAteRootIconSrc() : node.iconSrc,
         ateNodeId: node.id,

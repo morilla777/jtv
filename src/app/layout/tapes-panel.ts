@@ -4,8 +4,8 @@ import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { ToolbarModule } from 'primeng/toolbar';
-import { TranslatePipe } from '../i18n/translate.pipe';
-import { TranslationService } from '../i18n/translation.service';
+import { TranslatePipe } from '../pipes/translate.pipe';
+import { TranslationService } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 
 interface TapeButton {

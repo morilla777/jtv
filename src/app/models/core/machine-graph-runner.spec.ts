@@ -19,6 +19,10 @@ import { VariableValue } from './variable-value';
 import { WriterNode } from './writer-node';
 
 describe('MachineGraphRunner', () => {
+  it('uses the machine name as the ATE root label without a prefix', () => {
+    expect(new AteTraceRecorder('MULTIPLICADORA').root.label).toBe('MULTIPLICADORA');
+  });
+
   it('runs a graph that writes abcd and returns the head to the beginning', () => {
     const tape = new Tape();
     const context = {

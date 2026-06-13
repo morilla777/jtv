@@ -1,6 +1,6 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { es } from './translations/es';
-import { en } from './translations/en';
+import { es } from '../i18n/translations/es';
+import { en } from '../i18n/translations/en';
 
 export const AVAILABLE_LANGUAGES = ['es', 'en'] as const;
 export type Language = (typeof AVAILABLE_LANGUAGES)[number];

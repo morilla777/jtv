@@ -8,6 +8,8 @@ import { ExplorerPanel } from './explorer-panel';
 import { DesignerCanvasPanel } from './designer-canvas-panel';
 import { PropertiesPanel } from './properties-panel';
 import { TapesPanel } from './tapes-panel';
+import { TranslatePipe } from '../pipes/translate.pipe';
+import { JtvFileService } from '../services/jtv-file.service';
 
 @Component({
   selector: 'app-shell',
@@ -19,6 +21,7 @@ import { TapesPanel } from './tapes-panel';
     DesignerCanvasPanel,
     PropertiesPanel,
     TapesPanel,
+    TranslatePipe,
   ],
   template: `
     <div class="app-shell">
@@ -61,6 +64,11 @@ import { TapesPanel } from './tapes-panel';
           </ng-template>
         </p-splitter>
       </div>
+
+      <footer class="status-bar" [title]="currentFilePath() || ('status.file.empty' | translate)">
+        <span class="status-label">{{ 'status.file.label' | translate }}</span>
+        <span class="status-value">{{ currentFilePath() || ('status.file.empty' | translate) }}</span>
+      </footer>
     </div>
   `,
   styles: [`
@@ -81,6 +89,33 @@ import { TapesPanel } from './tapes-panel';
       min-height: 0;
       padding: 0.5rem;
       overflow: hidden;
+    }
+
+    .status-bar {
+      flex: 0 0 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      min-width: 0;
+      padding: 0 0.5rem;
+      border-top: 1px solid var(--p-content-border-color);
+      background: var(--p-surface-card);
+      color: var(--p-text-muted-color);
+      font-size: 0.75rem;
+      line-height: 1;
+    }
+
+    .status-label {
+      flex: 0 0 auto;
+      font-weight: 600;
+      color: var(--p-text-color);
+    }
+
+    .status-value {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .toast-modal-mask {
@@ -118,9 +153,11 @@ import { TapesPanel } from './tapes-panel';
 })
 export class AppShell implements OnInit, OnDestroy {
   private readonly messageService = inject(MessageService);
+  private readonly fileService = inject(JtvFileService);
   private readonly subscriptions = new Subscription();
 
   readonly simulationToastModalVisible = signal(false);
+  readonly currentFilePath = this.fileService.currentFilePath;
 
   ngOnInit(): void {
     this.subscriptions.add(

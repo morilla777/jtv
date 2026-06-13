@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, HostListener, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MessageService, type MenuItem } from 'primeng/api';
 import { ToolbarModule } from 'primeng/toolbar';
@@ -6,8 +6,9 @@ import { ButtonModule } from 'primeng/button';
 import { MenubarModule } from 'primeng/menubar';
 import { SelectModule, type SelectChangeEvent } from 'primeng/select';
 import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
-import { TranslatePipe } from '../i18n/translate.pipe';
-import { TranslationService, type Language } from '../i18n/translation.service';
+import { TranslatePipe } from '../pipes/translate.pipe';
+import { JtvFileService } from '../services/jtv-file.service';
+import { TranslationService, type Language } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 
 interface LanguageOption {
@@ -23,6 +24,46 @@ interface LanguageOption {
   template: `
     <div class="topbar-shell">
       <p-menubar [model]="menuItems" class="jtv-menubar">
+        <ng-template #start>
+          <div class="file-menu-shell">
+            <button
+              type="button"
+              class="file-menu-trigger"
+              [attr.aria-expanded]="fileMenuOpen"
+              aria-haspopup="menu"
+              (click)="toggleFileMenu($event)"
+            >
+              <span class="pi pi-file"></span>
+              <span>{{ 'topbar.menu.file' | translate }}</span>
+            </button>
+
+            @if (fileMenuOpen) {
+              <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'new')">
+                  <span class="pi pi-plus"></span>
+                  <span>{{ 'topbar.menu.file.new' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'open')">
+                  <span class="pi pi-folder-open"></span>
+                  <span>{{ 'topbar.menu.file.open' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'save')">
+                  <span class="pi pi-save"></span>
+                  <span>{{ 'topbar.menu.file.save' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'saveAs')">
+                  <span class="pi pi-save"></span>
+                  <span>{{ 'topbar.menu.file.saveAs' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'exportJson')">
+                  <span class="pi pi-code"></span>
+                  <span>{{ 'topbar.menu.file.exportTo.json' | translate }}</span>
+                </button>
+              </div>
+            }
+          </div>
+        </ng-template>
+
         <ng-template #end>
           <div class="menubar-end">
             <div class="lang-switcher">
@@ -70,6 +111,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.new' | translate"
               [title]="'topbar.new' | translate"
+              (click)="newMachine()"
             >
               <img src="assets/images/New24.gif" alt="" />
             </button>
@@ -79,6 +121,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.save' | translate"
               [title]="'topbar.save' | translate"
+              (click)="saveMachine()"
             >
               <img src="assets/images/Save24.gif" alt="" />
             </button>
@@ -88,6 +131,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.import' | translate"
               [title]="'topbar.import' | translate"
+              (click)="openMachine()"
             >
               <img src="assets/images/Open24.gif" alt="" />
             </button>
@@ -107,6 +151,8 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.undo' | translate"
               [title]="'topbar.menu.edit.undo' | translate"
+              [disabled]="!canUndo"
+              (click)="undo()"
             >
               <img src="assets/images/Undo24.gif" alt="" />
             </button>
@@ -116,6 +162,8 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.redo' | translate"
               [title]="'topbar.menu.edit.redo' | translate"
+              [disabled]="!canRedo"
+              (click)="redo()"
             >
               <img src="assets/images/Redo24.gif" alt="" />
             </button>
@@ -258,6 +306,67 @@ interface LanguageOption {
 
     :host ::ng-deep .jtv-menubar .p-menubar-submenu {
       z-index: 1001;
+    }
+
+    .file-menu-shell {
+      position: relative;
+      display: flex;
+      align-items: center;
+      height: 100%;
+    }
+
+    .file-menu-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      height: 2rem;
+      padding: 0.5rem 0.75rem;
+      border: 0;
+      border-radius: var(--p-menubar-item-border-radius, 4px);
+      color: var(--p-menubar-item-color, var(--p-text-color));
+      background: transparent;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .file-menu-trigger:hover,
+    .file-menu-trigger[aria-expanded="true"] {
+      color: var(--p-menubar-item-focus-color, var(--p-text-color));
+      background: var(--p-menubar-item-focus-background, var(--p-content-hover-background));
+    }
+
+    .file-menu-panel {
+      position: absolute;
+      top: calc(100% + 2px);
+      left: 0;
+      z-index: 1002;
+      min-width: 13rem;
+      padding: 0.25rem;
+      border: 1px solid var(--p-content-border-color);
+      border-radius: var(--p-menubar-submenu-border-radius, 4px);
+      background: var(--p-content-background);
+      box-shadow: var(--p-overlay-popover-shadow);
+    }
+
+    .file-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+      min-height: 2rem;
+      padding: 0.5rem 0.75rem;
+      border: 0;
+      border-radius: var(--p-menubar-item-border-radius, 4px);
+      color: var(--p-menubar-item-color, var(--p-text-color));
+      background: transparent;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+    }
+
+    .file-menu-item:hover {
+      color: var(--p-menubar-item-focus-color, var(--p-text-color));
+      background: var(--p-menubar-item-focus-background, var(--p-content-hover-background));
     }
 
     .jtv-topbar {
@@ -404,6 +513,7 @@ interface LanguageOption {
 })
 export class Topbar {
   readonly i18n = inject(TranslationService);
+  private readonly fileService = inject(JtvFileService);
   private readonly messageService = inject(MessageService);
   private readonly store = inject(JtvStore);
 
@@ -446,6 +556,7 @@ export class Topbar {
 
   selectedMachine = this.machineOptions[0];
   executionFinished = false;
+  fileMenuOpen = false;
   parameterAssignmentDialogVisible = false;
 
   get selectedSymbol(): string {
@@ -480,6 +591,14 @@ export class Topbar {
     return this.store.parameterAssignments();
   }
 
+  get canUndo(): boolean {
+    return this.store.canUndo();
+  }
+
+  get canRedo(): boolean {
+    return this.store.canRedo();
+  }
+
   openParameterAssignmentDialog(): void {
     this.parameterAssignmentDialogVisible = true;
   }
@@ -488,69 +607,18 @@ export class Topbar {
     this.store.assignParameters(assignments);
   }
 
+  undo(): void {
+    this.executionFinished = false;
+    this.store.undo();
+  }
+
+  redo(): void {
+    this.executionFinished = false;
+    this.store.redo();
+  }
+
   get menuItems(): MenuItem[] {
     return [
-      {
-        label: this.i18n.translate('topbar.menu.file'),
-        icon: 'pi pi-file',
-        items: [
-          {
-            label: this.i18n.translate('topbar.menu.file.new'),
-            icon: 'pi pi-plus',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.file.open'),
-            icon: 'pi pi-folder-open',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.file.save'),
-            icon: 'pi pi-save',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.file.saveAs'),
-            icon: 'pi pi-save',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.file.print'),
-            icon: 'pi pi-print',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.file.recentMachines'),
-            icon: 'pi pi-history',
-            items: [
-              {
-                label: this.i18n.translate('topbar.menu.file.recentMachines.dummyOne'),
-                icon: 'pi pi-cog',
-              },
-              {
-                label: this.i18n.translate('topbar.menu.file.recentMachines.dummyTwo'),
-                icon: 'pi pi-cog',
-              },
-            ],
-          },
-          {
-            label: this.i18n.translate('topbar.menu.file.exportTo'),
-            icon: 'pi pi-download',
-            items: [
-              {
-                label: this.i18n.translate('topbar.menu.file.exportTo.json'),
-                icon: 'pi pi-code',
-              },
-              {
-                label: this.i18n.translate('topbar.menu.file.exportTo.png'),
-                icon: 'pi pi-image',
-              },
-            ],
-          },
-          {
-            separator: true,
-          },
-          {
-            label: this.i18n.translate('topbar.menu.file.exit'),
-            icon: 'pi pi-sign-out',
-          },
-        ],
-      },
       {
         label: this.i18n.translate('topbar.menu.edit'),
         icon: 'pi pi-pencil',
@@ -558,10 +626,14 @@ export class Topbar {
           {
             label: this.i18n.translate('topbar.menu.edit.undo'),
             icon: 'pi pi-undo',
+            disabled: !this.canUndo,
+            command: () => this.undo(),
           },
           {
             label: this.i18n.translate('topbar.menu.edit.redo'),
             icon: 'pi pi-refresh',
+            disabled: !this.canRedo,
+            command: () => this.redo(),
           },
           {
             label: this.i18n.translate('topbar.menu.edit.makeInitial'),
@@ -645,6 +717,162 @@ export class Topbar {
     if (selected) {
       this.i18n.setLanguage(selected.code);
     }
+  }
+
+  @HostListener('document:click')
+  closeFileMenu(): void {
+    this.fileMenuOpen = false;
+  }
+
+  toggleFileMenu(event: Event): void {
+    event.stopPropagation();
+    this.fileMenuOpen = !this.fileMenuOpen;
+  }
+
+  runFileMenuAction(event: Event, action: 'new' | 'open' | 'save' | 'saveAs' | 'exportJson'): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.fileMenuOpen = false;
+
+    if (action === 'new') {
+      this.newMachine();
+      return;
+    }
+
+    if (action === 'open') {
+      void this.openMachine();
+      return;
+    }
+
+    if (action === 'save') {
+      void this.saveMachine();
+      return;
+    }
+
+    if (action === 'saveAs') {
+      void this.saveMachineAs();
+      return;
+    }
+
+    void this.exportMachineJson();
+  }
+
+  newMachine(): void {
+    this.executionFinished = false;
+    this.fileService.clearCurrentFile();
+    this.store.createNewMachine();
+    this.messageService.add({
+      key: 'simulation',
+      severity: 'info',
+      summary: 'JTV',
+      detail: this.i18n.translate('toast.machineNew'),
+      sticky: true,
+      closable: true,
+    });
+  }
+
+  async openMachine(): Promise<void> {
+    try {
+      const opened = await this.fileService.open();
+
+      if (!opened) {
+        return;
+      }
+
+      this.executionFinished = false;
+      this.store.importMachineFile(opened.file);
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'success',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.machineOpened', { fileName: opened.fileName }),
+        sticky: true,
+        closable: true,
+      });
+    } catch {
+      this.showPersistenceError('toast.machineOpenError');
+    }
+  }
+
+  async saveMachine(): Promise<void> {
+    try {
+      const fileName = this.getSuggestedMachineFileName();
+      const saved = await this.fileService.save(this.store.exportMachineFile(), fileName);
+
+      this.store.renameSelectedMachine(saved.machineName);
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'success',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.machineSaved', { fileName: saved.fileName }),
+        sticky: true,
+        closable: true,
+      });
+    } catch {
+      this.showPersistenceError('toast.machineSaveError');
+    }
+  }
+
+  async saveMachineAs(): Promise<void> {
+    try {
+      const fileName = this.getSuggestedMachineFileName();
+
+      const saved = await this.fileService.saveAs(this.store.exportMachineFile(), fileName);
+
+      this.store.renameSelectedMachine(saved.machineName);
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'success',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.machineSaved', { fileName: saved.fileName }),
+        sticky: true,
+        closable: true,
+      });
+    } catch {
+      this.showPersistenceError('toast.machineSaveError');
+    }
+  }
+
+  async exportMachineJson(): Promise<void> {
+    try {
+      const fileName = this.getSuggestedMachineFileName();
+
+      await this.fileService.exportJson(this.store.exportMachineFile(), fileName);
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'success',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.machineExported', { fileName }),
+        sticky: true,
+        closable: true,
+      });
+    } catch {
+      this.showPersistenceError('toast.machineSaveError');
+    }
+  }
+
+  private getSuggestedMachineFileName(): string {
+    const machineName = this.store.selectedMachine().name || 'jtv-machine';
+    const normalizedName = machineName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+
+    return `${normalizedName || 'jtv-machine'}.jtv.json`;
+  }
+
+  private showPersistenceError(messageKey: string): void {
+    this.messageService.add({
+      key: 'simulation',
+      severity: 'error',
+      summary: 'JTV',
+      detail: this.i18n.translate(messageKey),
+      sticky: true,
+      closable: true,
+    });
   }
 
   executeMachine(): void {
