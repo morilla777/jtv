@@ -109,7 +109,7 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                   (mousemove)="hoverNode(node.nodeId, $event)"
                   (mouseleave)="clearHoveredElement()"
                   (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
-                  (click)="handleNodeClick(node.nodeId); $event.stopPropagation()"
+                  (click)="handleNodeClick(node.nodeId, $event); $event.stopPropagation()"
                   (dblclick)="editSubmachineParameters(node.nodeId, $event)"
                   (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
                 >
@@ -130,7 +130,7 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                   (mousemove)="hoverNode(node.nodeId, $event)"
                   (mouseleave)="clearHoveredElement()"
                   (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
-                  (click)="handleNodeClick(node.nodeId); $event.stopPropagation()"
+                  (click)="handleNodeClick(node.nodeId, $event); $event.stopPropagation()"
                   (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
                 ></circle>
               } @else {
@@ -146,7 +146,8 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                   (mousemove)="hoverNode(node.nodeId, $event)"
                   (mouseleave)="clearHoveredElement()"
                   (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
-                  (click)="handleNodeClick(node.nodeId); $event.stopPropagation()"
+                  (click)="handleNodeClick(node.nodeId, $event); $event.stopPropagation()"
+                  (dblclick)="editSubmachineParameters(node.nodeId, $event)"
                   (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
                 >
                   <tspan>{{ node.label }}</tspan>
@@ -769,7 +770,11 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.hoveredLinkId.set(null);
   }
 
-  handleNodeClick(nodeId: string): void {
+  handleNodeClick(nodeId: string, event?: MouseEvent): void {
+    if (event && event.detail >= 2 && this.openSubmachineParameterDialog(nodeId, event)) {
+      return;
+    }
+
     if (this.isAutolinkInsertionToolActive()) {
       this.handleAutolinkNodeClick(nodeId);
       return;
@@ -828,14 +833,18 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   }
 
   editSubmachineParameters(nodeId: string, event: MouseEvent): void {
+    this.openSubmachineParameterDialog(nodeId, event);
+  }
+
+  private openSubmachineParameterDialog(nodeId: string, event: MouseEvent): boolean {
     if (!this.isPointerToolActive()) {
-      return;
+      return false;
     }
 
     const editState = this.store.getCanvasSubmachineParameterEditState(nodeId);
 
     if (!editState) {
-      return;
+      return false;
     }
 
     event.preventDefault();
@@ -847,6 +856,8 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.submachineParameterDialogParameters = editState.parameters;
     this.submachineParameterDialogAssignments = editState.assignments;
     this.submachineParameterDialogVisible = true;
+
+    return true;
   }
 
   handleCanvasPointerMove(event: PointerEvent): void {
