@@ -56,7 +56,7 @@ export class LinkCondition {
     return this.lastAssignment;
   }
 
-  getAteLabel(): string {
+  getAteLabel(showTapeIndex: boolean = false): string {
     if (this.clauses.length === 0) {
       return '';
     }
@@ -65,7 +65,7 @@ export class LinkCondition {
 
     if (this.clauses.length === 1) {
       const values = clause.acceptedValues.join(',');
-      const content = clause.assignToVariableName ? `${clause.assignToVariableName} = ${values}` : values;
+      const content = this.formatClauseContent(clause, values, showTapeIndex);
 
       return values ? (clause.negated ? `[not ${content}]` : `[${content}]`) : '';
     }
@@ -73,11 +73,17 @@ export class LinkCondition {
     return this.clauses
       .map((item) => {
         const values = item.acceptedValues.join(',');
-        const content = item.assignToVariableName ? `${item.assignToVariableName} = ${values}` : values;
+        const content = this.formatClauseContent(item, values, showTapeIndex);
 
         return item.negated ? `not ${content}` : content;
       })
       .join(' & ');
+  }
+
+  private formatClauseContent(clause: ReadConditionClause, values: string, showTapeIndex: boolean): string {
+    const content = clause.assignToVariableName ? `${clause.assignToVariableName} = ${values}` : values;
+
+    return showTapeIndex ? `${content};${clause.tapeIndex + 1}` : content;
   }
 
   private matchesAcceptedValue(readSymbol: SymbolValue, acceptedValue: string, context: ExecutionContext): boolean {

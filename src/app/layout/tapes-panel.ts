@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
@@ -364,6 +365,7 @@ interface TapeRowView {
 })
 export class TapesPanel {
   private readonly store = inject(JtvStore);
+  private readonly messageService = inject(MessageService);
   private readonly i18n = inject(TranslationService);
   private readonly tapeViewStartPositions = signal(new Map<string, number>());
 
@@ -441,7 +443,7 @@ export class TapesPanel {
     {
       labelKey: 'simulator.tapeActions.remove',
       icon: 'assets/images/RemoveTape24.gif',
-      action: () => this.store.removeSelectedTape(),
+      action: () => this.removeLastTape(),
     },
     {
       labelKey: 'simulator.tapeActions.clearAll',
@@ -497,6 +499,25 @@ export class TapesPanel {
   loadSelectedTape(): void {
     this.store.setSelectedTapeValue(this.tapeValue);
     this.centerSelectedTapePage();
+  }
+
+  private removeLastTape(): void {
+    const tapeNumber = this.store.tapes().length;
+
+    if (this.store.removeSelectedTape()) {
+      return;
+    }
+
+    if (this.store.lastTapeReferenceCount() > 0) {
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'warn',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.removeReferencedTape', { tapeNumber }),
+        sticky: true,
+        closable: true,
+      });
+    }
   }
 
   private moveSelectedTapePage(direction: -1 | 1): void {

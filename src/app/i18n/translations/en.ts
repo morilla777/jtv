@@ -127,6 +127,7 @@ export const en: Record<string, string> = {
   'toast.simulationStopped': 'Simulation finished, ETT released',
   'toast.duplicateAutolink': 'Adding more than one self-link to a node is not allowed',
   'toast.unassignedParameters': 'The machine cannot be executed because there are parameters without values',
+  'toast.removeReferencedTape': 'Tape {{tapeNumber}} cannot be removed because there are references to it in the design',
   'toast.machineNew': 'New machine created',
   'toast.machineOpened': 'Machine opened from {{fileName}}',
   'toast.machineOpenError': 'The machine file could not be opened',

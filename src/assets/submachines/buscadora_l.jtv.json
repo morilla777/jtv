@@ -1,0 +1,98 @@
+{
+  "format": "jtv-web-machine",
+  "version": 2,
+  "machine": {
+    "id": "8e8ae5df-8ee0-48de-8be6-acd63bf79cee",
+    "name": "BUSCADORA_L"
+  },
+  "parameterAssignments": {},
+  "metaValues": {
+    "variables": [],
+    "parameters": [
+      "A"
+    ]
+  },
+  "tapeCount": 1,
+  "graph": {
+    "initialGroupId": "133ca29e-18b2-451e-ad3a-335a5c8f1a1b",
+    "groups": [
+      {
+        "id": "133ca29e-18b2-451e-ad3a-335a5c8f1a1b",
+        "nodeIds": [
+          "0167a326-b191-4a6f-88a9-5efbec33c5d5"
+        ]
+      }
+    ],
+    "nodes": [
+      {
+        "id": "0167a326-b191-4a6f-88a9-5efbec33c5d5",
+        "type": "move-left",
+        "name": "L",
+        "tapeIndex": 0,
+        "isInitial": true
+      }
+    ],
+    "links": [],
+    "autolinks": [
+      {
+        "id": "8ccd474f-8215-4d47-a823-49c83578ed24",
+        "nodeId": "0167a326-b191-4a6f-88a9-5efbec33c5d5",
+        "condition": {
+          "clauses": [
+            {
+              "tapeIndex": 0,
+              "acceptedValues": [
+                "A"
+              ],
+              "negated": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "view": {
+    "groups": [
+      {
+        "groupId": "133ca29e-18b2-451e-ad3a-335a5c8f1a1b",
+        "label": "L",
+        "position": {
+          "x": 386,
+          "y": 152
+        },
+        "width": 28,
+        "height": 32
+      }
+    ],
+    "nodes": [
+      {
+        "nodeId": "0167a326-b191-4a6f-88a9-5efbec33c5d5",
+        "groupId": "133ca29e-18b2-451e-ad3a-335a5c8f1a1b",
+        "kind": "text",
+        "label": "L",
+        "tapeIndex": 0,
+        "initial": true,
+        "position": {
+          "x": 386,
+          "y": 152
+        }
+      }
+    ],
+    "links": [
+      {
+        "linkId": "8ccd474f-8215-4d47-a823-49c83578ed24",
+        "label": "[not A]",
+        "kind": "autolink",
+        "autolinkOrientation": "right",
+        "sourceGroupId": "133ca29e-18b2-451e-ad3a-335a5c8f1a1b",
+        "targetGroupId": "133ca29e-18b2-451e-ad3a-335a5c8f1a1b",
+        "points": [
+          {
+            "x": 386,
+            "y": 152
+          }
+        ]
+      }
+    ]
+  }
+}

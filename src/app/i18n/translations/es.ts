@@ -127,6 +127,7 @@ export const es: Record<string, string> = {
   'toast.simulationStopped': 'Simulación finalizada, ATE liberado',
   'toast.duplicateAutolink': 'No se permite agregar más de un autoenlace a un nodo',
   'toast.unassignedParameters': 'No puede ejecutar la máquina ya que existen parámetros sin valor',
+  'toast.removeReferencedTape': 'No puede eliminar la Cinta {{tapeNumber}} pues existen referencias a ella en el diseño',
   'toast.machineNew': 'Nueva m\u00e1quina creada',
   'toast.machineOpened': 'M\u00e1quina abierta desde {{fileName}}',
   'toast.machineOpenError': 'No se pudo abrir el archivo de m\u00e1quina',

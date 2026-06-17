@@ -4,13 +4,14 @@ import { ButtonModule } from 'primeng/button';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
 
 import { ConditionDialog, ConditionDialogValue } from '../components/condition-dialog';
+import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
 import { TranslationService } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
-import { MachineLinkView, ViewPoint } from '../models/view';
+import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
 
 @Component({
   selector: 'app-designer-canvas-panel',
-  imports: [ButtonModule, ContextMenuModule, ConditionDialog],
+  imports: [ButtonModule, ContextMenuModule, ConditionDialog, ParameterAssignmentDialog],
   template: `
     <div class="panel">
       <p-contextMenu #nodeContextMenu [model]="nodeContextMenuItems">
@@ -109,6 +110,7 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                   (mouseleave)="clearHoveredElement()"
                   (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
                   (click)="handleNodeClick(node.nodeId); $event.stopPropagation()"
+                  (dblclick)="editSubmachineParameters(node.nodeId, $event)"
                   (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
                 >
                   &gt;
@@ -147,7 +149,13 @@ import { MachineLinkView, ViewPoint } from '../models/view';
                   (click)="handleNodeClick(node.nodeId); $event.stopPropagation()"
                   (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
                 >
-                  {{ node.label }}
+                  <tspan>{{ node.label }}</tspan>
+                  @if (node.subscriptLabel) {
+                    <tspan class="machine-node-subscript" baseline-shift="sub">{{ node.subscriptLabel }}</tspan>
+                  }
+                  @if (showTapeIndexes()) {
+                    <tspan class="machine-node-tape-index" baseline-shift="super" dy="-8">({{ getNodeTapeNumber(node) }})</tspan>
+                  }
                 </text>
               }
             }
@@ -273,6 +281,14 @@ import { MachineLinkView, ViewPoint } from '../models/view';
         (accept)="acceptConditionalTransition($event)"
         (cancel)="cancelConditionalTransition()"
       />
+
+      <app-parameter-assignment-dialog
+        [(visible)]="submachineParameterDialogVisible"
+        [parameters]="submachineParameterDialogParameters"
+        [symbolOptions]="conditionSymbols"
+        [assignments]="submachineParameterDialogAssignments"
+        (assignmentsChange)="saveSubmachineParameterAssignments($event)"
+      />
     </div>
   `,
   styles: [`
@@ -341,6 +357,14 @@ import { MachineLinkView, ViewPoint } from '../models/view';
 
     .machine-text-parameter {
       fill: rgb(0, 204, 0);
+    }
+
+    .machine-node-tape-index {
+      font-size: 12px;
+    }
+
+    .machine-node-subscript {
+      font-size: 12px;
     }
 
     .machine-text-selected {
@@ -465,6 +489,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private readonly transitionSourceNodeId = signal<string | null>(null);
   private readonly transitionDraftEndPoint = signal<ViewPoint | null>(null);
   readonly transitionDraftVertices = signal<ViewPoint[]>([]);
+  readonly showTapeIndexes = computed(() => this.store.tapes().length > 1);
   private readonly conditionalTransitionTargetNodeId = signal<string | null>(null);
   private readonly autolinkTargetNodeId = signal<string | null>(null);
   private readonly editingLinkId = signal<string | null>(null);
@@ -496,7 +521,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   readonly isAutolinkInsertionToolActive = computed(() => this.store.activeToolId() === 'loop-transition');
   readonly isTransitionToolActive = computed(() => this.isLinkInsertionToolActive());
   readonly isNodeInsertionToolActive = computed(() =>
-    ['move-left', 'move-right', 'symbol-lowercase', 'symbol-variable', 'symbol-uppercase', 'hub'].includes(this.store.activeToolId() ?? ''),
+    ['move-left', 'move-right', 'symbol-lowercase', 'symbol-variable', 'symbol-uppercase', 'hub', 'search-left', 'search-right'].includes(this.store.activeToolId() ?? ''),
   );
   readonly isCanvasCursorActive = computed(
     () =>
@@ -599,6 +624,10 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   conditionParametersSelected: string[] = [];
   autolinkOrientation: 'top' | 'bottom' | 'left' | 'right' = 'right';
   conditionDialogDraft: ConditionDialogValue = this.createConditionDialogValue();
+  submachineParameterDialogVisible = false;
+  submachineParameterDialogNodeId: string | null = null;
+  submachineParameterDialogParameters: readonly string[] = [];
+  submachineParameterDialogAssignments: Readonly<Record<string, string>> = {};
   private contextMenuNodeId: string | null = null;
   private contextMenuLinkId: string | null = null;
   private draggedLinkVertex: { linkId: string; pointIndex: number; lastPoint: ViewPoint } | null = null;
@@ -682,6 +711,10 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
   getNegatedSymbolLabel(label: string): string | null {
     return /^\[not (.+)\]$/.exec(label)?.[1] ?? null;
+  }
+
+  getNodeTapeNumber(node: MachineNodeView): number {
+    return (node.tapeIndex ?? 0) + 1;
   }
 
   getLinkVertices(link: MachineLinkView): { point: ViewPoint; pointIndex: number }[] {
@@ -792,6 +825,28 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.normalizeAutolinkOrientation();
     this.refreshConditionDialogDraft();
     this.conditionDialogVisible.set(true);
+  }
+
+  editSubmachineParameters(nodeId: string, event: MouseEvent): void {
+    if (!this.isPointerToolActive()) {
+      return;
+    }
+
+    const editState = this.store.getCanvasSubmachineParameterEditState(nodeId);
+
+    if (!editState) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.draggedNodeGroup = null;
+    this.clearTransitionDraft();
+    this.store.selectCanvasNode(nodeId);
+    this.submachineParameterDialogNodeId = nodeId;
+    this.submachineParameterDialogParameters = editState.parameters;
+    this.submachineParameterDialogAssignments = editState.assignments;
+    this.submachineParameterDialogVisible = true;
   }
 
   handleCanvasPointerMove(event: PointerEvent): void {
@@ -1179,6 +1234,20 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.editingLinkId.set(null);
     this.conditionDialogMode.set(null);
     this.clearTransitionDraft();
+  }
+
+  saveSubmachineParameterAssignments(assignments: Record<string, string>): void {
+    if (!this.submachineParameterDialogNodeId) {
+      return;
+    }
+
+    this.store.updateCanvasSubmachineParameterAssignments(
+      this.submachineParameterDialogNodeId,
+      assignments,
+    );
+    this.submachineParameterDialogNodeId = null;
+    this.submachineParameterDialogParameters = [];
+    this.submachineParameterDialogAssignments = {};
   }
 
   private acceptAutolinkCondition(): void {

@@ -5,10 +5,12 @@ import { type AteNode } from './ate-node';
 
 export class AteTraceRecorder {
   private nextEntryId = 1;
+  private readonly showTapeIndexes: boolean;
 
   readonly root: AteNode;
 
-  constructor(machineName: string) {
+  constructor(machineName: string, options: { showTapeIndexes?: boolean } = {}) {
+    this.showTapeIndexes = options.showTapeIndexes ?? false;
     this.root = {
       id: 'ate-root',
       label: machineName,
@@ -32,7 +34,7 @@ export class AteTraceRecorder {
   recordLink(link: Link | Autolink): void {
     this.root.children.push({
       id: this.createEntryId('link'),
-      label: link.getAteLabel(),
+      label: link.getAteLabel(this.showTapeIndexes),
       iconSrc: this.getIconSrc(link.getAteIconName()),
       kind: 'link',
       linkId: link.id,

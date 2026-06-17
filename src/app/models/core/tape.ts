@@ -20,19 +20,13 @@ export class Tape {
   static fromInitialSnapshot(snapshot: TapeSnapshot): Tape {
     const tape = new Tape();
 
-    for (const [position, value] of Object.entries(snapshot.cells)) {
-      const symbol = SymbolValue.require(value);
+    tape.restoreSnapshot(snapshot);
+    tape.initialHeadPosition = tape.headPosition;
+    tape.initialCells.clear();
 
-      if (!symbol.equals(tape.blankSymbol)) {
-        const numericPosition = Number(position);
-
-        tape.cells.set(numericPosition, symbol);
-        tape.initialCells.set(numericPosition, symbol);
-      }
+    for (const [position, symbol] of tape.cells.entries()) {
+      tape.initialCells.set(position, symbol);
     }
-
-    tape.headPosition = snapshot.headPosition;
-    tape.initialHeadPosition = snapshot.headPosition;
 
     return tape;
   }
@@ -96,6 +90,19 @@ export class Tape {
   restoreInitialValues(): void {
     this.headPosition = this.initialHeadPosition;
     this.cells = new Map(this.initialCells);
+  }
+
+  restoreSnapshot(snapshot: TapeSnapshot): void {
+    this.headPosition = snapshot.headPosition;
+    this.cells.clear();
+
+    for (const [position, value] of Object.entries(snapshot.cells)) {
+      const symbol = SymbolValue.require(value);
+
+      if (!symbol.equals(this.blankSymbol)) {
+        this.cells.set(Number(position), symbol);
+      }
+    }
   }
 
   setHeadPosition(position: number): void {

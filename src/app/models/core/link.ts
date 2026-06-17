@@ -23,7 +23,7 @@ export class Link implements AteTraceRenderable {
     return 'link_ATE.gif';
   }
 
-  getAteLabel(): string {
-    return this.condition?.getAteLabel() ?? '';
+  getAteLabel(showTapeIndex: boolean = false): string {
+    return this.condition?.getAteLabel(showTapeIndex) ?? '';
   }
 }

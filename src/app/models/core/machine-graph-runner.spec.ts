@@ -15,6 +15,8 @@ import { MoveRightNode } from './move-right-node';
 import { ParameterValue } from './parameter-value';
 import { Tape } from './tape';
 import { SymbolValue } from './symbol-value';
+import { SubmachineDefinition } from './execution-context';
+import { SubmachineNode } from './submachine-node';
 import { VariableValue } from './variable-value';
 import { WriterNode } from './writer-node';
 
@@ -98,6 +100,20 @@ describe('MachineGraphRunner', () => {
     expect(condition.evaluate({ tapes: [tape], metaValues: new MetaValueDictionary() }).success).toBe(false);
   });
 
+  it('evaluates conditions against the selected tape index', () => {
+    const firstTape = new Tape();
+    const secondTape = new Tape();
+    const condition = new LinkCondition([{ tapeIndex: 1, acceptedValues: ['z'] }]);
+
+    firstTape.load('a');
+    firstTape.setHeadPosition(1);
+    secondTape.load('z');
+    secondTape.setHeadPosition(1);
+
+    expect(condition.getAteLabel(true)).toBe('[z;2]');
+    expect(condition.evaluate({ tapes: [firstTape, secondTape], metaValues: new MetaValueDictionary() }).success).toBe(true);
+  });
+
   it('writes the current value of a variable node', () => {
     const tape = new Tape();
     const variable = new VariableValue('α');
@@ -117,6 +133,21 @@ describe('MachineGraphRunner', () => {
         0: 'b',
       },
     });
+  });
+
+  it('executes writer nodes against their configured tape index', () => {
+    const firstTape = new Tape();
+    const secondTape = new Tape();
+    const context = {
+      tapes: [firstTape, secondTape],
+      metaValues: new MetaValueDictionary(),
+    };
+
+    const ok = new WriterNode('write-z-on-second-tape', 'z', 1).execute(context);
+
+    expect(ok).toBe(true);
+    expect(firstTape.getSnapshot().cells).toEqual({});
+    expect(secondTape.getSnapshot().cells).toEqual({ 0: 'z' });
   });
 
   it('writes the current value of a parameter node', () => {
@@ -221,6 +252,37 @@ describe('MachineGraphRunner', () => {
         iconSrc: 'assets/images/link_ATE.gif',
         kind: 'link',
         linkId: 'assign-sigma',
+      }),
+    );
+  });
+
+  it('records link tape indexes in the execution trace when enabled', () => {
+    const firstTape = new Tape();
+    const secondTape = new Tape();
+    const context = {
+      tapes: [firstTape, secondTape],
+      metaValues: new MetaValueDictionary(),
+    };
+    secondTape.load('a');
+    secondTape.setHeadPosition(1);
+    const startNode = new HubNode('start', 0, true);
+    const doneNode = new WriterNode('done', 'b', 1);
+    const startGroup = new LinearMachineGroup('start-group', startNode, startNode);
+    const doneGroup = new LinearMachineGroup('done-group', doneNode, doneNode);
+    const graph: MachineGraph = {
+      groups: [startGroup, doneGroup],
+      links: [new Link('second-tape-link', startGroup, doneGroup, new LinkCondition([{ tapeIndex: 1, acceptedValues: ['a'] }]))],
+      initialGroupId: startGroup.id,
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA', { showTapeIndexes: true });
+
+    const ok = new MachineGraphRunner().run(graph, context, traceRecorder);
+
+    expect(ok).toBe(true);
+    expect(traceRecorder.root.children).toContainEqual(
+      expect.objectContaining({
+        label: '[a;2]',
+        linkId: 'second-tape-link',
       }),
     );
   });
@@ -473,6 +535,57 @@ describe('MachineGraphRunner', () => {
         children: [],
       }),
     );
+  });
+
+  it('executes a submachine node with an isolated context and copies the first tape back', () => {
+    const callerTape = new Tape();
+    callerTape.load('ab');
+    const searchLeftNode = new MoveLeftNode('sub-left', 0, true);
+    const searchLeftGroup = new LinearMachineGroup('sub-left-group', searchLeftNode, searchLeftNode);
+    const submachine: SubmachineDefinition = {
+      graph: {
+        groups: [searchLeftGroup],
+        links: [],
+        autolinks: [
+          new Autolink(
+            'keep-searching-left',
+            searchLeftNode,
+            new LinkCondition([{ tapeIndex: 0, acceptedValues: ['A'], negated: true }]),
+          ),
+        ],
+        initialGroupId: searchLeftGroup.id,
+      },
+      tapeCount: 1,
+      parameterAssignments: {},
+    };
+    const submachineNode = new SubmachineNode(
+      'search-left-node',
+      'buscadora_l',
+      'BUSCADORA_L',
+      'L',
+      'A',
+      { A: '#' },
+      0,
+      true,
+    );
+    const context = {
+      tapes: [callerTape],
+      metaValues: new MetaValueDictionary(),
+      submachines: new Map([['buscadora_l' as const, submachine]]),
+    };
+
+    const ok = submachineNode.execute(context);
+
+    expect(ok).toBe(true);
+    expect(submachineNode.getAteIconName()).toBe('M_ATE.gif');
+    expect(submachineNode.getAteLabel()).toBe('BUSCADORA_L()');
+    expect(callerTape.getSnapshot()).toEqual({
+      headPosition: 0,
+      cells: {
+        1: 'a',
+        2: 'b',
+      },
+    });
   });
 });
 

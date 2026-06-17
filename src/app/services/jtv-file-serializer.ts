@@ -8,14 +8,16 @@ import { MachineGroup } from '../models/core/machine-group';
 import { MachineNode } from '../models/core/machine-node';
 import { MoveLeftNode } from '../models/core/move-left-node';
 import { MoveRightNode } from '../models/core/move-right-node';
+import { SymbolValue } from '../models/core/symbol-value';
+import { SubmachineNode, type PreinstalledSubmachineId } from '../models/core/submachine-node';
 import { WriterNode } from '../models/core/writer-node';
 import { MachineGraphView } from '../models/view';
-import type { JtvMachineState } from '../stores/jtv.store';
+import type { JtvMachineState, JtvTapeState } from '../stores/jtv.store';
 
 export const JTV_FILE_FORMAT = 'jtv-web-machine';
-export const JTV_FILE_VERSION = 1;
+export const JTV_FILE_VERSION = 2;
 
-type PersistedNodeType = 'writer' | 'move-left' | 'move-right' | 'hub';
+type PersistedNodeType = 'writer' | 'move-left' | 'move-right' | 'hub' | 'submachine';
 
 interface PersistedNode {
   readonly id: string;
@@ -23,6 +25,11 @@ interface PersistedNode {
   readonly name: string;
   readonly tapeIndex: number;
   readonly isInitial: boolean;
+  readonly submachineId?: PreinstalledSubmachineId;
+  readonly submachineName?: string;
+  readonly displaySymbol?: 'L' | 'R';
+  readonly parameterName?: string;
+  readonly submachineParameterAssignments?: Readonly<Record<string, string>>;
 }
 
 interface PersistedGroup {
@@ -47,11 +54,18 @@ interface PersistedAutolink {
   readonly condition: PersistedCondition | null;
 }
 
+export interface JtvMetaValues {
+  readonly variables: readonly string[];
+  readonly parameters: readonly string[];
+}
+
 export interface JtvFile {
   readonly format: typeof JTV_FILE_FORMAT;
   readonly version: typeof JTV_FILE_VERSION;
   readonly machine: JtvMachineState;
   readonly parameterAssignments: Readonly<Record<string, string>>;
+  readonly metaValues: JtvMetaValues;
+  readonly tapeCount: number;
   readonly graph: {
     readonly initialGroupId: string;
     readonly groups: readonly PersistedGroup[];
@@ -67,6 +81,8 @@ export interface JtvFileSource {
   readonly machineGraph: MachineGraph;
   readonly machineGraphView: MachineGraphView;
   readonly parameterAssignments: Readonly<Record<string, string>>;
+  readonly metaValues?: JtvMetaValues;
+  readonly tapes?: readonly JtvTapeState[];
 }
 
 export interface JtvFileSerializerOptions {
@@ -78,6 +94,8 @@ export interface RestoredJtvMachine {
   readonly machineGraph: MachineGraph;
   readonly machineGraphView: MachineGraphView;
   readonly parameterAssignments: Readonly<Record<string, string>>;
+  readonly metaValues: JtvMetaValues;
+  readonly tapeCount: number;
 }
 
 export function createJtvFileFromState(state: JtvFileSource, options: JtvFileSerializerOptions = {}): JtvFile {
@@ -96,6 +114,8 @@ export function createJtvFileFromState(state: JtvFileSource, options: JtvFileSer
     };
   });
 
+  const metaValues = collectMetaValues(state.machineGraph, state.parameterAssignments, state.metaValues);
+
   return {
     format: JTV_FILE_FORMAT,
     version: JTV_FILE_VERSION,
@@ -104,6 +124,8 @@ export function createJtvFileFromState(state: JtvFileSource, options: JtvFileSer
       id: options.preserveIds || isUuid(state.selectedMachine.id) ? state.selectedMachine.id : createUuid(),
     },
     parameterAssignments: { ...state.parameterAssignments },
+    metaValues,
+    tapeCount: Math.max(state.tapes?.length ?? 1, inferRequiredTapeCount(state.machineGraph)),
     graph: {
       initialGroupId: ids.groups.get(state.machineGraph.initialGroupId) ?? state.machineGraph.initialGroupId,
       groups,
@@ -159,16 +181,40 @@ export function restoreMachineFromJtvFile(file: JtvFile): RestoredJtvMachine {
     restoreCondition(persistedAutolink.condition),
   ));
 
+  const machineGraphView = cloneView(file.view);
+  const linkLabels = new Map([
+    ...links.map((link) => [link.id, link.getAteLabel()] as const),
+    ...autolinks.map((autolink) => [autolink.id, autolink.getAteLabel()] as const),
+  ]);
+  const machineGraph = {
+    initialGroupId: file.graph.initialGroupId,
+    groups,
+    links,
+    autolinks,
+  };
+  const parameterAssignments = { ...file.parameterAssignments };
+  const metaValues = collectMetaValues(machineGraph, parameterAssignments, file.metaValues);
+
   return {
     selectedMachine: { ...file.machine },
-    machineGraph: {
-      initialGroupId: file.graph.initialGroupId,
-      groups,
-      links,
-      autolinks,
+    machineGraph,
+    machineGraphView: {
+      ...machineGraphView,
+      nodes: machineGraphView.nodes.map((nodeView) => ({
+        ...nodeView,
+        subscriptLabel: nodeView.subscriptLabel ?? (nodes.get(nodeView.nodeId) instanceof SubmachineNode
+          ? (nodes.get(nodeView.nodeId) as SubmachineNode).getParameterDisplayValue()
+          : undefined),
+        tapeIndex: nodeView.tapeIndex ?? nodes.get(nodeView.nodeId)?.tapeIndex ?? 0,
+      })),
+      links: machineGraphView.links.map((linkView) => ({
+        ...linkView,
+        label: linkLabels.get(linkView.linkId) ?? linkView.label,
+      })),
     },
-    machineGraphView: cloneView(file.view),
-    parameterAssignments: { ...file.parameterAssignments },
+    parameterAssignments,
+    metaValues,
+    tapeCount: file.tapeCount,
   };
 }
 
@@ -184,16 +230,37 @@ function assertJtvFile(file: JtvFile): void {
   if (!file.view || !Array.isArray(file.view.groups) || !Array.isArray(file.view.nodes) || !Array.isArray(file.view.links)) {
     throw new Error('Invalid JTV view data.');
   }
+
+  if (
+    !file.metaValues ||
+    !Array.isArray(file.metaValues.variables) ||
+    !Array.isArray(file.metaValues.parameters) ||
+    !Number.isInteger(file.tapeCount) ||
+    file.tapeCount < 1
+  ) {
+    throw new Error('Invalid JTV machine metadata.');
+  }
 }
 
 function persistNode(node: MachineNode, nodeIds: ReadonlyMap<string, string>): PersistedNode {
-  return {
+  const persistedNode: PersistedNode = {
     id: nodeIds.get(node.id) ?? node.id,
     type: getNodeType(node),
     name: node.name,
     tapeIndex: node.tapeIndex,
     isInitial: node.isInitial,
   };
+
+  return node instanceof SubmachineNode
+    ? {
+      ...persistedNode,
+      submachineId: node.submachineId,
+      submachineName: node.submachineName,
+      displaySymbol: node.displaySymbol,
+      parameterName: node.parameterName,
+      submachineParameterAssignments: { ...node.parameterAssignments },
+    }
+    : persistedNode;
 }
 
 function restoreNode(node: PersistedNode): MachineNode {
@@ -207,6 +274,19 @@ function restoreNode(node: PersistedNode): MachineNode {
 
   if (node.type === 'hub') {
     return new HubNode(node.id, node.tapeIndex, node.isInitial);
+  }
+
+  if (node.type === 'submachine') {
+    return new SubmachineNode(
+      node.id,
+      node.submachineId ?? 'buscadora_l',
+      node.submachineName ?? (node.submachineId === 'buscadora_r' ? 'BUSCADORA_R' : 'BUSCADORA_L'),
+      node.displaySymbol ?? 'L',
+      node.parameterName ?? 'A',
+      node.submachineParameterAssignments ?? { A: SymbolValue.BLANK },
+      node.tapeIndex,
+      node.isInitial,
+    );
   }
 
   return new WriterNode(node.id, node.name, node.tapeIndex, node.isInitial);
@@ -225,7 +305,89 @@ function getNodeType(node: MachineNode): PersistedNodeType {
     return 'hub';
   }
 
+  if (node instanceof SubmachineNode) {
+    return 'submachine';
+  }
+
   return 'writer';
+}
+
+function inferRequiredTapeCount(graph: MachineGraph): number {
+  let maxTapeIndex = 0;
+
+  for (const node of getMachineNodes(graph)) {
+    if (!(node instanceof HubNode)) {
+      maxTapeIndex = Math.max(maxTapeIndex, node.tapeIndex);
+    }
+  }
+
+  for (const transition of [...graph.links, ...(graph.autolinks ?? [])]) {
+    for (const clause of transition.condition?.clauses ?? []) {
+      maxTapeIndex = Math.max(maxTapeIndex, clause.tapeIndex);
+    }
+  }
+
+  return maxTapeIndex + 1;
+}
+
+function getMachineNodes(graph: MachineGraph): MachineNode[] {
+  return graph.groups.flatMap((group) => getGroupNodes(group));
+}
+
+function collectMetaValues(
+  graph: MachineGraph,
+  parameterAssignments: Readonly<Record<string, string>>,
+  declaredMetaValues?: JtvMetaValues,
+): JtvMetaValues {
+  const variables = new Set(declaredMetaValues?.variables ?? []);
+  const parameters = new Set<string>();
+
+  for (const node of getMachineNodes(graph)) {
+    if (node instanceof SubmachineNode) {
+      continue;
+    }
+
+    if (node instanceof WriterNode && isParameterName(node.name)) {
+      parameters.add(node.name);
+    } else if (node instanceof WriterNode && isVariableName(node.name)) {
+      variables.add(node.name);
+    }
+  }
+
+  for (const transition of [...graph.links, ...(graph.autolinks ?? [])]) {
+    for (const clause of transition.condition?.clauses ?? []) {
+      if (clause.assignToVariableName) {
+        variables.add(clause.assignToVariableName);
+      }
+
+      for (const acceptedValue of clause.acceptedValues) {
+        if (isParameterName(acceptedValue)) {
+          parameters.add(acceptedValue);
+        } else if (isVariableName(acceptedValue)) {
+          variables.add(acceptedValue);
+        }
+      }
+    }
+  }
+
+  for (const parameterName of Object.keys(parameterAssignments)) {
+    if (isParameterName(parameterName)) {
+      parameters.add(parameterName);
+    }
+  }
+
+  return {
+    variables: Array.from(variables).sort((left, right) => left.localeCompare(right)),
+    parameters: Array.from(parameters).sort((left, right) => left.localeCompare(right)),
+  };
+}
+
+function isParameterName(value: string): boolean {
+  return /^[A-Z]$/.test(value);
+}
+
+function isVariableName(value: string): boolean {
+  return value.length > 0 && !isParameterName(value) && !SymbolValue.of(value);
 }
 
 function persistCondition(condition: LinkCondition | null): PersistedCondition | null {

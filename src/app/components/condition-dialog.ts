@@ -305,8 +305,9 @@ export class ConditionDialog implements OnChanges {
 
   conditionSymbolLabel(): string {
     const values = this.getAcceptedConditionValues().join(',');
+    const content = this.draft.assignToVariable ? `${this.draft.assignToVariable} = ${values}` : values;
 
-    return this.draft.assignToVariable ? `${this.draft.assignToVariable} = ${values}` : values;
+    return values ? `${content}${this.tapeOptions.length > 1 ? `;${this.draft.tapeIndex + 1}` : ''}` : '';
   }
 
   acceptDraft(): void {

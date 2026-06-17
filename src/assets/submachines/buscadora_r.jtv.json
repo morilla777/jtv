@@ -1,0 +1,98 @@
+{
+  "format": "jtv-web-machine",
+  "version": 2,
+  "machine": {
+    "id": "8e8ae5df-8ee0-48de-8be6-acd63bf79cee",
+    "name": "BUSCADORA_R"
+  },
+  "parameterAssignments": {},
+  "metaValues": {
+    "variables": [],
+    "parameters": [
+      "A"
+    ]
+  },
+  "tapeCount": 1,
+  "graph": {
+    "initialGroupId": "c18473b5-b7ef-4683-849c-7ebf3f84f809",
+    "groups": [
+      {
+        "id": "c18473b5-b7ef-4683-849c-7ebf3f84f809",
+        "nodeIds": [
+          "19700272-5be0-460c-b3e9-320774d49127"
+        ]
+      }
+    ],
+    "nodes": [
+      {
+        "id": "19700272-5be0-460c-b3e9-320774d49127",
+        "type": "move-right",
+        "name": "R",
+        "tapeIndex": 0,
+        "isInitial": true
+      }
+    ],
+    "links": [],
+    "autolinks": [
+      {
+        "id": "d8eb41da-c6d0-4401-ab15-c299a7d12c98",
+        "nodeId": "19700272-5be0-460c-b3e9-320774d49127",
+        "condition": {
+          "clauses": [
+            {
+              "tapeIndex": 0,
+              "acceptedValues": [
+                "A"
+              ],
+              "negated": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "view": {
+    "groups": [
+      {
+        "groupId": "c18473b5-b7ef-4683-849c-7ebf3f84f809",
+        "label": "R",
+        "position": {
+          "x": 393,
+          "y": 161
+        },
+        "width": 28,
+        "height": 32
+      }
+    ],
+    "nodes": [
+      {
+        "nodeId": "19700272-5be0-460c-b3e9-320774d49127",
+        "groupId": "c18473b5-b7ef-4683-849c-7ebf3f84f809",
+        "kind": "text",
+        "label": "R",
+        "tapeIndex": 0,
+        "initial": true,
+        "position": {
+          "x": 393,
+          "y": 161
+        }
+      }
+    ],
+    "links": [
+      {
+        "linkId": "d8eb41da-c6d0-4401-ab15-c299a7d12c98",
+        "label": "[not A]",
+        "kind": "autolink",
+        "autolinkOrientation": "right",
+        "sourceGroupId": "c18473b5-b7ef-4683-849c-7ebf3f84f809",
+        "targetGroupId": "c18473b5-b7ef-4683-849c-7ebf3f84f809",
+        "points": [
+          {
+            "x": 393,
+            "y": 161
+          }
+        ]
+      }
+    ]
+  }
+}
