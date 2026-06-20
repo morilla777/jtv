@@ -292,12 +292,14 @@ interface LanguageOption {
               ariaLabel="Letra mayúscula"
             />
             <p-select
-              [options]="machineOptions"
-              [(ngModel)]="selectedMachine"
+              [options]="machineOptions()"
+              [(ngModel)]="selectedSubmachineName"
               size="small"
               class="toolbar-select machine-select"
               ariaLabel="Máquina"
-            />
+            >
+              <ng-template #empty></ng-template>
+            </p-select>
           </div>
         </ng-template>
       </p-toolbar>
@@ -585,9 +587,8 @@ export class Topbar {
 
   readonly uppercaseOptions = Array.from({ length: 26 }, (_, index) => String.fromCharCode(65 + index));
 
-  readonly machineOptions = ['MAQUINA 1', 'MÁQUINA 2'];
+  readonly machineOptions = this.store.activeChildMachineNames;
 
-  selectedMachine = this.machineOptions[0];
   executionFinished = false;
   fileMenuOpen = false;
   settingsMenuOpen = false;
@@ -632,6 +633,14 @@ export class Topbar {
 
   get canRedo(): boolean {
     return this.store.canRedo();
+  }
+
+  get selectedSubmachineName(): string | null {
+    return this.store.selectedChildMachineName();
+  }
+
+  set selectedSubmachineName(machineName: string | null) {
+    this.store.selectChildSubmachineByName(machineName);
   }
 
   openParameterAssignmentDialog(): void {

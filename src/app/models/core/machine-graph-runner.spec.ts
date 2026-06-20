@@ -23,6 +23,8 @@ import copiadora2File from '../../../assets/examples/copiadora2.jtv.json';
 import copiadoraFile from '../../../assets/examples/copiadora.jtv.json';
 import igualesAbcFile from '../../../assets/examples/iguales_abc.jtv.json';
 import monusFile from '../../../assets/examples/monus.jtv.json';
+import multiplicadoraFile from '../../../assets/examples/multiplicadora.jtv.json';
+import multiplicadora2File from '../../../assets/examples/multiplicadora2.jtv.json';
 import palindromeFile from '../../../assets/examples/palindrome.jtv.json';
 import buscadoraLFile from '../../../assets/submachines/buscadora_l.jtv.json';
 import buscadoraNotLFile from '../../../assets/submachines/buscadora_not_l.jtv.json';
@@ -886,6 +888,94 @@ describe('MachineGraphRunner', () => {
     expect(runExampleMachine(monusFile as JtvFile, input)).toEqual(expectedSnapshot);
   });
 
+  it.each([
+    [
+      '1#1',
+      {
+        headPosition: 2,
+        cells: {
+          1: '1',
+        },
+      },
+    ],
+    [
+      '11#11',
+      {
+        headPosition: 5,
+        cells: {
+          1: '1',
+          2: '1',
+          3: '1',
+          4: '1',
+        },
+      },
+    ],
+    [
+      '11111#11',
+      {
+        headPosition: 11,
+        cells: {
+          1: '1',
+          2: '1',
+          3: '1',
+          4: '1',
+          5: '1',
+          6: '1',
+          7: '1',
+          8: '1',
+          9: '1',
+          10: '1',
+        },
+      },
+    ],
+  ])('executes the MULTIPLICADORA example for "%s"', (input, expectedSnapshot) => {
+    expect(runExampleMachine(multiplicadoraFile as JtvFile, input)).toEqual(expectedSnapshot);
+  });
+
+  it.each([
+    [
+      '1#1',
+      {
+        headPosition: 2,
+        cells: {
+          1: '1',
+        },
+      },
+    ],
+    [
+      '11#11',
+      {
+        headPosition: 5,
+        cells: {
+          1: '1',
+          2: '1',
+          3: '1',
+          4: '1',
+        },
+      },
+    ],
+    [
+      '11111#11',
+      {
+        headPosition: 11,
+        cells: {
+          1: '1',
+          2: '1',
+          3: '1',
+          4: '1',
+          5: '1',
+          6: '1',
+          7: '1',
+          8: '1',
+          9: '1',
+          10: '1',
+        },
+      },
+    ],
+  ])('executes the MULTIPLICADORA2 example for "%s"', (input, expectedSnapshot) => {
+    expect(runExampleMachine(multiplicadora2File as JtvFile, input)).toEqual(expectedSnapshot);
+  });
+
   it('executes the IGUALES_ABC example for an accepted input', () => {
     expect(runExampleMachine(igualesAbcFile as JtvFile, 'abccabbca')).toEqual({
       headPosition: 0,
@@ -1055,7 +1145,7 @@ function runExampleMachineTapes(file: JtvFile, inputs: readonly string[]): Retur
   const ok = new MachineGraphRunner().run(restored.machineGraph, {
     tapes,
     metaValues: new MetaValueDictionary(),
-    submachines: createPreinstalledSubmachines(),
+    submachines: createExampleSubmachines(restored),
   });
 
   expect(ok).toBe(true);
@@ -1074,7 +1164,7 @@ function runExampleMachineBurst(file: JtvFile, input: string, maxSteps: number):
   const result = new MachineGraphRunner().runBurst(restored.machineGraph, {
     tapes: [tape],
     metaValues: new MetaValueDictionary(),
-    submachines: createPreinstalledSubmachines(),
+    submachines: createExampleSubmachines(restored),
   }, traceRecorder, { maxSteps });
 
   if (result.status === 'suspended' && result.continuation) {
@@ -1099,6 +1189,30 @@ function createSubmachineDefinition(file: JtvFile): SubmachineDefinition {
     tapeCount: restored.tapeCount,
     parameterAssignments: restored.parameterAssignments,
   };
+}
+
+function createExampleSubmachines(restored: ReturnType<typeof restoreMachineFromJtvFile>): ReadonlyMap<string, SubmachineDefinition> {
+  const submachines = new Map<string, SubmachineDefinition>(createPreinstalledSubmachines());
+
+  addRestoredSubmachines(submachines, restored.submachines);
+
+  return submachines;
+}
+
+function addRestoredSubmachines(
+  submachines: Map<string, SubmachineDefinition>,
+  files: readonly JtvFile[],
+): void {
+  for (const file of files) {
+    const restored = restoreMachineFromJtvFile(file);
+
+    submachines.set(restored.selectedMachine.id, {
+      graph: restored.machineGraph,
+      tapeCount: restored.tapeCount,
+      parameterAssignments: restored.parameterAssignments,
+    });
+    addRestoredSubmachines(submachines, restored.submachines);
+  }
 }
 
 function linkNodes<T extends MachineNode>(nodes: T[]): T[] {

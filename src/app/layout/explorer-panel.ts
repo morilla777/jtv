@@ -1,18 +1,42 @@
-import { Component, computed, inject } from '@angular/core';
-import { TreeNode } from 'primeng/api';
+import { Component, ElementRef, HostListener, ViewChild, computed, inject } from '@angular/core';
+import { ConfirmationService, MenuItem, MessageService, TreeNode } from 'primeng/api';
 import { TabsModule } from 'primeng/tabs';
 import { TreeModule } from 'primeng/tree';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { TranslationService } from '../services/translation.service';
 import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { AteNode } from '../models/ate';
-import { JtvStore } from '../stores/jtv.store';
+import { JtvMachineTreeNode, JtvStore } from '../stores/jtv.store';
 
 @Component({
   selector: 'app-explorer-panel',
   imports: [TabsModule, TreeModule, TranslatePipe],
   template: `
     <div class="panel">
+      @if (machineContextMenuOpen) {
+        <div
+          class="machine-context-menu"
+          [style.left.px]="machineContextMenuPosition.x"
+          [style.top.px]="machineContextMenuPosition.y"
+          (click)="$event.stopPropagation()"
+          role="menu"
+        >
+          @for (item of machineContextMenuItems; track item.label) {
+          <button type="button" class="machine-context-menu-item" role="menuitem" (click)="runMachineContextMenuItem(item, $event)">
+            <img class="machine-context-menu-icon" [src]="item['data']?.iconSrc" alt="" />
+            <span>{{ item.label }}</span>
+          </button>
+          }
+        </div>
+      }
+      <input
+        #existingSubmachineFileInput
+        type="file"
+        accept=".jtv,.json,application/json"
+        class="hidden-file-input"
+        (change)="loadExistingSubmachineFromInput($event)"
+      />
+
       <div class="panel-body">
         <p-tabs value="ate" class="explorer-tabs" [style]="tabsStyle">
           <p-tablist>
@@ -47,9 +71,16 @@ import { JtvStore } from '../stores/jtv.store';
                 [value]="mainMachineNodes()"
                 selectionMode="single"
                 [(selection)]="selectedMachineNode"
+                (onNodeSelect)="selectMachineNode($event.node)"
                 [style]="treeStyle"
                 [indentation]="0.25"
-              />
+              >
+                <ng-template pTemplate="default" let-node>
+                  <span class="machine-tree-node" (contextmenu)="showMachineContextMenu(node, $event)">
+                    <span>{{ node.label }}</span>
+                  </span>
+                </ng-template>
+              </p-tree>
             </p-tabpanel>
 
           </p-tabpanels>
@@ -70,6 +101,10 @@ import { JtvStore } from '../stores/jtv.store';
       min-height: 0;
       overflow: hidden;
       padding: 2px;
+    }
+
+    .hidden-file-input {
+      display: none;
     }
 
     :host ::ng-deep .p-tabpanels {
@@ -181,12 +216,59 @@ import { JtvStore } from '../stores/jtv.store';
       object-fit: contain;
       flex: 0 0 auto;
     }
+
+    .machine-tree-node {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+      line-height: 1;
+    }
+
+    .machine-context-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+
+    .machine-context-menu {
+      position: fixed;
+      z-index: 1100;
+      min-width: 10rem;
+      padding: 0.25rem;
+      border: 1px solid var(--p-content-border-color);
+      border-radius: 4px;
+      background: var(--p-content-background);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    }
+
+    .machine-context-menu-item:hover {
+      background: var(--p-content-hover-background);
+    }
+
+    .machine-context-menu-icon {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+      flex: 0 0 auto;
+    }
   `],
 })
 export class ExplorerPanel {
+  @ViewChild('existingSubmachineFileInput') private existingSubmachineFileInput?: ElementRef<HTMLInputElement>;
+
   private readonly store = inject(JtvStore);
   private readonly i18n = inject(TranslationService);
   private readonly loading = inject(LoadingIndicatorService);
+  private readonly confirmationService = inject(ConfirmationService);
+  private readonly messageService = inject(MessageService);
 
   readonly tabsStyle = {
     width: '100%',
@@ -207,14 +289,50 @@ export class ExplorerPanel {
     '--p-tree-node-toggle-button-size': '0.875rem',
   };
 
-  readonly mainMachineNodes = computed<TreeNode[]>(() => [{
-    key: this.store.selectedMachine().id,
-    label: this.store.selectedMachine().name,
-    icon: 'pi pi-cog',
-    expanded: true,
-    selectable: true,
-    children: [],
-  }]);
+  readonly mainMachineNodes = computed<TreeNode[]>(() => [this.toMachineTreeNode(this.store.machineTree())]);
+  machineContextMenuOpen = false;
+  machineContextMenuPosition = { x: 0, y: 0 };
+
+  get machineContextMenuItems(): MenuItem[] {
+    return [
+      {
+        label: this.i18n.translate('explorer.machineMenu.addNew'),
+        data: {
+          iconSrc: 'assets/images/New16.gif',
+        },
+        command: () => this.addNewSubmachine(),
+      },
+      {
+        label: this.i18n.translate('explorer.machineMenu.addExisting'),
+        data: {
+          iconSrc: 'assets/images/Add16.gif',
+          action: 'add-existing',
+        },
+        command: () => this.addExistingSubmachine(),
+      },
+      {
+        label: this.i18n.translate('explorer.machineMenu.delete'),
+        data: {
+          iconSrc: 'assets/images/Delete16.gif',
+        },
+        command: () => this.deleteSubmachine(),
+      },
+      {
+        label: this.i18n.translate('explorer.machineMenu.saveAs'),
+        data: {
+          iconSrc: 'assets/images/SaveAs16.gif',
+        },
+        command: () => this.saveSubmachineAs(),
+      },
+      {
+        label: this.i18n.translate('explorer.machineMenu.properties'),
+        data: {
+          iconSrc: 'assets/images/Properties16.gif',
+        },
+        command: () => this.openSubmachineProperties(),
+      },
+    ];
+  }
 
   readonly machineNodes: TreeNode[] = [
     {
@@ -265,6 +383,107 @@ export class ExplorerPanel {
   selectAteNode(node: TreeNode): void {
     this.store.selectAteNode(node.data?.ateNodeId ?? null);
   }
+
+  selectMachineNode(node: TreeNode): void {
+    this.store.selectDesignMachine(node.data?.machineId ?? '');
+  }
+
+  showMachineContextMenu(node: TreeNode, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    this.selectedMachineNode = node;
+    this.store.selectDesignMachine(node.data?.machineId ?? '');
+    this.machineContextMenuPosition = { x: event.clientX, y: event.clientY };
+    this.machineContextMenuOpen = true;
+  }
+
+  runMachineContextMenuItem(item: MenuItem, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.machineContextMenuOpen = false;
+    item.command?.({ originalEvent: event, item });
+  }
+
+  @HostListener('document:click')
+  closeMachineContextMenu(): void {
+    this.machineContextMenuOpen = false;
+  }
+
+  @HostListener('document:keydown.escape')
+  closeMachineContextMenuWithEscape(): void {
+    this.machineContextMenuOpen = false;
+  }
+
+  addNewSubmachine(): void {}
+
+  addExistingSubmachine(): void {
+    const input = this.existingSubmachineFileInput?.nativeElement;
+
+    if (!input) {
+      return;
+    }
+
+    input.value = '';
+    input.click();
+  }
+
+  async loadExistingSubmachineFromInput(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+
+    if (!file) {
+      return;
+    }
+
+    this.store.addExistingSubmachine(JSON.parse(await file.text()));
+    queueMicrotask(() => {
+      this.selectedMachineNode = this.findTreeNodeByMachineId(
+        this.mainMachineNodes(),
+        this.store.activeMachineTreeNodeId(),
+      );
+    });
+  }
+
+  deleteSubmachine(): void {
+    const machineId = this.selectedMachineNode?.data?.machineId ?? '';
+
+    if (!machineId || machineId === this.store.rootMachineTreeNodeId()) {
+      return;
+    }
+
+    if (this.store.isDesignMachineReferencedByInvoker(machineId)) {
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'warn',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.submachineReferenced'),
+        sticky: true,
+        closable: true,
+      });
+      return;
+    }
+
+    this.confirmationService.confirm({
+      key: 'machine',
+      message: this.i18n.translate('confirm.deleteSubmachine'),
+      acceptLabel: this.i18n.translate('confirm.yes'),
+      rejectLabel: this.i18n.translate('confirm.no'),
+      accept: () => {
+        this.store.deleteDesignMachine(machineId);
+        queueMicrotask(() => {
+          this.selectedMachineNode = this.findTreeNodeByMachineId(
+            this.mainMachineNodes(),
+            this.store.activeMachineTreeNodeId(),
+          );
+        });
+      },
+    });
+  }
+
+  saveSubmachineAs(): void {}
+
+  openSubmachineProperties(): void {}
 
   async continueAteExecution(node: TreeNode, event: MouseEvent): Promise<void> {
     event.preventDefault();
@@ -322,6 +541,36 @@ export class ExplorerPanel {
       }
 
       const childMatch = this.findTreeNodeByAteNodeId(node.children ?? [], ateNodeId);
+
+      if (childMatch) {
+        return childMatch;
+      }
+    }
+
+    return null;
+  }
+
+  private toMachineTreeNode(node: JtvMachineTreeNode): TreeNode {
+    return {
+      key: node.id,
+      label: node.name || this.i18n.translate('explorer.ateRootLabel'),
+      icon: 'pi pi-cog',
+      expanded: true,
+      selectable: true,
+      data: {
+        machineId: node.id,
+      },
+      children: node.children.map((child) => this.toMachineTreeNode(child)),
+    };
+  }
+
+  private findTreeNodeByMachineId(nodes: readonly TreeNode[], machineId: string): TreeNode | null {
+    for (const node of nodes) {
+      if (node.data?.machineId === machineId) {
+        return node;
+      }
+
+      const childMatch = this.findTreeNodeByMachineId(node.children ?? [], machineId);
 
       if (childMatch) {
         return childMatch;

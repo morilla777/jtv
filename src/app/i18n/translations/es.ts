@@ -46,6 +46,11 @@ export const es: Record<string, string> = {
   'explorer.ateRootLabel': 'NUEVA',
   'explorer.machines': 'Máquinas',
   'explorer.examples': 'Ejemplos',
+  'explorer.machineMenu.addNew': 'Agregar nueva',
+  'explorer.machineMenu.addExisting': 'Agregar existente',
+  'explorer.machineMenu.delete': 'Eliminar',
+  'explorer.machineMenu.saveAs': 'Guardar como...',
+  'explorer.machineMenu.properties': 'Propiedades',
 
   // Designer
   'designer.title': 'Diseño de Máquina',
@@ -143,5 +148,9 @@ export const es: Record<string, string> = {
   'toast.machineSaved': 'M\u00e1quina guardada en {{fileName}}',
   'toast.machineExported': 'M\u00e1quina exportada a {{fileName}}',
   'toast.machineSaveError': 'No se pudo guardar el archivo de m\u00e1quina',
+  'toast.submachineReferenced': 'No puede eliminar esta m\u00e1quina ya que est\u00e1 referenciada desde la m\u00e1quina invocadora',
+  'confirm.yes': 'S\u00ed',
+  'confirm.no': 'No',
+  'confirm.deleteSubmachine': '\u00bfSeguro que desea eliminar esta m\u00e1quina?',
 };
 

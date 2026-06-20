@@ -544,6 +544,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       'search-right-inverse',
       'shift-left',
       'shift-right',
+      'submachine',
     ].includes(this.store.activeToolId() ?? ''),
   );
   readonly isCanvasCursorActive = computed(

@@ -2,12 +2,12 @@ import { Injectable, computed, signal } from '@angular/core';
 
 import { JtvFile } from './jtv-file-serializer';
 
-interface OpenedJtvFile {
+export interface OpenedJtvFile {
   readonly file: JtvFile;
   readonly fileName: string;
 }
 
-interface SavedJtvFile {
+export interface SavedJtvFile {
   readonly fileName: string;
   readonly machineName: string;
 }
@@ -59,6 +59,14 @@ export class JtvFileService {
   }
 
   async open(): Promise<OpenedJtvFile | null> {
+    return this.openFromPicker({ trackCurrentFile: true });
+  }
+
+  async openDetached(): Promise<OpenedJtvFile | null> {
+    return this.openFromPicker({ trackCurrentFile: false });
+  }
+
+  private async openFromPicker(options: { trackCurrentFile: boolean }): Promise<OpenedJtvFile | null> {
     const pickerWindow = window as FilePickerWindow;
 
     if (pickerWindow.showOpenFilePicker) {
@@ -69,16 +77,19 @@ export class JtvFileService {
       });
       const file = await handle.getFile();
 
-      this.currentFileHandle = handle;
-      this.activeFilePath.set(file.name);
-      this.dirty.set(false);
+      if (options.trackCurrentFile) {
+        this.currentFileHandle = handle;
+        this.activeFilePath.set(file.name);
+        this.dirty.set(false);
+      }
+
       return {
         file: JSON.parse(await file.text()) as JtvFile,
         fileName: file.name,
       };
     }
 
-    return this.openWithFileInput();
+    return this.openWithFileInput(options);
   }
 
   async save(file: JtvFile, suggestedName: string): Promise<SavedJtvFile> {
@@ -115,7 +126,7 @@ export class JtvFileService {
     this.download(this.createJsonBlob(file), suggestedName);
   }
 
-  private openWithFileInput(): Promise<OpenedJtvFile | null> {
+  private openWithFileInput(options: { trackCurrentFile: boolean }): Promise<OpenedJtvFile | null> {
     return new Promise((resolve, reject) => {
       const input = document.createElement('input');
 
@@ -133,9 +144,12 @@ export class JtvFileService {
         }
 
         try {
-          this.currentFileHandle = null;
-          this.activeFilePath.set(file.name);
-          this.dirty.set(false);
+          if (options.trackCurrentFile) {
+            this.currentFileHandle = null;
+            this.activeFilePath.set(file.name);
+            this.dirty.set(false);
+          }
+
           resolve({
             file: JSON.parse(await file.text()) as JtvFile,
             fileName: file.name,

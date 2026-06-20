@@ -1,5 +1,6 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { MessageService, type ToastMessageOptions } from 'primeng/api';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { SplitterModule } from 'primeng/splitter';
 import { ToastModule } from 'primeng/toast';
 import { Subscription } from 'rxjs';
@@ -16,6 +17,7 @@ import { JtvFileService } from '../services/jtv-file.service';
   selector: 'app-shell',
   imports: [
     SplitterModule,
+    ConfirmDialogModule,
     ToastModule,
     Topbar,
     ExplorerPanel,
@@ -32,6 +34,7 @@ import { JtvFileService } from '../services/jtv-file.service';
       }
 
       <p-toast key="simulation" position="center" (onClose)="hideSimulationToastModal()" />
+      <p-confirmDialog key="machine" />
       <app-loading-overlay />
       <app-topbar />
 

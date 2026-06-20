@@ -9,7 +9,7 @@ import { MachineNode } from '../models/core/machine-node';
 import { MoveLeftNode } from '../models/core/move-left-node';
 import { MoveRightNode } from '../models/core/move-right-node';
 import { SymbolValue } from '../models/core/symbol-value';
-import { SubmachineNode, type PreinstalledSubmachineId } from '../models/core/submachine-node';
+import { SubmachineNode } from '../models/core/submachine-node';
 import { WriterNode } from '../models/core/writer-node';
 import { MachineGraphView } from '../models/view';
 import type { JtvMachineState, JtvTapeState } from '../stores/jtv.store';
@@ -25,7 +25,7 @@ interface PersistedNode {
   readonly name: string;
   readonly tapeIndex: number;
   readonly isInitial: boolean;
-  readonly submachineId?: PreinstalledSubmachineId;
+  readonly submachineId?: string;
   readonly submachineName?: string;
   readonly displaySymbol?: string;
   readonly parameterName?: string;
@@ -68,6 +68,7 @@ export interface JtvFile {
   readonly parameterAssignments: Readonly<Record<string, string>>;
   readonly metaValues: JtvMetaValues;
   readonly tapeCount: number;
+  readonly submachines?: readonly JtvFile[];
   readonly graph: {
     readonly initialGroupId: string;
     readonly groups: readonly PersistedGroup[];
@@ -85,6 +86,7 @@ export interface JtvFileSource {
   readonly parameterAssignments: Readonly<Record<string, string>>;
   readonly metaValues?: JtvMetaValues;
   readonly tapes?: readonly JtvTapeState[];
+  readonly submachines?: readonly JtvFile[];
 }
 
 export interface JtvFileSerializerOptions {
@@ -98,6 +100,7 @@ export interface RestoredJtvMachine {
   readonly parameterAssignments: Readonly<Record<string, string>>;
   readonly metaValues: JtvMetaValues;
   readonly tapeCount: number;
+  readonly submachines: readonly JtvFile[];
 }
 
 export function createJtvFileFromState(state: JtvFileSource, options: JtvFileSerializerOptions = {}): JtvFile {
@@ -128,6 +131,7 @@ export function createJtvFileFromState(state: JtvFileSource, options: JtvFileSer
     parameterAssignments: { ...state.parameterAssignments },
     metaValues,
     tapeCount: Math.max(state.tapes?.length ?? 1, inferRequiredTapeCount(state.machineGraph)),
+    submachines: state.submachines ?? [],
     graph: {
       initialGroupId: ids.groups.get(state.machineGraph.initialGroupId) ?? state.machineGraph.initialGroupId,
       groups,
@@ -224,6 +228,7 @@ export function restoreMachineFromJtvFile(file: JtvFile): RestoredJtvMachine {
     parameterAssignments,
     metaValues,
     tapeCount: file.tapeCount,
+    submachines: file.submachines ?? [],
   };
 }
 
@@ -303,7 +308,7 @@ function restoreNode(node: PersistedNode): MachineNode {
   return new WriterNode(node.id, node.name, node.tapeIndex, node.isInitial);
 }
 
-function getDefaultSubmachineName(submachineId: PreinstalledSubmachineId | undefined): string {
+function getDefaultSubmachineName(submachineId: string | undefined): string {
   if (submachineId === 'buscadora_r') {
     return 'BUSCADORA_R';
   }

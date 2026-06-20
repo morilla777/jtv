@@ -46,6 +46,11 @@ export const en: Record<string, string> = {
   'explorer.ateRootLabel': 'NEW',
   'explorer.machines': 'Machines',
   'explorer.examples': 'Examples',
+  'explorer.machineMenu.addNew': 'Add New',
+  'explorer.machineMenu.addExisting': 'Add Existing',
+  'explorer.machineMenu.delete': 'Delete',
+  'explorer.machineMenu.saveAs': 'Save As...',
+  'explorer.machineMenu.properties': 'Properties',
 
   // Designer
   'designer.title': 'Machine Design',
@@ -143,4 +148,8 @@ export const en: Record<string, string> = {
   'toast.machineSaved': 'Machine saved to {{fileName}}',
   'toast.machineExported': 'Machine exported to {{fileName}}',
   'toast.machineSaveError': 'The machine file could not be saved',
+  'toast.submachineReferenced': 'This machine cannot be deleted because it is referenced from the invoking machine',
+  'confirm.yes': 'Yes',
+  'confirm.no': 'No',
+  'confirm.deleteSubmachine': 'Are you sure you want to delete this machine?',
 };

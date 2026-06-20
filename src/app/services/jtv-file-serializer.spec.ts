@@ -443,6 +443,19 @@ describe('JTV file serializer', () => {
     expect(restoredNode?.getAteLabel()).toBe('SHIFT_L()');
     expect(restored.machineGraphView.nodes[0].subscriptLabel).toBe('L');
   });
+
+  it('persists custom submachines recursively', () => {
+    const childFile = createJtvFileFromState(createEmptyFileSource('child-machine', 'CHILD'));
+    const parentFile = createJtvFileFromState({
+      ...createEmptyFileSource('parent-machine', 'PARENT'),
+      submachines: [childFile],
+    });
+    const restored = restoreMachineFromJtvFile(parentFile);
+
+    expect(parentFile.submachines?.[0].machine.name).toBe('CHILD');
+    expect(restored.submachines).toHaveLength(1);
+    expect(restored.submachines[0].machine.name).toBe('CHILD');
+  });
 });
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -454,4 +467,22 @@ function linkNodes<T extends MachineNode>(nodes: T[]): T[] {
   }
 
   return nodes;
+}
+
+function createEmptyFileSource(id: string, name: string): Parameters<typeof createJtvFileFromState>[0] {
+  return {
+    selectedMachine: { id, name },
+    machineGraph: {
+      groups: [],
+      links: [],
+      autolinks: [],
+      initialGroupId: '',
+    },
+    machineGraphView: {
+      groups: [],
+      nodes: [],
+      links: [],
+    },
+    parameterAssignments: {},
+  };
 }

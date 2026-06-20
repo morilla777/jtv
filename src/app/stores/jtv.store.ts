@@ -18,6 +18,7 @@ import { SubmachineNode } from '../models/core/submachine-node';
 import { SymbolValue } from '../models/core/symbol-value';
 import { Tape, TapeSnapshot } from '../models/core/tape';
 import { WriterNode } from '../models/core/writer-node';
+import { SubmachineDefinition } from '../models/core/execution-context';
 import { AutolinkOrientation, MachineGraphView, MachineLinkKind, MachineLinkView, ViewPoint } from '../models/view';
 import { createJtvFileFromState, restoreMachineFromJtvFile, type JtvFile, type JtvMetaValues } from '../services/jtv-file-serializer';
 import { JtvFileService } from '../services/jtv-file.service';
@@ -95,6 +96,23 @@ interface JtvHistorySnapshot {
   readonly file: JtvFile;
   readonly selectedTapeIndex: number;
   readonly tapes: readonly JtvHistoryTapeState[];
+}
+
+export interface JtvMachineTreeNode {
+  readonly id: string;
+  readonly name: string;
+  readonly children: readonly JtvMachineTreeNode[];
+}
+
+interface JtvDesignMachine {
+  readonly id: string;
+  readonly selectedMachine: JtvMachineState;
+  readonly machineGraph: MachineGraph;
+  readonly machineGraphView: MachineGraphView;
+  readonly metaValues: JtvMetaValues;
+  readonly parameterAssignments: Readonly<Record<string, string>>;
+  readonly tapeCount: number;
+  readonly submachineIds: readonly string[];
 }
 
 function createTapeState(index: number): JtvTapeState {
@@ -195,7 +213,7 @@ function createInitialState(): JtvState {
   const emptyMachine = createEmptyMachine();
   const selectedMachine = {
     id: 'new',
-    name: 'NUEVA',
+    name: '',
   };
 
   return {
@@ -348,10 +366,15 @@ export class JtvStore {
   private readonly settingsService = inject(JtvSettingsService);
   private readonly machineGraphRunner = new MachineGraphRunner();
   private readonly historyRevision = signal(0);
+  private readonly machineWorkspaceRevision = signal(0);
   private undoStack: JtvHistorySnapshot[] = [];
   private redoStack: JtvHistorySnapshot[] = [];
   private lastHistorySnapshot: JtvHistorySnapshot | null = null;
   private historyTransactionStart: JtvHistorySnapshot | null = null;
+  private rootDesignMachineId = this.state().selectedMachine.id;
+  private activeDesignMachineId = this.state().selectedMachine.id;
+  private selectedChildSubmachineId: string | null = null;
+  private designMachines = new Map<string, JtvDesignMachine>();
 
   readonly activeToolId = computed(() => this.state().activeToolId);
   readonly canUndo = computed(() => {
@@ -363,6 +386,38 @@ export class JtvStore {
     this.historyRevision();
 
     return this.redoStack.length > 0;
+  });
+  readonly activeMachineTreeNodeId = computed(() => {
+    this.machineWorkspaceRevision();
+
+    return this.activeDesignMachineId;
+  });
+  readonly rootMachineTreeNodeId = computed(() => {
+    this.machineWorkspaceRevision();
+
+    return this.rootDesignMachineId;
+  });
+  readonly machineTree = computed(() => {
+    this.machineWorkspaceRevision();
+
+    return this.createMachineTreeNode(this.rootDesignMachineId);
+  });
+  readonly activeChildMachineNames = computed(() => {
+    this.machineWorkspaceRevision();
+
+    const activeMachine = this.designMachines.get(this.activeDesignMachineId);
+
+    return activeMachine?.submachineIds
+      .map((submachineId) => this.designMachines.get(submachineId)?.selectedMachine.name ?? '')
+      .filter((name) => name.length > 0) ?? [];
+  });
+  readonly selectedChildMachineName = computed(() => {
+    this.machineWorkspaceRevision();
+    const activeMachine = this.designMachines.get(this.activeDesignMachineId);
+
+    return this.selectedChildSubmachineId && activeMachine?.submachineIds.includes(this.selectedChildSubmachineId)
+      ? this.designMachines.get(this.selectedChildSubmachineId)?.selectedMachine.name ?? null
+      : null;
   });
   readonly ate = computed(() => this.state().ate);
   readonly selectedAteNode = computed(() => this.findAteNode(this.state().ate, this.state().selectedAteNodeId));
@@ -426,6 +481,7 @@ export class JtvStore {
   });
 
   constructor() {
+    this.resetMachineWorkspaceFromCurrentState();
     this.resetHistory();
   }
 
@@ -463,6 +519,7 @@ export class JtvStore {
         name,
       },
     }));
+    this.saveActiveDesignMachine();
     this.lastHistorySnapshot = this.captureHistorySnapshot();
   }
 
@@ -1413,6 +1470,7 @@ export class JtvStore {
   }
 
   runMachineOnFirstTape(): boolean {
+    this.saveActiveDesignMachine();
     const tapes = this.state().tapes;
 
     if (tapes.length === 0) {
@@ -1423,7 +1481,7 @@ export class JtvStore {
     const context = {
       tapes: tapes.map((tapeState) => tapeState.tape),
       metaValues: this.createExecutionMetaValues(),
-      submachines: this.preinstalledSubmachineService.getSubmachines(),
+      submachines: this.createExecutionSubmachines(),
     };
     const result = this.machineGraphRunner.runBurst(this.state().machineGraph, context, traceRecorder, {
       maxSteps: this.settingsService.getSettings().burstSize,
@@ -1560,35 +1618,26 @@ export class JtvStore {
   }
 
   exportMachineFile(): JtvFile {
-    return createJtvFileFromState(this.state());
+    this.saveActiveDesignMachine();
+
+    return this.createFileFromDesignMachine(this.rootDesignMachineId);
   }
 
   importMachineFile(file: JtvFile): void {
-    const restored = restoreMachineFromJtvFile(file);
-    const tapes = createTapeStates(restored.tapeCount);
+    this.importDesignMachineWorkspace(file);
+    const rootMachine = this.designMachines.get(this.rootDesignMachineId);
 
-    this.state.update((current) => ({
-      ...current,
-      activeToolId: null,
-      ate: new AteTraceRecorder(restored.selectedMachine.name).root,
-      machineGraph: restored.machineGraph,
-      machineGraphView: restored.machineGraphView,
-      metaValues: restored.metaValues,
-      parameterAssignments: restored.parameterAssignments,
-      selectedAteNodeId: null,
-      selectedCanvasLinkId: null,
-      selectedCanvasNodeId: null,
-      selectedMachine: restored.selectedMachine,
-      selectedTapeIndex: Math.min(current.selectedTapeIndex, tapes.length - 1),
-      tapes,
-    }));
+    if (rootMachine) {
+      this.loadDesignMachine(rootMachine.id, { saveCurrent: false });
+    }
+
     this.resetHistory();
   }
 
   createNewMachine(): void {
     const selectedMachine = {
       id: this.createUuid(),
-      name: 'NUEVA',
+      name: '',
     };
     const emptyMachine = createEmptyMachine();
 
@@ -1607,12 +1656,288 @@ export class JtvStore {
       selectedTapeIndex: 0,
       tapes: [createTapeState(1)],
     }));
+    this.resetMachineWorkspaceFromCurrentState();
     this.resetHistory();
   }
 
   reset(): void {
     this.state.set(createInitialState());
+    this.resetMachineWorkspaceFromCurrentState();
     this.resetHistory();
+  }
+
+  selectDesignMachine(machineId: string): void {
+    if (machineId === this.activeDesignMachineId || !this.designMachines.has(machineId)) {
+      return;
+    }
+
+    this.loadDesignMachine(machineId);
+    this.selectChildSubmachineByName(null);
+  }
+
+  selectChildSubmachineByName(machineName: string | null): void {
+    const activeMachine = this.designMachines.get(this.activeDesignMachineId);
+    const machineId = activeMachine?.submachineIds.find((submachineId) =>
+      this.designMachines.get(submachineId)?.selectedMachine.name === machineName,
+    ) ?? null;
+
+    this.selectedChildSubmachineId = machineId;
+    this.bumpMachineWorkspaceRevision();
+  }
+
+  isDesignMachineReferencedByInvoker(machineId: string): boolean {
+    this.saveActiveDesignMachine();
+    const parent = this.findParentDesignMachine(machineId);
+
+    return parent ? this.hasSubmachineReference(parent.machine, machineId) : false;
+  }
+
+  deleteDesignMachine(machineId: string): boolean {
+    this.saveActiveDesignMachine();
+    const parent = this.findParentDesignMachine(machineId);
+
+    if (!parent || machineId === this.rootDesignMachineId || this.hasSubmachineReference(parent.machine, machineId)) {
+      return false;
+    }
+
+    const deletedMachineIds = this.collectDesignMachineSubtreeIds(machineId);
+
+    this.designMachines.set(parent.id, {
+      ...parent.machine,
+      submachineIds: parent.machine.submachineIds.filter((submachineId) => submachineId !== machineId),
+    });
+
+    for (const deletedMachineId of deletedMachineIds) {
+      this.designMachines.delete(deletedMachineId);
+    }
+
+    if (this.selectedChildSubmachineId && deletedMachineIds.includes(this.selectedChildSubmachineId)) {
+      this.selectedChildSubmachineId = null;
+    }
+
+    const nextMachineId = deletedMachineIds.includes(this.activeDesignMachineId) ? parent.id : this.activeDesignMachineId;
+
+    this.loadDesignMachine(nextMachineId, { saveCurrent: false });
+    this.bumpMachineWorkspaceRevision();
+    this.fileService.markDirty();
+
+    return true;
+  }
+
+  addExistingSubmachine(file: JtvFile): void {
+    this.saveActiveDesignMachine();
+
+    const submachine = this.createDesignMachineFromFile(file);
+    const rootMachine = this.designMachines.get(this.rootDesignMachineId);
+
+    if (!rootMachine) {
+      return;
+    }
+
+    this.designMachines.set(submachine.id, submachine);
+    this.designMachines.set(rootMachine.id, {
+      ...rootMachine,
+      submachineIds: [...rootMachine.submachineIds, submachine.id],
+    });
+    this.selectedChildSubmachineId = submachine.id;
+    this.activeDesignMachineId = submachine.id;
+    this.loadDesignMachine(submachine.id, { saveCurrent: false });
+    this.bumpMachineWorkspaceRevision();
+    this.fileService.markDirty();
+  }
+
+  private resetMachineWorkspaceFromCurrentState(): void {
+    const current = this.state();
+    const designMachine = this.createDesignMachineFromState(current, []);
+
+    this.rootDesignMachineId = designMachine.id;
+    this.activeDesignMachineId = designMachine.id;
+    this.designMachines = new Map([[designMachine.id, designMachine]]);
+    this.bumpMachineWorkspaceRevision();
+  }
+
+  private importDesignMachineWorkspace(file: JtvFile): void {
+    this.designMachines = new Map();
+    const rootMachine = this.createDesignMachineFromFile(file);
+
+    this.rootDesignMachineId = rootMachine.id;
+    this.activeDesignMachineId = rootMachine.id;
+  }
+
+  private createDesignMachineFromFile(file: JtvFile): JtvDesignMachine {
+    const restored = restoreMachineFromJtvFile(file);
+    const submachineIds = restored.submachines.map((submachineFile) => this.createDesignMachineFromFile(submachineFile).id);
+    const designMachine = this.createDesignMachineFromRestored(restored, submachineIds);
+
+    this.designMachines.set(designMachine.id, designMachine);
+
+    return designMachine;
+  }
+
+  private createDesignMachineFromRestored(
+    restored: ReturnType<typeof restoreMachineFromJtvFile>,
+    submachineIds: readonly string[],
+  ): JtvDesignMachine {
+    const id = this.createUniqueDesignMachineId(restored.selectedMachine.id);
+
+    return {
+      id,
+      selectedMachine: {
+        ...restored.selectedMachine,
+        id,
+      },
+      machineGraph: restored.machineGraph,
+      machineGraphView: restored.machineGraphView,
+      metaValues: restored.metaValues,
+      parameterAssignments: restored.parameterAssignments,
+      tapeCount: restored.tapeCount,
+      submachineIds,
+    };
+  }
+
+  private createDesignMachineFromState(state: JtvState, submachineIds: readonly string[]): JtvDesignMachine {
+    return {
+      id: state.selectedMachine.id,
+      selectedMachine: state.selectedMachine,
+      machineGraph: state.machineGraph,
+      machineGraphView: state.machineGraphView,
+      metaValues: state.metaValues,
+      parameterAssignments: state.parameterAssignments,
+      tapeCount: state.tapes.length,
+      submachineIds,
+    };
+  }
+
+  private saveActiveDesignMachine(): void {
+    const current = this.state();
+    const existing = this.designMachines.get(this.activeDesignMachineId);
+
+    this.designMachines.set(this.activeDesignMachineId, this.createDesignMachineFromState(
+      current,
+      existing?.submachineIds ?? [],
+    ));
+    this.bumpMachineWorkspaceRevision();
+  }
+
+  private loadDesignMachine(machineId: string, options: { saveCurrent?: boolean } = {}): void {
+    if (options.saveCurrent ?? true) {
+      this.saveActiveDesignMachine();
+    }
+
+    const machine = this.designMachines.get(machineId);
+
+    if (!machine) {
+      return;
+    }
+
+    const tapes = createTapeStates(machine.tapeCount);
+
+    this.activeDesignMachineId = machine.id;
+    this.state.update((current) => ({
+      ...current,
+      activeToolId: null,
+      ate: new AteTraceRecorder(machine.selectedMachine.name).root,
+      machineGraph: machine.machineGraph,
+      machineGraphView: machine.machineGraphView,
+      metaValues: machine.metaValues,
+      parameterAssignments: machine.parameterAssignments,
+      selectedAteNodeId: null,
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: null,
+      selectedMachine: machine.selectedMachine,
+      selectedTapeIndex: Math.min(current.selectedTapeIndex, tapes.length - 1),
+      tapes,
+    }));
+    this.syncCurrentHistorySnapshot();
+    this.bumpMachineWorkspaceRevision();
+  }
+
+  private createMachineTreeNode(machineId: string): JtvMachineTreeNode {
+    const machine = this.designMachines.get(machineId);
+
+    if (!machine) {
+      return {
+        id: machineId,
+        name: '',
+        children: [],
+      };
+    }
+
+    return {
+      id: machine.id,
+      name: machine.selectedMachine.name,
+      children: machine.submachineIds.map((submachineId) => this.createMachineTreeNode(submachineId)),
+    };
+  }
+
+  private getSelectedChildSubmachine(): JtvDesignMachine | null {
+    const activeMachine = this.designMachines.get(this.activeDesignMachineId);
+    const selectedId = this.selectedChildSubmachineId && activeMachine?.submachineIds.includes(this.selectedChildSubmachineId)
+      ? this.selectedChildSubmachineId
+      : activeMachine?.submachineIds[0] ?? null;
+
+    return selectedId ? this.designMachines.get(selectedId) ?? null : null;
+  }
+
+  private findParentDesignMachine(machineId: string): { id: string; machine: JtvDesignMachine } | null {
+    for (const [id, machine] of this.designMachines.entries()) {
+      if (machine.submachineIds.includes(machineId)) {
+        return { id, machine };
+      }
+    }
+
+    return null;
+  }
+
+  private hasSubmachineReference(machine: JtvDesignMachine, submachineId: string): boolean {
+    return machine.machineGraph.groups.some((group) =>
+      getMachineGroupNodes(group).some((node) => node instanceof SubmachineNode && node.submachineId === submachineId),
+    );
+  }
+
+  private collectDesignMachineSubtreeIds(machineId: string): string[] {
+    const machine = this.designMachines.get(machineId);
+
+    if (!machine) {
+      return [machineId];
+    }
+
+    return [
+      machineId,
+      ...machine.submachineIds.flatMap((submachineId) => this.collectDesignMachineSubtreeIds(submachineId)),
+    ];
+  }
+
+  private createFileFromDesignMachine(machineId: string): JtvFile {
+    const machine = this.designMachines.get(machineId);
+
+    if (!machine) {
+      return createJtvFileFromState(this.state());
+    }
+
+    return createJtvFileFromState({
+      selectedMachine: machine.selectedMachine,
+      machineGraph: machine.machineGraph,
+      machineGraphView: machine.machineGraphView,
+      parameterAssignments: machine.parameterAssignments,
+      metaValues: machine.metaValues,
+      tapes: createTapeStates(machine.tapeCount),
+      submachines: machine.submachineIds.map((submachineId) => this.createFileFromDesignMachine(submachineId)),
+    });
+  }
+
+  private bumpMachineWorkspaceRevision(): void {
+    this.machineWorkspaceRevision.update((revision) => revision + 1);
+  }
+
+  private createUniqueDesignMachineId(preferredId: string): string {
+    let candidate = preferredId || this.createUuid();
+
+    while (this.designMachines.has(candidate)) {
+      candidate = this.createUuid();
+    }
+
+    return candidate;
   }
 
   private patchState(patch: Partial<JtvState>): void {
@@ -1999,7 +2324,7 @@ export class JtvStore {
 
   private isInsertableNodeTool(
     toolId: JtvToolId | null,
-  ): toolId is 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'symbol-uppercase' | 'hub' | 'search-left' | 'search-right' | 'search-left-inverse' | 'search-right-inverse' | 'shift-left' | 'shift-right' {
+  ): toolId is 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'symbol-uppercase' | 'hub' | 'search-left' | 'search-right' | 'search-left-inverse' | 'search-right-inverse' | 'shift-left' | 'shift-right' | 'submachine' {
     return (
       toolId === 'move-left' ||
       toolId === 'move-right' ||
@@ -2012,13 +2337,14 @@ export class JtvStore {
       toolId === 'search-left-inverse' ||
       toolId === 'search-right-inverse' ||
       toolId === 'shift-left' ||
-      toolId === 'shift-right'
+      toolId === 'shift-right' ||
+      toolId === 'submachine'
     );
   }
 
   private createMachineNodeForTool(
     state: JtvState,
-    toolId: 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'symbol-uppercase' | 'hub' | 'search-left' | 'search-right' | 'search-left-inverse' | 'search-right-inverse' | 'shift-left' | 'shift-right',
+    toolId: 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'symbol-uppercase' | 'hub' | 'search-left' | 'search-right' | 'search-left-inverse' | 'search-right-inverse' | 'shift-left' | 'shift-right' | 'submachine',
     tapeIndex: number,
   ): MachineNode | null {
     if (toolId === 'move-left') {
@@ -2107,6 +2433,22 @@ export class JtvStore {
         false,
         'R',
       );
+    }
+
+    if (toolId === 'submachine') {
+      const submachine = this.getSelectedChildSubmachine();
+
+      return submachine
+        ? new SubmachineNode(
+          this.createMachineNodeId(state.machineGraph, 'submachine'),
+          submachine.id,
+          submachine.selectedMachine.name,
+          'M',
+          '',
+          {},
+          tapeIndex,
+        )
+        : null;
     }
 
     if (toolId === 'symbol-variable') {
@@ -2294,7 +2636,7 @@ export class JtvStore {
     const context = {
       tapes,
       metaValues: this.createExecutionMetaValues(),
-      submachines: this.preinstalledSubmachineService.getSubmachines(),
+      submachines: this.createExecutionSubmachines(),
     };
     const machineNodes = this.getMachineNodesById(state.machineGraph);
     const transitions = this.getTransitionsById(state.machineGraph);
@@ -2339,7 +2681,7 @@ export class JtvStore {
   private createContinuationExecutionContext(continuation: AteContinuationSnapshot): {
     tapes: Tape[];
     metaValues: MetaValueDictionary;
-    submachines: ReturnType<PreinstalledSubmachineService['getSubmachines']>;
+    submachines: ReadonlyMap<string, SubmachineDefinition>;
   } {
     return {
       tapes: this.state().tapes.map((tapeState, index) => {
@@ -2355,8 +2697,22 @@ export class JtvStore {
         return tape;
       }),
       metaValues: this.createMetaValuesFromContinuation(continuation),
-      submachines: this.preinstalledSubmachineService.getSubmachines(),
+      submachines: this.createExecutionSubmachines(),
     };
+  }
+
+  private createExecutionSubmachines(): ReadonlyMap<string, SubmachineDefinition> {
+    const submachines = new Map<string, SubmachineDefinition>(this.preinstalledSubmachineService.getSubmachines());
+
+    for (const machine of this.designMachines.values()) {
+      submachines.set(machine.id, {
+        graph: machine.machineGraph,
+        tapeCount: machine.tapeCount,
+        parameterAssignments: machine.parameterAssignments,
+      });
+    }
+
+    return submachines;
   }
 
   private createMetaValueAssignmentsSnapshot<T extends { isSet(): boolean; resolve(): SymbolValue; getName(): string }>(
