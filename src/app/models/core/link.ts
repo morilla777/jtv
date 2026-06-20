@@ -2,6 +2,7 @@ import { AteTraceRenderable } from './ate-trace-renderable';
 import { ExecutionContext } from './execution-context';
 import { LinkCondition } from './link-condition';
 import { MachineGroup } from './machine-group';
+import { MachineNode } from './machine-node';
 
 export class Link implements AteTraceRenderable {
   constructor(
@@ -9,6 +10,7 @@ export class Link implements AteTraceRenderable {
     public sourceGroup: MachineGroup | null,
     public targetGroup: MachineGroup | null,
     public condition: LinkCondition | null = null,
+    public targetNode: MachineNode | null = null,
   ) {}
 
   canTraverse(context: ExecutionContext): boolean {

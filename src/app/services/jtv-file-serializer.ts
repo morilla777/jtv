@@ -27,9 +27,10 @@ interface PersistedNode {
   readonly isInitial: boolean;
   readonly submachineId?: PreinstalledSubmachineId;
   readonly submachineName?: string;
-  readonly displaySymbol?: 'L' | 'R';
+  readonly displaySymbol?: string;
   readonly parameterName?: string;
   readonly submachineParameterAssignments?: Readonly<Record<string, string>>;
+  readonly displaySubscriptLabel?: string;
 }
 
 interface PersistedGroup {
@@ -45,6 +46,7 @@ interface PersistedLink {
   readonly id: string;
   readonly sourceGroupId: string | null;
   readonly targetGroupId: string | null;
+  readonly targetNodeId?: string | null;
   readonly condition: PersistedCondition | null;
 }
 
@@ -134,6 +136,7 @@ export function createJtvFileFromState(state: JtvFileSource, options: JtvFileSer
         id: ids.links.get(link.id) ?? link.id,
         sourceGroupId: link.sourceGroup?.id ? ids.groups.get(link.sourceGroup.id) ?? link.sourceGroup.id : null,
         targetGroupId: link.targetGroup?.id ? ids.groups.get(link.targetGroup.id) ?? link.targetGroup.id : null,
+        targetNodeId: link.targetNode?.id ? ids.nodes.get(link.targetNode.id) ?? link.targetNode.id : null,
         condition: persistCondition(link.condition),
       })),
       autolinks: (state.machineGraph.autolinks ?? []).map((autolink) => ({
@@ -169,11 +172,13 @@ export function restoreMachineFromJtvFile(file: JtvFile): RestoredJtvMachine {
     );
   });
   const groupsById = new Map(groups.map((group) => [group.id, group]));
+  const machineGraphView = cloneView(file.view);
   const links = file.graph.links.map((persistedLink) => new Link(
     persistedLink.id,
     persistedLink.sourceGroupId ? groupsById.get(persistedLink.sourceGroupId) ?? null : null,
     persistedLink.targetGroupId ? groupsById.get(persistedLink.targetGroupId) ?? null : null,
     restoreCondition(persistedLink.condition),
+    restoreLinkTargetNode(persistedLink, machineGraphView, nodes, groupsById),
   ));
   const autolinks = file.graph.autolinks.map((persistedAutolink) => new Autolink(
     persistedAutolink.id,
@@ -181,7 +186,6 @@ export function restoreMachineFromJtvFile(file: JtvFile): RestoredJtvMachine {
     restoreCondition(persistedAutolink.condition),
   ));
 
-  const machineGraphView = cloneView(file.view);
   const linkLabels = new Map([
     ...links.map((link) => [link.id, link.getAteLabel()] as const),
     ...autolinks.map((autolink) => [autolink.id, autolink.getAteLabel()] as const),
@@ -200,13 +204,18 @@ export function restoreMachineFromJtvFile(file: JtvFile): RestoredJtvMachine {
     machineGraph,
     machineGraphView: {
       ...machineGraphView,
-      nodes: machineGraphView.nodes.map((nodeView) => ({
-        ...nodeView,
-        subscriptLabel: nodeView.subscriptLabel ?? (nodes.get(nodeView.nodeId) instanceof SubmachineNode
-          ? (nodes.get(nodeView.nodeId) as SubmachineNode).getParameterDisplayValue()
-          : undefined),
-        tapeIndex: nodeView.tapeIndex ?? nodes.get(nodeView.nodeId)?.tapeIndex ?? 0,
-      })),
+      nodes: machineGraphView.nodes.map((nodeView) => {
+        const node = nodes.get(nodeView.nodeId);
+
+        return {
+          ...nodeView,
+          subscriptLabel: nodeView.subscriptLabel ?? (node instanceof SubmachineNode
+            ? node.getParameterDisplayValue()
+            : undefined),
+          subscriptOverline: node instanceof SubmachineNode ? node.hasNegatedParameterDisplay() : nodeView.subscriptOverline,
+          tapeIndex: nodeView.tapeIndex ?? node?.tapeIndex ?? 0,
+        };
+      }),
       links: machineGraphView.links.map((linkView) => ({
         ...linkView,
         label: linkLabels.get(linkView.linkId) ?? linkView.label,
@@ -259,6 +268,7 @@ function persistNode(node: MachineNode, nodeIds: ReadonlyMap<string, string>): P
       displaySymbol: node.displaySymbol,
       parameterName: node.parameterName,
       submachineParameterAssignments: { ...node.parameterAssignments },
+      displaySubscriptLabel: node.displaySubscriptLabel,
     }
     : persistedNode;
 }
@@ -280,16 +290,99 @@ function restoreNode(node: PersistedNode): MachineNode {
     return new SubmachineNode(
       node.id,
       node.submachineId ?? 'buscadora_l',
-      node.submachineName ?? (node.submachineId === 'buscadora_r' ? 'BUSCADORA_R' : 'BUSCADORA_L'),
+      node.submachineName ?? getDefaultSubmachineName(node.submachineId),
       node.displaySymbol ?? 'L',
       node.parameterName ?? 'A',
       node.submachineParameterAssignments ?? { A: SymbolValue.BLANK },
       node.tapeIndex,
       node.isInitial,
+      node.displaySubscriptLabel,
     );
   }
 
   return new WriterNode(node.id, node.name, node.tapeIndex, node.isInitial);
+}
+
+function getDefaultSubmachineName(submachineId: PreinstalledSubmachineId | undefined): string {
+  if (submachineId === 'buscadora_r') {
+    return 'BUSCADORA_R';
+  }
+
+  if (submachineId === 'buscadora_not_l') {
+    return 'BUSCADORA_NOT_L';
+  }
+
+  if (submachineId === 'buscadora_not_r') {
+    return 'BUSCADORA_NOT_R';
+  }
+
+  if (submachineId === 'shift_l') {
+    return 'SHIFT_L';
+  }
+
+  if (submachineId === 'shift_r') {
+    return 'SHIFT_R';
+  }
+
+  return 'BUSCADORA_L';
+}
+
+function restoreLinkTargetNode(
+  link: PersistedLink,
+  view: MachineGraphView,
+  nodes: ReadonlyMap<string, MachineNode>,
+  groupsById: ReadonlyMap<string, MachineGroup>,
+): MachineNode | null {
+  if (link.targetNodeId) {
+    return nodes.get(link.targetNodeId) ?? null;
+  }
+
+  if (!link.targetGroupId) {
+    return null;
+  }
+
+  const linkView = view.links.find((item) => item.linkId === link.id);
+  const endPoint = linkView?.points?.at(-1);
+  const targetGroup = groupsById.get(link.targetGroupId);
+
+  if (!endPoint || !targetGroup) {
+    return targetGroup?.entry ?? null;
+  }
+
+  const targetNodeIds = new Set(getGroupNodes(targetGroup).map((node) => node.id));
+  const candidateViews = view.nodes.filter((nodeView) =>
+    nodeView.groupId === link.targetGroupId && targetNodeIds.has(nodeView.nodeId),
+  );
+
+  let bestMatch: { nodeId: string; distance: number } | null = null;
+
+  for (const nodeView of candidateViews) {
+    const anchor = getNodeLeftAnchor(nodeView);
+    const distance = Math.hypot(anchor.x - endPoint.x, anchor.y - endPoint.y);
+
+    if (!bestMatch || distance < bestMatch.distance) {
+      bestMatch = {
+        nodeId: nodeView.nodeId,
+        distance,
+      };
+    }
+  }
+
+  return bestMatch ? nodes.get(bestMatch.nodeId) ?? targetGroup.entry : targetGroup.entry;
+}
+
+function getNodeLeftAnchor(node: MachineGraphView['nodes'][number]): { x: number; y: number } {
+  if (node.kind === 'hub') {
+    return {
+      x: node.position.x - 6,
+      y: node.position.y,
+    };
+  }
+
+  return {
+    x: node.position.x - 5,
+    y: node.position.y - 10,
+  };
 }
 
 function getNodeType(node: MachineNode): PersistedNodeType {
@@ -467,6 +560,7 @@ function cloneView(view: MachineGraphView, ids?: PersistenceIdMap): MachineGraph
       linkId: ids?.links.get(link.linkId) ?? link.linkId,
       sourceGroupId: ids?.groups.get(link.sourceGroupId) ?? link.sourceGroupId,
       targetGroupId: ids?.groups.get(link.targetGroupId) ?? link.targetGroupId,
+      targetNodeId: link.targetNodeId ? ids?.nodes.get(link.targetNodeId) ?? link.targetNodeId : undefined,
       points: link.points?.map((point) => ({ ...point })),
       selected: undefined,
       canvasSelected: undefined,

@@ -6,7 +6,13 @@ import { ParameterValue } from './parameter-value';
 import { SymbolValue } from './symbol-value';
 import { Tape } from './tape';
 
-export type PreinstalledSubmachineId = 'buscadora_l' | 'buscadora_r';
+export type PreinstalledSubmachineId =
+  | 'buscadora_l'
+  | 'buscadora_r'
+  | 'buscadora_not_l'
+  | 'buscadora_not_r'
+  | 'shift_l'
+  | 'shift_r';
 
 export class SubmachineNode extends AbstractMachineNode {
   private readonly runner = new MachineGraphRunner();
@@ -15,11 +21,12 @@ export class SubmachineNode extends AbstractMachineNode {
     id: string,
     readonly submachineId: PreinstalledSubmachineId,
     readonly submachineName: string,
-    readonly displaySymbol: 'L' | 'R',
+    readonly displaySymbol: string,
     readonly parameterName: string,
     private localParameterAssignments: Readonly<Record<string, string>>,
     tapeIndex: number,
     isInitial: boolean = false,
+    readonly displaySubscriptLabel?: string,
   ) {
     super(id, displaySymbol, tapeIndex, isInitial);
   }
@@ -30,7 +37,7 @@ export class SubmachineNode extends AbstractMachineNode {
 
   execute(context: ExecutionContext): boolean {
     const definition = context.submachines?.get(this.submachineId);
-    const callerTape = context.tapes[0];
+    const callerTape = context.tapes[this.tapeIndex];
 
     if (!definition || !callerTape) {
       return false;
@@ -61,7 +68,15 @@ export class SubmachineNode extends AbstractMachineNode {
   }
 
   getParameterDisplayValue(): string {
+    if (this.displaySubscriptLabel) {
+      return this.displaySubscriptLabel;
+    }
+
     return this.parameterAssignments[this.parameterName] ?? this.parameterName;
+  }
+
+  hasNegatedParameterDisplay(): boolean {
+    return this.submachineId === 'buscadora_not_l' || this.submachineId === 'buscadora_not_r';
   }
 
   setParameterAssignments(assignments: Readonly<Record<string, string>>): void {

@@ -74,6 +74,12 @@ export const es: Record<string, string> = {
   'parameterDialog.cancel': 'Cancelar',
   'parameterDialog.empty': 'Sin par\u00e1metros',
 
+  // Dialogo de Tamano de Rafaga
+  'burstSizeDialog.title': 'Tama\u00f1o de R\u00e1faga',
+  'burstSizeDialog.burstSize': 'Tama\u00f1o de R\u00e1faga',
+  'burstSizeDialog.cancel': 'Cancelar',
+  'burstSizeDialog.validation.range': 'Ingrese un valor entre 5 y 1000.',
+
   // Properties
   'properties.tool': 'Herramienta',
   'properties.tools.symbolLowercase': 'Máquina Escritora de Símbolos',

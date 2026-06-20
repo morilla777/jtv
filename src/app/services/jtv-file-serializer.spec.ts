@@ -10,7 +10,13 @@ import { MoveRightNode } from '../models/core/move-right-node';
 import { SubmachineNode } from '../models/core/submachine-node';
 import { WriterNode } from '../models/core/writer-node';
 import { MachineGraphView } from '../models/view';
-import { createJtvFileFromState, restoreMachineFromJtvFile } from './jtv-file-serializer';
+import {
+  createJtvFileFromState,
+  JTV_FILE_FORMAT,
+  JTV_FILE_VERSION,
+  restoreMachineFromJtvFile,
+  type JtvFile,
+} from './jtv-file-serializer';
 
 describe('JTV file serializer', () => {
   it('restores domain objects and graph layout from a saved machine file', () => {
@@ -146,6 +152,104 @@ describe('JTV file serializer', () => {
     expect(file.view.nodes[0].nodeId).toBe('write-a');
   });
 
+  it('persists and restores the exact target node of a direct link', () => {
+    const sourceNode = new WriterNode('source-write', 'a', 0, true);
+    const sourceGroup = new LinearMachineGroup('source-group', sourceNode, sourceNode);
+    const targetNodes = linkNodes([
+      new WriterNode('target-initial', 'x', 0, true),
+      new WriterNode('target-destination', 'y', 0),
+    ]);
+    const targetGroup = new LinearMachineGroup('target-group', targetNodes[0], targetNodes[1]);
+    const graph: MachineGraph = {
+      groups: [sourceGroup, targetGroup],
+      links: [new Link('link-to-node', sourceGroup, targetGroup, null, targetNodes[1])],
+      autolinks: [],
+      initialGroupId: sourceGroup.id,
+    };
+    const view: MachineGraphView = {
+      groups: [
+        { groupId: sourceGroup.id, label: 'a', position: { x: 10, y: 20 }, width: 28, height: 32 },
+        { groupId: targetGroup.id, label: 'xy', position: { x: 100, y: 20 }, width: 48, height: 32 },
+      ],
+      nodes: [
+        { nodeId: sourceNode.id, groupId: sourceGroup.id, label: sourceNode.name, position: { x: 10, y: 20 } },
+        { nodeId: targetNodes[0].id, groupId: targetGroup.id, label: targetNodes[0].name, position: { x: 100, y: 20 } },
+        { nodeId: targetNodes[1].id, groupId: targetGroup.id, label: targetNodes[1].name, position: { x: 120, y: 20 } },
+      ],
+      links: [{
+        linkId: 'link-to-node',
+        kind: 'direct',
+        sourceGroupId: sourceGroup.id,
+        targetGroupId: targetGroup.id,
+        targetNodeId: targetNodes[1].id,
+      }],
+    };
+
+    const file = createJtvFileFromState({
+      selectedMachine: { id: 'machine-a', name: 'NUEVA' },
+      machineGraph: graph,
+      machineGraphView: view,
+      parameterAssignments: {},
+    }, { preserveIds: true });
+    const restored = restoreMachineFromJtvFile(file);
+
+    expect(file.graph.links[0].targetNodeId).toBe('target-destination');
+    expect(restored.machineGraph.links[0].targetNode?.id).toBe('target-destination');
+    expect(restored.machineGraphView.links[0].targetNodeId).toBe('target-destination');
+  });
+
+  it('infers a direct link target node from old files without targetNodeId', () => {
+    const file: JtvFile = {
+      format: JTV_FILE_FORMAT,
+      version: JTV_FILE_VERSION,
+      machine: { id: 'machine-a', name: 'NUEVA' },
+      parameterAssignments: {},
+      metaValues: { variables: [], parameters: [] },
+      tapeCount: 1,
+      graph: {
+        initialGroupId: 'source-group',
+        groups: [
+          { id: 'source-group', nodeIds: ['source-write'] },
+          { id: 'target-group', nodeIds: ['target-initial', 'target-destination'] },
+        ],
+        nodes: [
+          { id: 'source-write', type: 'writer', name: 'a', tapeIndex: 0, isInitial: true },
+          { id: 'target-initial', type: 'writer', name: 'x', tapeIndex: 0, isInitial: true },
+          { id: 'target-destination', type: 'writer', name: 'y', tapeIndex: 0, isInitial: false },
+        ],
+        links: [{
+          id: 'old-link',
+          sourceGroupId: 'source-group',
+          targetGroupId: 'target-group',
+          condition: null,
+        }],
+        autolinks: [],
+      },
+      view: {
+        groups: [
+          { groupId: 'source-group', label: 'a', position: { x: 10, y: 20 }, width: 28, height: 32 },
+          { groupId: 'target-group', label: 'xy', position: { x: 100, y: 20 }, width: 48, height: 32 },
+        ],
+        nodes: [
+          { nodeId: 'source-write', groupId: 'source-group', label: 'a', position: { x: 10, y: 20 } },
+          { nodeId: 'target-initial', groupId: 'target-group', label: 'x', position: { x: 100, y: 20 } },
+          { nodeId: 'target-destination', groupId: 'target-group', label: 'y', position: { x: 140, y: 20 } },
+        ],
+        links: [{
+          linkId: 'old-link',
+          kind: 'direct',
+          sourceGroupId: 'source-group',
+          targetGroupId: 'target-group',
+          points: [{ x: 38, y: 10 }, { x: 135, y: 10 }],
+        }],
+      },
+    };
+
+    const restored = restoreMachineFromJtvFile(file);
+
+    expect(restored.machineGraph.links[0].targetNode?.id).toBe('target-destination');
+  });
+
   it('persists and restores the required tape count', () => {
     const node = new WriterNode('write-z', 'z', 1, true);
     const group = new LinearMachineGroup('group-z', node, node);
@@ -249,6 +353,95 @@ describe('JTV file serializer', () => {
     expect(file.metaValues.parameters).toEqual([]);
     expect(restoredNode).toBeInstanceOf(SubmachineNode);
     expect(restored.machineGraphView.nodes[0].subscriptLabel).toBe('#');
+  });
+
+  it('persists and restores inverse preinstalled submachine nodes', () => {
+    const node = new SubmachineNode('search-right-inverse', 'buscadora_not_r', 'BUSCADORA_NOT_R', 'R', 'A', { A: '#' }, 0, true);
+    const group = new LinearMachineGroup('group-search-right-inverse', node, node);
+    const graph: MachineGraph = {
+      groups: [group],
+      links: [],
+      autolinks: [],
+      initialGroupId: group.id,
+    };
+    const view: MachineGraphView = {
+      groups: [{ groupId: group.id, label: 'R', position: { x: 10, y: 20 }, width: 28, height: 32 }],
+      nodes: [{
+        nodeId: node.id,
+        groupId: group.id,
+        kind: 'submachine',
+        label: node.name,
+        subscriptLabel: '#',
+        position: { x: 10, y: 20 },
+      }],
+      links: [],
+    };
+
+    const file = createJtvFileFromState({
+      selectedMachine: { id: 'new', name: 'NUEVA' },
+      machineGraph: graph,
+      machineGraphView: view,
+      parameterAssignments: {},
+    });
+    const restored = restoreMachineFromJtvFile(file);
+    const restoredNode = restored.machineGraph.groups[0].entry;
+
+    expect(file.graph.nodes[0]).toEqual(expect.objectContaining({
+      type: 'submachine',
+      submachineId: 'buscadora_not_r',
+      submachineName: 'BUSCADORA_NOT_R',
+      displaySymbol: 'R',
+      parameterName: 'A',
+      submachineParameterAssignments: { A: '#' },
+    }));
+    expect(restoredNode).toBeInstanceOf(SubmachineNode);
+    expect(restored.machineGraphView.nodes[0].subscriptLabel).toBe('#');
+    expect(restored.machineGraphView.nodes[0].subscriptOverline).toBe(true);
+  });
+
+  it('persists and restores shift preinstalled submachine nodes', () => {
+    const node = new SubmachineNode('shift-left', 'shift_l', 'SHIFT_L', 'S', '', {}, 0, true, 'L');
+    const group = new LinearMachineGroup('group-shift-left', node, node);
+    const graph: MachineGraph = {
+      groups: [group],
+      links: [],
+      autolinks: [],
+      initialGroupId: group.id,
+    };
+    const view: MachineGraphView = {
+      groups: [{ groupId: group.id, label: 'S', position: { x: 10, y: 20 }, width: 28, height: 32 }],
+      nodes: [{
+        nodeId: node.id,
+        groupId: group.id,
+        kind: 'submachine',
+        label: node.name,
+        subscriptLabel: 'L',
+        position: { x: 10, y: 20 },
+      }],
+      links: [],
+    };
+
+    const file = createJtvFileFromState({
+      selectedMachine: { id: 'new', name: 'NUEVA' },
+      machineGraph: graph,
+      machineGraphView: view,
+      parameterAssignments: {},
+    });
+    const restored = restoreMachineFromJtvFile(file);
+    const restoredNode = restored.machineGraph.groups[0].entry;
+
+    expect(file.graph.nodes[0]).toEqual(expect.objectContaining({
+      type: 'submachine',
+      submachineId: 'shift_l',
+      submachineName: 'SHIFT_L',
+      displaySymbol: 'S',
+      parameterName: '',
+      submachineParameterAssignments: {},
+      displaySubscriptLabel: 'L',
+    }));
+    expect(restoredNode).toBeInstanceOf(SubmachineNode);
+    expect(restoredNode?.getAteLabel()).toBe('SHIFT_L()');
+    expect(restored.machineGraphView.nodes[0].subscriptLabel).toBe('L');
   });
 });
 

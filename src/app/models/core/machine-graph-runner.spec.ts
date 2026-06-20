@@ -19,6 +19,17 @@ import { SubmachineDefinition } from './execution-context';
 import { SubmachineNode } from './submachine-node';
 import { VariableValue } from './variable-value';
 import { WriterNode } from './writer-node';
+import copiadora2File from '../../../assets/examples/copiadora2.jtv.json';
+import copiadoraFile from '../../../assets/examples/copiadora.jtv.json';
+import monusFile from '../../../assets/examples/monus.jtv.json';
+import palindromeFile from '../../../assets/examples/palindrome.jtv.json';
+import buscadoraLFile from '../../../assets/submachines/buscadora_l.jtv.json';
+import buscadoraNotLFile from '../../../assets/submachines/buscadora_not_l.jtv.json';
+import buscadoraNotRFile from '../../../assets/submachines/buscadora_not_r.jtv.json';
+import buscadoraRFile from '../../../assets/submachines/buscadora_r.jtv.json';
+import shiftLFile from '../../../assets/submachines/shift_l.jtv.json';
+import shiftRFile from '../../../assets/submachines/shift_r.jtv.json';
+import { restoreMachineFromJtvFile, type JtvFile } from '../../services/jtv-file-serializer';
 
 describe('MachineGraphRunner', () => {
   it('uses the machine name as the ATE root label without a prefix', () => {
@@ -75,6 +86,66 @@ describe('MachineGraphRunner', () => {
         2: 'b',
         3: 'c',
         4: 'd',
+      },
+    });
+  });
+
+  it('starts a target group at the link target node when one is configured', () => {
+    const tape = new Tape();
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const sourceNode = new MoveRightNode('source-right', 0, true);
+    const sourceGroup = new LinearMachineGroup('source', sourceNode, sourceNode);
+    const targetNodes = linkNodes([
+      new WriterNode('write-wrong', 'n', 0, true),
+      new WriterNode('write-right', 'y', 0),
+    ]);
+    const targetGroup = new LinearMachineGroup('target', targetNodes[0], targetNodes.at(-1) ?? null);
+    const graph: MachineGraph = {
+      groups: [sourceGroup, targetGroup],
+      links: [new Link('source-to-target-node', sourceGroup, targetGroup, null, targetNodes[1])],
+      initialGroupId: sourceGroup.id,
+    };
+
+    const ok = new MachineGraphRunner().run(graph, context);
+
+    expect(ok).toBe(true);
+    expect(tape.getSnapshot()).toEqual({
+      headPosition: 1,
+      cells: {
+        1: 'y',
+      },
+    });
+  });
+
+  it('falls back to the target group initial node when a link has no target node', () => {
+    const tape = new Tape();
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const sourceNode = new MoveRightNode('source-right', 0, true);
+    const sourceGroup = new LinearMachineGroup('source', sourceNode, sourceNode);
+    const targetNodes = linkNodes([
+      new WriterNode('write-initial', 'a', 0, true),
+      new WriterNode('write-next', 'b', 0),
+    ]);
+    const targetGroup = new LinearMachineGroup('target', targetNodes[0], targetNodes.at(-1) ?? null);
+    const graph: MachineGraph = {
+      groups: [sourceGroup, targetGroup],
+      links: [new Link('source-to-target-group', sourceGroup, targetGroup)],
+      initialGroupId: sourceGroup.id,
+    };
+
+    const ok = new MachineGraphRunner().run(graph, context);
+
+    expect(ok).toBe(true);
+    expect(tape.getSnapshot()).toEqual({
+      headPosition: 1,
+      cells: {
+        1: 'b',
       },
     });
   });
@@ -587,6 +658,210 @@ describe('MachineGraphRunner', () => {
       },
     });
   });
+
+  it('executes a submachine node against its configured caller tape', () => {
+    const firstCallerTape = new Tape();
+    firstCallerTape.load('xx');
+    const secondCallerTape = new Tape();
+    secondCallerTape.load('ab');
+    const searchLeftNode = new MoveLeftNode('sub-left', 0, true);
+    const searchLeftGroup = new LinearMachineGroup('sub-left-group', searchLeftNode, searchLeftNode);
+    const submachine: SubmachineDefinition = {
+      graph: {
+        groups: [searchLeftGroup],
+        links: [],
+        autolinks: [
+          new Autolink(
+            'keep-searching-left',
+            searchLeftNode,
+            new LinkCondition([{ tapeIndex: 0, acceptedValues: ['A'], negated: true }]),
+          ),
+        ],
+        initialGroupId: searchLeftGroup.id,
+      },
+      tapeCount: 1,
+      parameterAssignments: {},
+    };
+    const submachineNode = new SubmachineNode(
+      'search-left-node',
+      'buscadora_l',
+      'BUSCADORA_L',
+      'L',
+      'A',
+      { A: '#' },
+      1,
+      true,
+    );
+    const context = {
+      tapes: [firstCallerTape, secondCallerTape],
+      metaValues: new MetaValueDictionary(),
+      submachines: new Map([['buscadora_l' as const, submachine]]),
+    };
+
+    const ok = submachineNode.execute(context);
+
+    expect(ok).toBe(true);
+    expect(firstCallerTape.getSnapshot()).toEqual({
+      headPosition: 3,
+      cells: {
+        1: 'x',
+        2: 'x',
+      },
+    });
+    expect(secondCallerTape.getSnapshot()).toEqual({
+      headPosition: 0,
+      cells: {
+        1: 'a',
+        2: 'b',
+      },
+    });
+  });
+
+  it('executes the preinstalled shift-right submachine without looping', () => {
+    const tape = new Tape();
+    tape.load('ab');
+    const buscadoraR = restoreMachineFromJtvFile(buscadoraRFile as JtvFile);
+    const shiftR = restoreMachineFromJtvFile(shiftRFile as JtvFile);
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+      submachines: new Map<string, SubmachineDefinition>([
+        ['buscadora_r', {
+          graph: buscadoraR.machineGraph,
+          tapeCount: buscadoraR.tapeCount,
+          parameterAssignments: buscadoraR.parameterAssignments,
+        }],
+      ]),
+    };
+
+    const ok = new MachineGraphRunner().run(shiftR.machineGraph, context);
+
+    expect(ok).toBe(true);
+    expect(tape.getSnapshot()).toEqual({
+      headPosition: 4,
+      cells: {
+        2: 'a',
+        3: 'b',
+      },
+    });
+  });
+
+  it.each([
+    [
+      'ab',
+      {
+        headPosition: 6,
+        cells: {
+          1: 'a',
+          2: 'b',
+          4: 'a',
+          5: 'b',
+        },
+      },
+    ],
+    [
+      'aba',
+      {
+        headPosition: 8,
+        cells: {
+          1: 'a',
+          2: 'b',
+          3: 'a',
+          5: 'a',
+          6: 'b',
+          7: 'a',
+        },
+      },
+    ],
+  ])('executes the COPIADORA example for "%s"', (input, expectedSnapshot) => {
+    expect(runExampleMachine(copiadoraFile as JtvFile, input)).toEqual(expectedSnapshot);
+  });
+
+  it('executes the COPIADORA2 example using the configured submachine tape', () => {
+    expect(runExampleMachineTapes(copiadora2File as JtvFile, ['ab', ''])).toEqual([
+      {
+        headPosition: 6,
+        cells: {
+          1: 'a',
+          2: 'b',
+          4: 'a',
+          5: 'b',
+        },
+      },
+      {
+        headPosition: 3,
+        cells: {
+          1: 'a',
+          2: 'b',
+        },
+      },
+    ]);
+  });
+
+  it.each([
+    [
+      '111111#1111',
+      {
+        headPosition: 3,
+        cells: {
+          1: '1',
+          2: '1',
+        },
+      },
+    ],
+    [
+      '1111#1',
+      {
+        headPosition: 4,
+        cells: {
+          1: '1',
+          2: '1',
+          3: '1',
+        },
+      },
+    ],
+    [
+      '111#111',
+      {
+        headPosition: 1,
+        cells: {},
+      },
+    ],
+  ])('executes the MONUS example for "%s"', (input, expectedSnapshot) => {
+    expect(runExampleMachine(monusFile as JtvFile, input)).toEqual(expectedSnapshot);
+  });
+
+  it.each([
+    [
+      'aba',
+      {
+        headPosition: 2,
+        cells: {
+          1: 'y',
+        },
+      },
+    ],
+    [
+      'abba',
+      {
+        headPosition: 2,
+        cells: {
+          1: 'y',
+        },
+      },
+    ],
+  ])('executes the PALINDROME example for "%s"', (input, expectedSnapshot) => {
+    expect(runExampleMachine(palindromeFile as JtvFile, input)).toEqual(expectedSnapshot);
+  });
+
+  it.each(['ab', 'abca', 'ba'])('leaves #n# on tape 1 for non-palindrome "%s"', (input) => {
+    expect(runExampleMachine(palindromeFile as JtvFile, input)).toEqual({
+      headPosition: 2,
+      cells: {
+        1: 'n',
+      },
+    });
+  });
 });
 
 function runConditionalLinkMachine(input: string): Tape {
@@ -663,6 +938,49 @@ function runConditionalLinkMachine(input: string): Tape {
   expect(new MachineGraphRunner().run(graph, context)).toBe(true);
 
   return tape;
+}
+
+function createPreinstalledSubmachines(): ReadonlyMap<string, SubmachineDefinition> {
+  return new Map<string, SubmachineDefinition>([
+    ['buscadora_l', createSubmachineDefinition(buscadoraLFile as JtvFile)],
+    ['buscadora_r', createSubmachineDefinition(buscadoraRFile as JtvFile)],
+    ['buscadora_not_l', createSubmachineDefinition(buscadoraNotLFile as JtvFile)],
+    ['buscadora_not_r', createSubmachineDefinition(buscadoraNotRFile as JtvFile)],
+    ['shift_l', createSubmachineDefinition(shiftLFile as JtvFile)],
+    ['shift_r', createSubmachineDefinition(shiftRFile as JtvFile)],
+  ]);
+}
+
+function runExampleMachine(file: JtvFile, input: string): ReturnType<Tape['getSnapshot']> {
+  return runExampleMachineTapes(file, [input])[0];
+}
+
+function runExampleMachineTapes(file: JtvFile, inputs: readonly string[]): ReturnType<Tape['getSnapshot']>[] {
+  const restored = restoreMachineFromJtvFile(file);
+  const tapeCount = Math.max(restored.tapeCount, inputs.length, 1);
+  const tapes = Array.from({ length: tapeCount }, (_, index) => {
+    const tape = new Tape();
+    tape.load(inputs[index] ?? '');
+    return tape;
+  });
+  const ok = new MachineGraphRunner().run(restored.machineGraph, {
+    tapes,
+    metaValues: new MetaValueDictionary(),
+    submachines: createPreinstalledSubmachines(),
+  });
+
+  expect(ok).toBe(true);
+  return tapes.map((tape) => tape.getSnapshot());
+}
+
+function createSubmachineDefinition(file: JtvFile): SubmachineDefinition {
+  const restored = restoreMachineFromJtvFile(file);
+
+  return {
+    graph: restored.machineGraph,
+    tapeCount: restored.tapeCount,
+    parameterAssignments: restored.parameterAssignments,
+  };
 }
 
 function linkNodes<T extends MachineNode>(nodes: T[]): T[] {

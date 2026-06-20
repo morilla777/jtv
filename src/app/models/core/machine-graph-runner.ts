@@ -11,6 +11,7 @@ export class MachineGraphRunner {
 
   run(graph: MachineGraph, context: ExecutionContext, traceRecorder?: AteTraceRecorder): boolean {
     let currentGroup = this.findInitialGroup(graph);
+    let currentStartNode: MachineNode | null | undefined = currentGroup ? this.findInitialNode(currentGroup) : null;
 
     if (!currentGroup) {
       return false;
@@ -18,7 +19,7 @@ export class MachineGraphRunner {
 
     while (currentGroup) {
       const ok = this.sequenceRunner.run(
-        this.findInitialNode(currentGroup),
+        currentStartNode ?? this.findInitialNode(currentGroup),
         context,
         traceRecorder,
         graph.autolinks ?? [],
@@ -34,6 +35,7 @@ export class MachineGraphRunner {
       }
 
       currentGroup = nextLink?.targetGroup ?? undefined;
+      currentStartNode = nextLink?.targetNode ?? (currentGroup ? this.findInitialNode(currentGroup) : null);
     }
 
     return true;

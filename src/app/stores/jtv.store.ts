@@ -304,6 +304,7 @@ function createLinkView(
     label?: string;
     sourceGroupId?: string;
     targetGroupId?: string;
+    targetNodeId?: string;
     points: readonly ViewPoint[];
   },
 ): MachineLinkView {
@@ -314,6 +315,7 @@ function createLinkView(
     autolinkOrientation: layout.autolinkOrientation,
     sourceGroupId: layout.sourceGroupId ?? (link instanceof Link ? link.sourceGroup?.id : '') ?? '',
     targetGroupId: layout.targetGroupId ?? (link instanceof Link ? link.targetGroup?.id : '') ?? '',
+    targetNodeId: layout.targetNodeId ?? (link instanceof Link ? link.targetNode?.id : undefined),
     points: layout.points,
   };
 }
@@ -353,6 +355,7 @@ function createLinearNodeViews(
     kind: getMachineNodeViewKind(node),
     label: node.name,
     subscriptLabel: node instanceof SubmachineNode ? node.getParameterDisplayValue() : undefined,
+    subscriptOverline: node instanceof SubmachineNode ? node.hasNegatedParameterDisplay() : undefined,
     tapeIndex: node.tapeIndex,
     initial: node.isInitial,
     position: {
@@ -643,8 +646,9 @@ export class JtvStore {
       const targetGroup = targetNodeView
         ? current.machineGraph.groups.find((group) => group.id === targetNodeView.groupId)
         : null;
+      const targetNode = targetGroup ? this.findMachineNodeInGroup(targetGroup, targetNodeId) : null;
 
-      if (!sourceNodeView || !targetNodeView || !sourceGroup || !targetGroup || sourceGroup.exit?.id !== sourceNodeId) {
+      if (!sourceNodeView || !targetNodeView || !sourceGroup || !targetGroup || !targetNode || sourceGroup.exit?.id !== sourceNodeId) {
         return current;
       }
 
@@ -652,6 +656,8 @@ export class JtvStore {
         this.createMachineLinkId(current.machineGraph, 'link'),
         sourceGroup,
         targetGroup,
+        null,
+        targetNode,
       );
 
       return {
@@ -672,6 +678,7 @@ export class JtvStore {
                 ...vertices,
                 this.getNodeLeftAnchor(targetNodeView),
               ],
+              targetNodeId,
             }),
           ],
         },
@@ -799,11 +806,17 @@ export class JtvStore {
       return null;
     }
 
+    const parameters = Object.keys(node.parameterAssignments).length > 0
+      ? Object.keys(node.parameterAssignments).sort((left, right) => left.localeCompare(right))
+      : node.parameterName ? [node.parameterName] : [];
+
+    if (parameters.length === 0) {
+      return null;
+    }
+
     return {
       nodeId,
-      parameters: Object.keys(node.parameterAssignments).length > 0
-        ? Object.keys(node.parameterAssignments).sort((left, right) => left.localeCompare(right))
-        : [node.parameterName],
+      parameters,
       assignments: node.parameterAssignments,
     };
   }
@@ -841,6 +854,7 @@ export class JtvStore {
               ? {
                 ...viewNode,
                 subscriptLabel: node.getParameterDisplayValue(),
+                subscriptOverline: node.hasNegatedParameterDisplay(),
               }
               : viewNode,
           ),
@@ -990,6 +1004,7 @@ export class JtvStore {
               kind: this.getMachineNodeViewKind(insertedNode),
               label: insertedNode.name,
               subscriptLabel: insertedNode instanceof SubmachineNode ? insertedNode.getParameterDisplayValue() : undefined,
+              subscriptOverline: insertedNode instanceof SubmachineNode ? insertedNode.hasNegatedParameterDisplay() : undefined,
               tapeIndex: insertedNode.tapeIndex,
               initial: insertedNode.isInitial,
               position: insertedNodePosition,
@@ -1070,6 +1085,7 @@ export class JtvStore {
               kind: this.getMachineNodeViewKind(insertedNode),
               label: insertedNode.name,
               subscriptLabel: insertedNode instanceof SubmachineNode ? insertedNode.getParameterDisplayValue() : undefined,
+              subscriptOverline: insertedNode instanceof SubmachineNode ? insertedNode.hasNegatedParameterDisplay() : undefined,
               tapeIndex: insertedNode.tapeIndex,
               initial: insertedNode.isInitial,
               position,
@@ -1948,8 +1964,9 @@ export class JtvStore {
       const sourceNodeView = sourceGroup?.exit
         ? nodes.find((node) => node.nodeId === sourceGroup.exit?.id)
         : null;
-      const targetNodeView = targetGroup?.entry
-        ? nodes.find((node) => node.nodeId === targetGroup.entry?.id)
+      const targetNodeId = link.targetNodeId ?? targetGroup?.entry?.id;
+      const targetNodeView = targetNodeId
+        ? nodes.find((node) => node.nodeId === targetNodeId)
         : null;
       const points = link.points ?? [];
 
@@ -1997,7 +2014,7 @@ export class JtvStore {
 
   private isInsertableNodeTool(
     toolId: JtvToolId | null,
-  ): toolId is 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'symbol-uppercase' | 'hub' | 'search-left' | 'search-right' {
+  ): toolId is 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'symbol-uppercase' | 'hub' | 'search-left' | 'search-right' | 'search-left-inverse' | 'search-right-inverse' | 'shift-left' | 'shift-right' {
     return (
       toolId === 'move-left' ||
       toolId === 'move-right' ||
@@ -2006,13 +2023,17 @@ export class JtvStore {
       toolId === 'symbol-uppercase' ||
       toolId === 'hub' ||
       toolId === 'search-left' ||
-      toolId === 'search-right'
+      toolId === 'search-right' ||
+      toolId === 'search-left-inverse' ||
+      toolId === 'search-right-inverse' ||
+      toolId === 'shift-left' ||
+      toolId === 'shift-right'
     );
   }
 
   private createMachineNodeForTool(
     state: JtvState,
-    toolId: 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'symbol-uppercase' | 'hub' | 'search-left' | 'search-right',
+    toolId: 'move-left' | 'move-right' | 'symbol-lowercase' | 'symbol-variable' | 'symbol-uppercase' | 'hub' | 'search-left' | 'search-right' | 'search-left-inverse' | 'search-right-inverse' | 'shift-left' | 'shift-right',
     tapeIndex: number,
   ): MachineNode | null {
     if (toolId === 'move-left') {
@@ -2048,6 +2069,58 @@ export class JtvStore {
         'A',
         { A: SymbolValue.BLANK },
         tapeIndex,
+      );
+    }
+
+    if (toolId === 'search-left-inverse') {
+      return new SubmachineNode(
+        this.createMachineNodeId(state.machineGraph, 'search-left-inverse'),
+        'buscadora_not_l',
+        'BUSCADORA_NOT_L',
+        'L',
+        'A',
+        { A: SymbolValue.BLANK },
+        tapeIndex,
+      );
+    }
+
+    if (toolId === 'search-right-inverse') {
+      return new SubmachineNode(
+        this.createMachineNodeId(state.machineGraph, 'search-right-inverse'),
+        'buscadora_not_r',
+        'BUSCADORA_NOT_R',
+        'R',
+        'A',
+        { A: SymbolValue.BLANK },
+        tapeIndex,
+      );
+    }
+
+    if (toolId === 'shift-left') {
+      return new SubmachineNode(
+        this.createMachineNodeId(state.machineGraph, 'shift-left'),
+        'shift_l',
+        'SHIFT_L',
+        'S',
+        '',
+        {},
+        tapeIndex,
+        false,
+        'L',
+      );
+    }
+
+    if (toolId === 'shift-right') {
+      return new SubmachineNode(
+        this.createMachineNodeId(state.machineGraph, 'shift-right'),
+        'shift_r',
+        'SHIFT_R',
+        'S',
+        '',
+        {},
+        tapeIndex,
+        false,
+        'R',
       );
     }
 
@@ -2093,8 +2166,9 @@ export class JtvStore {
       const targetGroup = targetNodeView
         ? current.machineGraph.groups.find((group) => group.id === targetNodeView.groupId)
         : null;
+      const targetNode = targetGroup ? this.findMachineNodeInGroup(targetGroup, targetNodeId) : null;
 
-      if (!sourceNodeView || !targetNodeView || !sourceGroup || !targetGroup || sourceGroup.exit?.id !== sourceNodeId) {
+      if (!sourceNodeView || !targetNodeView || !sourceGroup || !targetGroup || !targetNode || sourceGroup.exit?.id !== sourceNodeId) {
         return current;
       }
 
@@ -2103,6 +2177,7 @@ export class JtvStore {
         sourceGroup,
         targetGroup,
         condition,
+        targetNode,
       );
 
       return {
@@ -2123,6 +2198,7 @@ export class JtvStore {
                 ...vertices,
                 this.getNodeLeftAnchor(targetNodeView),
               ],
+              targetNodeId,
             }),
           ],
         },

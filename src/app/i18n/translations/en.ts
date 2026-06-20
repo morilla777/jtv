@@ -74,6 +74,12 @@ export const en: Record<string, string> = {
   'parameterDialog.cancel': 'Cancel',
   'parameterDialog.empty': 'No parameters',
 
+  // Burst Size Dialog
+  'burstSizeDialog.title': 'Burst Size',
+  'burstSizeDialog.burstSize': 'Burst Size',
+  'burstSizeDialog.cancel': 'Cancel',
+  'burstSizeDialog.validation.range': 'Enter a value between 5 and 1000.',
+
   // Properties
   'properties.tool': 'Tool',
   'properties.tools.symbolLowercase': 'Symbol Writer Machine',

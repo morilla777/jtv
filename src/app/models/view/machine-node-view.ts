@@ -6,6 +6,7 @@ export interface MachineNodeView {
   readonly kind?: 'text' | 'parameter' | 'hub' | 'submachine';
   readonly label: string;
   readonly subscriptLabel?: string;
+  readonly subscriptOverline?: boolean;
   readonly tapeIndex?: number;
   readonly initial?: boolean;
   readonly position: ViewPoint;

@@ -10,6 +10,7 @@ export interface MachineLinkView {
   readonly autolinkOrientation?: AutolinkOrientation;
   readonly sourceGroupId: string;
   readonly targetGroupId: string;
+  readonly targetNodeId?: string;
   readonly points?: readonly ViewPoint[];
   readonly selected?: boolean;
   readonly canvasSelected?: boolean;

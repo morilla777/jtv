@@ -152,7 +152,11 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                 >
                   <tspan>{{ node.label }}</tspan>
                   @if (node.subscriptLabel) {
-                    <tspan class="machine-node-subscript" baseline-shift="sub">{{ node.subscriptLabel }}</tspan>
+                    <tspan
+                      class="machine-node-subscript"
+                      [class.machine-node-subscript-overline]="node.subscriptOverline"
+                      baseline-shift="sub"
+                    >{{ node.subscriptLabel }}</tspan>
                   }
                   @if (showTapeIndexes()) {
                     <tspan class="machine-node-tape-index" baseline-shift="super" dy="-8">({{ getNodeTapeNumber(node) }})</tspan>
@@ -368,6 +372,11 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
       font-size: 12px;
     }
 
+    .machine-node-subscript-overline {
+      text-decoration: overline;
+      text-underline-offset: -2px;
+    }
+
     .machine-text-selected {
       fill: red;
     }
@@ -522,7 +531,20 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   readonly isAutolinkInsertionToolActive = computed(() => this.store.activeToolId() === 'loop-transition');
   readonly isTransitionToolActive = computed(() => this.isLinkInsertionToolActive());
   readonly isNodeInsertionToolActive = computed(() =>
-    ['move-left', 'move-right', 'symbol-lowercase', 'symbol-variable', 'symbol-uppercase', 'hub', 'search-left', 'search-right'].includes(this.store.activeToolId() ?? ''),
+    [
+      'move-left',
+      'move-right',
+      'symbol-lowercase',
+      'symbol-variable',
+      'symbol-uppercase',
+      'hub',
+      'search-left',
+      'search-right',
+      'search-left-inverse',
+      'search-right-inverse',
+      'shift-left',
+      'shift-right',
+    ].includes(this.store.activeToolId() ?? ''),
   );
   readonly isCanvasCursorActive = computed(
     () =>

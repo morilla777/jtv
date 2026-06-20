@@ -5,6 +5,7 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { ButtonModule } from 'primeng/button';
 import { MenubarModule } from 'primeng/menubar';
 import { SelectModule, type SelectChangeEvent } from 'primeng/select';
+import { BurstSizeDialog } from '../components/burst-size-dialog';
 import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvFileService } from '../services/jtv-file.service';
@@ -20,7 +21,7 @@ interface LanguageOption {
 
 @Component({
   selector: 'app-topbar',
-  imports: [FormsModule, MenubarModule, ToolbarModule, ButtonModule, SelectModule, ParameterAssignmentDialog, TranslatePipe],
+  imports: [FormsModule, MenubarModule, ToolbarModule, ButtonModule, SelectModule, BurstSizeDialog, ParameterAssignmentDialog, TranslatePipe],
   template: `
     <div class="topbar-shell">
       <p-menubar [model]="menuItems" class="jtv-menubar">
@@ -58,6 +59,32 @@ interface LanguageOption {
                 <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'exportJson')">
                   <span class="pi pi-code"></span>
                   <span>{{ 'topbar.menu.file.exportTo.json' | translate }}</span>
+                </button>
+              </div>
+            }
+          </div>
+
+          <div class="file-menu-shell">
+            <button
+              type="button"
+              class="file-menu-trigger"
+              [attr.aria-expanded]="settingsMenuOpen"
+              aria-haspopup="menu"
+              (click)="toggleSettingsMenu($event)"
+            >
+              <span class="pi pi-cog"></span>
+              <span>{{ 'topbar.menu.settings' | translate }}</span>
+            </button>
+
+            @if (settingsMenuOpen) {
+              <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runSettingsMenuAction($event, 'burstSize')">
+                  <span class="pi pi-bolt"></span>
+                  <span>{{ 'topbar.menu.settings.burstSize' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runSettingsMenuAction($event, 'notationChange')">
+                  <span class="pi pi-language"></span>
+                  <span>{{ 'topbar.menu.settings.notationChange' | translate }}</span>
                 </button>
               </div>
             }
@@ -280,6 +307,10 @@ interface LanguageOption {
         [symbolOptions]="symbolOptions"
         [assignments]="parameterAssignments"
         (assignmentsChange)="saveParameterAssignments($event)"
+      />
+
+      <app-burst-size-dialog
+        [(visible)]="burstSizeDialogVisible"
       />
     </div>
   `,
@@ -557,7 +588,9 @@ export class Topbar {
   selectedMachine = this.machineOptions[0];
   executionFinished = false;
   fileMenuOpen = false;
+  settingsMenuOpen = false;
   parameterAssignmentDialogVisible = false;
+  burstSizeDialogVisible = false;
 
   get selectedSymbol(): string {
     return this.store.selectedSymbol();
@@ -601,6 +634,10 @@ export class Topbar {
 
   openParameterAssignmentDialog(): void {
     this.parameterAssignmentDialogVisible = true;
+  }
+
+  openBurstSizeDialog(): void {
+    this.burstSizeDialogVisible = true;
   }
 
   saveParameterAssignments(assignments: Record<string, string>): void {
@@ -662,20 +699,6 @@ export class Topbar {
         ],
       },
       {
-        label: this.i18n.translate('topbar.menu.settings'),
-        icon: 'pi pi-cog',
-        items: [
-          {
-            label: this.i18n.translate('topbar.menu.settings.burstSize'),
-            icon: 'pi pi-bolt',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.settings.notationChange'),
-            icon: 'pi pi-language',
-          },
-        ],
-      },
-      {
         label: this.i18n.translate('topbar.menu.help'),
         icon: 'pi pi-question-circle',
         items: [
@@ -720,13 +743,21 @@ export class Topbar {
   }
 
   @HostListener('document:click')
-  closeFileMenu(): void {
+  closeOpenMenus(): void {
     this.fileMenuOpen = false;
+    this.settingsMenuOpen = false;
   }
 
   toggleFileMenu(event: Event): void {
     event.stopPropagation();
     this.fileMenuOpen = !this.fileMenuOpen;
+    this.settingsMenuOpen = false;
+  }
+
+  toggleSettingsMenu(event: Event): void {
+    event.stopPropagation();
+    this.settingsMenuOpen = !this.settingsMenuOpen;
+    this.fileMenuOpen = false;
   }
 
   runFileMenuAction(event: Event, action: 'new' | 'open' | 'save' | 'saveAs' | 'exportJson'): void {
@@ -755,6 +786,16 @@ export class Topbar {
     }
 
     void this.exportMachineJson();
+  }
+
+  runSettingsMenuAction(event: Event, action: 'burstSize' | 'notationChange'): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.settingsMenuOpen = false;
+
+    if (action === 'burstSize') {
+      this.openBurstSizeDialog();
+    }
   }
 
   newMachine(): void {
