@@ -8,6 +8,7 @@ import { ExplorerPanel } from './explorer-panel';
 import { DesignerCanvasPanel } from './designer-canvas-panel';
 import { PropertiesPanel } from './properties-panel';
 import { TapesPanel } from './tapes-panel';
+import { LoadingOverlay } from '../components/loading-overlay';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvFileService } from '../services/jtv-file.service';
 
@@ -21,6 +22,7 @@ import { JtvFileService } from '../services/jtv-file.service';
     DesignerCanvasPanel,
     PropertiesPanel,
     TapesPanel,
+    LoadingOverlay,
     TranslatePipe,
   ],
   template: `
@@ -30,6 +32,7 @@ import { JtvFileService } from '../services/jtv-file.service';
       }
 
       <p-toast key="simulation" position="center" (onClose)="hideSimulationToastModal()" />
+      <app-loading-overlay />
       <app-topbar />
 
       <div class="workspace">

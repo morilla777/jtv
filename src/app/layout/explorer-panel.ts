@@ -4,6 +4,7 @@ import { TabsModule } from 'primeng/tabs';
 import { TreeModule } from 'primeng/tree';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { TranslationService } from '../services/translation.service';
+import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { AteNode } from '../models/ate';
 import { JtvStore } from '../stores/jtv.store';
 
@@ -32,7 +33,7 @@ import { JtvStore } from '../stores/jtv.store';
                   [indentation]="0.25"
                 >
                   <ng-template pTemplate="default" let-node>
-                    <span class="ate-tree-node">
+                    <span class="ate-tree-node" (dblclick)="continueAteExecution(node, $event)">
                       <img class="ate-tree-icon" [src]="node.data.iconSrc" [alt]="node.label" />
                       <span>{{ node.label }}</span>
                     </span>
@@ -43,7 +44,7 @@ import { JtvStore } from '../stores/jtv.store';
 
             <p-tabpanel value="machines">
               <p-tree
-                [value]="machineNodes"
+                [value]="mainMachineNodes()"
                 selectionMode="single"
                 [(selection)]="selectedMachineNode"
                 [style]="treeStyle"
@@ -185,6 +186,7 @@ import { JtvStore } from '../stores/jtv.store';
 export class ExplorerPanel {
   private readonly store = inject(JtvStore);
   private readonly i18n = inject(TranslationService);
+  private readonly loading = inject(LoadingIndicatorService);
 
   readonly tabsStyle = {
     width: '100%',
@@ -204,6 +206,15 @@ export class ExplorerPanel {
     '--p-tree-node-gap': '0.1875rem',
     '--p-tree-node-toggle-button-size': '0.875rem',
   };
+
+  readonly mainMachineNodes = computed<TreeNode[]>(() => [{
+    key: this.store.selectedMachine().id,
+    label: this.store.selectedMachine().name,
+    icon: 'pi pi-cog',
+    expanded: true,
+    selectable: true,
+    children: [],
+  }]);
 
   readonly machineNodes: TreeNode[] = [
     {
@@ -234,7 +245,7 @@ export class ExplorerPanel {
 
   readonly ateNodes = computed<TreeNode[]>(() => [this.toTreeNode(this.store.ate())]);
 
-  selectedMachineNode: TreeNode | null = this.machineNodes[0].children?.[0] ?? null;
+  selectedMachineNode: TreeNode | null = null;
   selectedAteNode: TreeNode | null = null;
 
   private toTreeNode(node: AteNode): TreeNode {
@@ -253,6 +264,15 @@ export class ExplorerPanel {
 
   selectAteNode(node: TreeNode): void {
     this.store.selectAteNode(node.data?.ateNodeId ?? null);
+  }
+
+  async continueAteExecution(node: TreeNode, event: MouseEvent): Promise<void> {
+    event.preventDefault();
+    event.stopPropagation();
+    await this.loading.run(
+      () => this.store.continueAteExecution(node.data?.ateNodeId ?? ''),
+      this.i18n.translate('loading.executing'),
+    );
   }
 
   restoreAteSelection(): void {

@@ -9,6 +9,7 @@ import { BurstSizeDialog } from '../components/burst-size-dialog';
 import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvFileService } from '../services/jtv-file.service';
+import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { TranslationService, type Language } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 
@@ -545,6 +546,7 @@ interface LanguageOption {
 export class Topbar {
   readonly i18n = inject(TranslationService);
   private readonly fileService = inject(JtvFileService);
+  private readonly loading = inject(LoadingIndicatorService);
   private readonly messageService = inject(MessageService);
   private readonly store = inject(JtvStore);
 
@@ -916,7 +918,7 @@ export class Topbar {
     });
   }
 
-  executeMachine(): void {
+  async executeMachine(): Promise<void> {
     const hasUnassignedParameters = this.insertedParameters.some((parameter) => !this.parameterAssignments[parameter]);
 
     if (hasUnassignedParameters) {
@@ -931,7 +933,10 @@ export class Topbar {
       return;
     }
 
-    this.store.runMachineOnFirstTape();
+    await this.loading.run(
+      () => this.store.runMachineOnFirstTape(),
+      this.i18n.translate('loading.executing'),
+    );
     this.executionFinished = true;
     this.messageService.add({
       key: 'simulation',

@@ -128,6 +128,9 @@ export const en: Record<string, string> = {
   'status.file.label': 'File:',
   'status.file.empty': 'No file',
 
+  // Loading
+  'loading.executing': 'Executing...',
+
   // Toasts
   'toast.simulationStarted': 'ETT generated, simulation started',
   'toast.simulationStopped': 'Simulation finished, ETT released',

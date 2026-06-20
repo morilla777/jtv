@@ -21,6 +21,7 @@ import { VariableValue } from './variable-value';
 import { WriterNode } from './writer-node';
 import copiadora2File from '../../../assets/examples/copiadora2.jtv.json';
 import copiadoraFile from '../../../assets/examples/copiadora.jtv.json';
+import igualesAbcFile from '../../../assets/examples/iguales_abc.jtv.json';
 import monusFile from '../../../assets/examples/monus.jtv.json';
 import palindromeFile from '../../../assets/examples/palindrome.jtv.json';
 import buscadoraLFile from '../../../assets/submachines/buscadora_l.jtv.json';
@@ -145,6 +146,60 @@ describe('MachineGraphRunner', () => {
     expect(tape.getSnapshot()).toEqual({
       headPosition: 1,
       cells: {
+        1: 'b',
+      },
+    });
+  });
+
+  it('suspends execution when the burst size is reached and resumes from the continuation', () => {
+    const tape = new Tape();
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const nodes = linkNodes([
+      new WriterNode('write-a', 'a', 0, true),
+      new MoveRightNode('move-right', 0),
+      new WriterNode('write-b', 'b', 0),
+    ]);
+    const group = new LinearMachineGroup('write-ab', nodes[0], nodes.at(-1) ?? null);
+    const graph: MachineGraph = {
+      groups: [group],
+      links: [],
+      autolinks: [],
+      initialGroupId: group.id,
+    };
+    const runner = new MachineGraphRunner();
+    const firstTraceRecorder = new AteTraceRecorder('NUEVA');
+
+    const firstResult = runner.runBurst(graph, context, firstTraceRecorder, { maxSteps: 2 });
+
+    expect(firstResult.status).toBe('suspended');
+    expect(firstResult.continuation).toEqual({
+      currentGroupId: group.id,
+      currentNodeId: 'move-right',
+      phase: 'after-node',
+    });
+    expect(firstTraceRecorder.root.children.map((child) => child.machineNodeId)).toEqual(['write-a', 'move-right']);
+    expect(tape.getSnapshot()).toEqual({
+      headPosition: 1,
+      cells: {
+        0: 'a',
+      },
+    });
+
+    const secondTraceRecorder = new AteTraceRecorder('NUEVA');
+    const secondResult = runner.runBurst(graph, context, secondTraceRecorder, {
+      maxSteps: 2,
+      startAt: firstResult.continuation,
+    });
+
+    expect(secondResult.status).toBe('completed');
+    expect(secondTraceRecorder.root.children.map((child) => child.machineNodeId)).toEqual(['write-b']);
+    expect(tape.getSnapshot()).toEqual({
+      headPosition: 1,
+      cells: {
+        0: 'a',
         1: 'b',
       },
     });
@@ -831,6 +886,40 @@ describe('MachineGraphRunner', () => {
     expect(runExampleMachine(monusFile as JtvFile, input)).toEqual(expectedSnapshot);
   });
 
+  it('executes the IGUALES_ABC example for an accepted input', () => {
+    expect(runExampleMachine(igualesAbcFile as JtvFile, 'abccabbca')).toEqual({
+      headPosition: 0,
+      cells: {
+        1: 'd',
+        2: 'd',
+        3: 'd',
+        4: 'd',
+        5: 'd',
+        6: 'd',
+        7: 'd',
+        8: 'd',
+        9: 'd',
+      },
+    });
+  });
+
+  it('suspends the IGUALES_ABC example for a looping input', () => {
+    const execution = runExampleMachineBurst(igualesAbcFile as JtvFile, 'abccabb', 40);
+    const expandNode = execution.traceRecorder.root.children.at(-1);
+
+    expect(execution.result.status).toBe('suspended');
+    expect(expandNode).toEqual(expect.objectContaining({
+      iconSrc: 'assets/images/expand_ATE.gif',
+      kind: 'expand',
+      label: '',
+    }));
+    expect(expandNode?.continuation).toEqual(expect.objectContaining({
+      currentGroupId: expect.any(String),
+      phase: expect.stringMatching(/^(node|after-node|after-group)$/),
+      tapeSnapshots: [execution.tape.getSnapshot()],
+    }));
+  });
+
   it.each([
     [
       'aba',
@@ -971,6 +1060,35 @@ function runExampleMachineTapes(file: JtvFile, inputs: readonly string[]): Retur
 
   expect(ok).toBe(true);
   return tapes.map((tape) => tape.getSnapshot());
+}
+
+function runExampleMachineBurst(file: JtvFile, input: string, maxSteps: number): {
+  result: ReturnType<MachineGraphRunner['runBurst']>;
+  tape: Tape;
+  traceRecorder: AteTraceRecorder;
+} {
+  const restored = restoreMachineFromJtvFile(file);
+  const tape = new Tape();
+  tape.load(input);
+  const traceRecorder = new AteTraceRecorder(restored.selectedMachine.name);
+  const result = new MachineGraphRunner().runBurst(restored.machineGraph, {
+    tapes: [tape],
+    metaValues: new MetaValueDictionary(),
+    submachines: createPreinstalledSubmachines(),
+  }, traceRecorder, { maxSteps });
+
+  if (result.status === 'suspended' && result.continuation) {
+    traceRecorder.recordExpand({
+      currentGroupId: result.continuation.currentGroupId,
+      currentNodeId: result.continuation.currentNodeId,
+      phase: result.continuation.phase,
+      tapeSnapshots: [tape.getSnapshot()],
+      variableAssignments: {},
+      parameterAssignments: {},
+    });
+  }
+
+  return { result, tape, traceRecorder };
 }
 
 function createSubmachineDefinition(file: JtvFile): SubmachineDefinition {

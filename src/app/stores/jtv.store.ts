@@ -1,12 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
-import { AteNode, AteTraceRecorder } from '../models/ate';
+import { AteContinuationSnapshot, AteNode, AteTraceRecorder } from '../models/ate';
 import { Autolink } from '../models/core/autolink';
 import { LinearMachineGroup } from '../models/core/linear-machine-group';
 import { Link } from '../models/core/link';
 import { LinkCondition, type ReadConditionClause } from '../models/core/link-condition';
 import { MachineGraph } from '../models/core/machine-graph';
-import { MachineGraphRunner } from '../models/core/machine-graph-runner';
+import { MachineGraphExecutionPoint, MachineGraphRunner } from '../models/core/machine-graph-runner';
 import { MachineGroup } from '../models/core/machine-group';
 import { MachineNode } from '../models/core/machine-node';
 import { HubNode } from '../models/core/hub-node';
@@ -21,6 +21,7 @@ import { WriterNode } from '../models/core/writer-node';
 import { AutolinkOrientation, MachineGraphView, MachineLinkKind, MachineLinkView, ViewPoint } from '../models/view';
 import { createJtvFileFromState, restoreMachineFromJtvFile, type JtvFile, type JtvMetaValues } from '../services/jtv-file-serializer';
 import { JtvFileService } from '../services/jtv-file.service';
+import { JtvSettingsService } from '../services/jtv-settings.service';
 import { PreinstalledSubmachineService } from '../services/preinstalled-submachine.service';
 
 export type JtvToolId =
@@ -185,9 +186,13 @@ function getMachineGroupNodes(group: MachineGroup): MachineNode[] {
   return nodes;
 }
 
+function deleteMutableContinuation(node: AteNode): void {
+  delete (node as { continuation?: AteContinuationSnapshot }).continuation;
+}
+
 function createInitialState(): JtvState {
   const initialTape = createTapeState(1);
-  const demoMachine = createDemoMachine();
+  const emptyMachine = createEmptyMachine();
   const selectedMachine = {
     id: 'new',
     name: 'NUEVA',
@@ -196,9 +201,9 @@ function createInitialState(): JtvState {
   return {
     activeToolId: null,
     ate: new AteTraceRecorder(selectedMachine.name).root,
-    machineGraph: demoMachine.graph,
-    machineGraphView: demoMachine.view,
-    metaValues: collectMachineMetaValues(demoMachine.graph, {}),
+    machineGraph: emptyMachine.graph,
+    machineGraphView: emptyMachine.view,
+    metaValues: collectMachineMetaValues(emptyMachine.graph, {}),
     parameterAssignments: {},
     selectedCanvasLinkId: null,
     selectedCanvasNodeId: null,
@@ -212,86 +217,18 @@ function createInitialState(): JtvState {
   };
 }
 
-function createDemoMachine(): { graph: MachineGraph; view: MachineGraphView } {
-  const writeGroupNodes = linkNodes([
-    new MoveRightNode('move-right-a', 0, true),
-    new WriterNode('write-a', 'a', 0),
-    new MoveRightNode('move-right-b', 0),
-    new WriterNode('write-b', 'b', 0),
-    new MoveRightNode('move-right-c', 0),
-    new WriterNode('write-c', 'c', 0),
-    new MoveRightNode('move-right-d', 0),
-    new WriterNode('write-d', 'd', 0),
-  ]);
-  const rewindGroupNodes = linkNodes([
-    new MoveLeftNode('move-left-1', 0),
-  ]);
-  const writeGroup = new LinearMachineGroup(
-    'write-abcd',
-    writeGroupNodes[0],
-    writeGroupNodes.at(-1) ?? null,
-  );
-  const rewindGroup = new LinearMachineGroup(
-    'rewind',
-    rewindGroupNodes[0],
-    rewindGroupNodes.at(-1) ?? null,
-  );
-  const writeToRewindLink = new Link(
-    'write-to-rewind',
-    writeGroup,
-    rewindGroup,
-    new LinkCondition([{ tapeIndex: 0, acceptedValues: ['d'] }]),
-  );
-  const rewindAutolink = new Autolink(
-    'rewind-autolink',
-    rewindGroupNodes[0],
-    new LinkCondition([{ tapeIndex: 0, acceptedValues: ['#'], negated: true }]),
-  );
-
+function createEmptyMachine(): { graph: MachineGraph; view: MachineGraphView } {
   return {
     graph: {
-      groups: [writeGroup, rewindGroup],
-      links: [writeToRewindLink],
-      autolinks: [rewindAutolink],
-      initialGroupId: writeGroup.id,
+      groups: [],
+      links: [],
+      autolinks: [],
+      initialGroupId: '',
     },
     view: {
-      groups: [
-        {
-          groupId: writeGroup.id,
-          label: formatGroupLabel(writeGroup),
-          position: { x: 32, y: 72 },
-          width: 176,
-          height: 32,
-        },
-        {
-          groupId: rewindGroup.id,
-          label: formatGroupLabel(rewindGroup),
-          position: { x: 300, y: 72 },
-          width: 28,
-          height: 32,
-        },
-      ],
-      nodes: [
-        ...createLinearNodeViews(writeGroup.id, writeGroupNodes, 32, 72),
-        ...createLinearNodeViews(rewindGroup.id, rewindGroupNodes, 300, 72),
-      ],
-      links: [
-        createLinkView(writeToRewindLink, {
-          kind: 'direct',
-          points: [
-            { x: 190, y: 62 },
-            { x: 296, y: 62 },
-          ],
-        }),
-        createLinkView(rewindAutolink, {
-          kind: 'autolink',
-          autolinkOrientation: 'right',
-          sourceGroupId: rewindGroup.id,
-          targetGroupId: rewindGroup.id,
-          points: [{ x: 300, y: 72 }],
-        }),
-      ],
+      groups: [],
+      nodes: [],
+      links: [],
     },
   };
 }
@@ -408,6 +345,7 @@ export class JtvStore {
   private readonly state = signal<JtvState>(createInitialState());
   private readonly fileService = inject(JtvFileService);
   private readonly preinstalledSubmachineService = inject(PreinstalledSubmachineService);
+  private readonly settingsService = inject(JtvSettingsService);
   private readonly machineGraphRunner = new MachineGraphRunner();
   private readonly historyRevision = signal(0);
   private undoStack: JtvHistorySnapshot[] = [];
@@ -1487,9 +1425,15 @@ export class JtvStore {
       metaValues: this.createExecutionMetaValues(),
       submachines: this.preinstalledSubmachineService.getSubmachines(),
     };
-    const ok = this.machineGraphRunner.run(this.state().machineGraph, context, traceRecorder);
+    const result = this.machineGraphRunner.runBurst(this.state().machineGraph, context, traceRecorder, {
+      maxSteps: this.settingsService.getSettings().burstSize,
+    });
 
-    traceRecorder.recordStop();
+    if (result.status === 'completed') {
+      traceRecorder.recordStop();
+    } else if (result.status === 'suspended' && result.continuation) {
+      traceRecorder.recordExpand(this.createAteContinuationSnapshot(result.continuation, context));
+    }
 
     this.state.update((current) => ({
       ...current,
@@ -1498,7 +1442,56 @@ export class JtvStore {
       tapes: current.tapes.map((tapeState) => ({ ...tapeState })),
     }));
 
-    return ok;
+    return result.status !== 'failed';
+  }
+
+  continueAteExecution(expandNodeId: string): boolean {
+    const state = this.state();
+    const expandNode = this.findAteNode(state.ate, expandNodeId);
+
+    if (!expandNode?.continuation) {
+      return false;
+    }
+
+    const context = this.createContinuationExecutionContext(expandNode.continuation);
+    const traceRecorder = new AteTraceRecorder(state.selectedMachine.name, {
+      root: expandNode,
+      showTapeIndexes: state.tapes.length > 1,
+      nextEntryId: this.getAteTraceNodes(state.ate).length + 1,
+    });
+    const result = this.machineGraphRunner.runBurst(state.machineGraph, context, traceRecorder, {
+      maxSteps: this.settingsService.getSettings().burstSize,
+      startAt: {
+        currentGroupId: expandNode.continuation.currentGroupId,
+        currentNodeId: expandNode.continuation.currentNodeId,
+        phase: expandNode.continuation.phase,
+      },
+    });
+
+    if (result.status === 'completed') {
+      traceRecorder.recordStop();
+      deleteMutableContinuation(expandNode);
+    } else if (result.status === 'suspended' && result.continuation) {
+      traceRecorder.recordExpand(this.createAteContinuationSnapshot(result.continuation, context));
+      deleteMutableContinuation(expandNode);
+    }
+
+    this.state.update((current) => ({
+      ...current,
+      ate: { ...current.ate },
+      selectedAteNodeId: null,
+      tapes: current.tapes.map((tapeState, index) => {
+        const snapshot = context.tapes[index]?.getSnapshot();
+
+        if (snapshot) {
+          tapeState.tape.restoreSnapshot(snapshot);
+        }
+
+        return { ...tapeState };
+      }),
+    }));
+
+    return result.status !== 'failed';
   }
 
   clearAte(): void {
@@ -1597,22 +1590,14 @@ export class JtvStore {
       id: this.createUuid(),
       name: 'NUEVA',
     };
+    const emptyMachine = createEmptyMachine();
 
     this.state.update((current) => ({
       ...current,
       activeToolId: null,
       ate: new AteTraceRecorder(selectedMachine.name).root,
-      machineGraph: {
-        groups: [],
-        links: [],
-        autolinks: [],
-        initialGroupId: '',
-      },
-      machineGraphView: {
-        groups: [],
-        nodes: [],
-        links: [],
-      },
+      machineGraph: emptyMachine.graph,
+      machineGraphView: emptyMachine.view,
       metaValues: { variables: [], parameters: [] },
       parameterAssignments: {},
       selectedAteNodeId: null,
@@ -2335,6 +2320,83 @@ export class JtvStore {
     }
 
     return tapes.map((tape) => tape.getSnapshot());
+  }
+
+  private createAteContinuationSnapshot(
+    point: MachineGraphExecutionPoint,
+    context: { tapes: readonly Tape[]; metaValues: MetaValueDictionary },
+  ): AteContinuationSnapshot {
+    return {
+      currentGroupId: point.currentGroupId,
+      currentNodeId: point.currentNodeId,
+      phase: point.phase,
+      tapeSnapshots: context.tapes.map((tape) => tape.getSnapshot()),
+      variableAssignments: this.createMetaValueAssignmentsSnapshot(context.metaValues.getVariables()),
+      parameterAssignments: this.createMetaValueAssignmentsSnapshot(context.metaValues.getParameters()),
+    };
+  }
+
+  private createContinuationExecutionContext(continuation: AteContinuationSnapshot): {
+    tapes: Tape[];
+    metaValues: MetaValueDictionary;
+    submachines: ReturnType<PreinstalledSubmachineService['getSubmachines']>;
+  } {
+    return {
+      tapes: this.state().tapes.map((tapeState, index) => {
+        const tape = tapeState.tape;
+        const snapshot = continuation.tapeSnapshots[index];
+
+        if (snapshot) {
+          tape.restoreSnapshot(snapshot);
+        } else {
+          tape.clear();
+        }
+
+        return tape;
+      }),
+      metaValues: this.createMetaValuesFromContinuation(continuation),
+      submachines: this.preinstalledSubmachineService.getSubmachines(),
+    };
+  }
+
+  private createMetaValueAssignmentsSnapshot<T extends { isSet(): boolean; resolve(): SymbolValue; getName(): string }>(
+    values: ReadonlyMap<string, T>,
+  ): Record<string, string> {
+    const snapshot: Record<string, string> = {};
+
+    for (const [name, value] of values.entries()) {
+      if (value.isSet()) {
+        snapshot[name] = value.resolve().getName();
+      }
+    }
+
+    return snapshot;
+  }
+
+  private createMetaValuesFromContinuation(continuation: AteContinuationSnapshot): MetaValueDictionary {
+    const metaValues = new MetaValueDictionary();
+
+    for (const [variableName, symbolName] of Object.entries(continuation.variableAssignments)) {
+      const symbol = SymbolValue.of(symbolName);
+
+      if (symbol) {
+        metaValues.getOrCreateVariable(variableName).setValue(symbol);
+      }
+    }
+
+    for (const [parameterName, symbolName] of Object.entries(continuation.parameterAssignments)) {
+      const symbol = SymbolValue.of(symbolName);
+
+      if (!symbol) {
+        continue;
+      }
+
+      const parameter = new ParameterValue(parameterName);
+      parameter.setValue(symbol);
+      metaValues.addParameter(parameter);
+    }
+
+    return metaValues;
   }
 
   private getAteTraceNodes(root: AteNode): AteNode[] {

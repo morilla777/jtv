@@ -128,6 +128,9 @@ export const es: Record<string, string> = {
   'status.file.label': 'Archivo:',
   'status.file.empty': 'Sin archivo',
 
+  // Carga
+  'loading.executing': 'Ejecutando...',
+
   // Toasts
   'toast.simulationStarted': 'ATE generado, simulación iniciada',
   'toast.simulationStopped': 'Simulación finalizada, ATE liberado',
