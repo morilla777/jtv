@@ -20,6 +20,7 @@ describe('JtvSettingsService', () => {
   it('returns the default burst size when there are no saved settings', () => {
     expect(new JtvSettingsService().getSettings()).toEqual({
       burstSize: 300,
+      oldNotation: false,
     });
   });
 
@@ -30,9 +31,26 @@ describe('JtvSettingsService', () => {
 
     expect(JSON.parse(storage.get('jtv-settings') ?? '{}')).toEqual({
       burstSize: 450,
+      oldNotation: false,
     });
     expect(service.getSettings()).toEqual({
       burstSize: 450,
+      oldNotation: false,
+    });
+  });
+
+  it('persists notation change settings in the same JSON', () => {
+    const service = new JtvSettingsService();
+
+    service.saveOldNotation(true);
+
+    expect(JSON.parse(storage.get('jtv-settings') ?? '{}')).toEqual({
+      burstSize: 300,
+      oldNotation: true,
+    });
+    expect(service.getSettings()).toEqual({
+      burstSize: 300,
+      oldNotation: true,
     });
   });
 
@@ -41,6 +59,7 @@ describe('JtvSettingsService', () => {
 
     expect(new JtvSettingsService().getSettings()).toEqual({
       burstSize: 300,
+      oldNotation: false,
     });
   });
 });

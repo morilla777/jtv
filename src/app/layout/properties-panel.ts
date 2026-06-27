@@ -1,6 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { ButtonModule } from 'primeng/button';
 import { TranslatePipe } from '../pipes/translate.pipe';
+import { JtvSettingsService } from '../services/jtv-settings.service';
 import { JtvStore, type JtvToolId } from '../stores/jtv.store';
 
 interface ToolButton {
@@ -10,6 +11,21 @@ interface ToolButton {
   readonly icon: string | null;
   readonly pushIcon: string | null;
 }
+
+const NEW_NOTATION_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
+  'assets/images/L.gif': 'assets/images/LN.gif',
+  'assets/images/LPush.gif': 'assets/images/LNPush.gif',
+  'assets/images/LSigma.gif': 'assets/images/LSigmaN.gif',
+  'assets/images/LSigmaPush.gif': 'assets/images/LSigmaNPush.gif',
+  'assets/images/L!Sigma.gif': 'assets/images/L!SigmaN.gif',
+  'assets/images/L!SigmaPush.gif': 'assets/images/L!SigmaNPush.gif',
+  'assets/images/R.gif': 'assets/images/RN.gif',
+  'assets/images/RPush.gif': 'assets/images/RNPush.gif',
+  'assets/images/RSigma.gif': 'assets/images/RSigmaN.gif',
+  'assets/images/RSigmaPush.gif': 'assets/images/RSigmaNPush.gif',
+  'assets/images/R!Sigma.gif': 'assets/images/R!SigmaN.gif',
+  'assets/images/R!SigmaPush.gif': 'assets/images/R!SigmaNPush.gif',
+};
 
 @Component({
   selector: 'app-properties-panel',
@@ -91,6 +107,7 @@ interface ToolButton {
 })
 export class PropertiesPanel {
   private readonly store = inject(JtvStore);
+  private readonly settingsService = inject(JtvSettingsService);
 
   readonly activeToolId = computed(() => this.store.activeToolId());
 
@@ -224,7 +241,17 @@ export class PropertiesPanel {
   ];
 
   getIcon(button: ToolButton): string | null {
-    return button.toolId && this.activeToolId() === button.toolId ? button.pushIcon : button.icon;
+    const icon = button.toolId && this.activeToolId() === button.toolId ? button.pushIcon : button.icon;
+
+    return this.getNotationIcon(icon);
+  }
+
+  private getNotationIcon(icon: string | null): string | null {
+    if (!icon || this.settingsService.settings().oldNotation) {
+      return icon;
+    }
+
+    return NEW_NOTATION_ICON_BY_OLD_ICON[icon] ?? icon;
   }
 
   toggleTool(button: ToolButton): void {

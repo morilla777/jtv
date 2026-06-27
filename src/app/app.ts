@@ -1,5 +1,6 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { AppShell } from './layout/app-shell';
+import { TranslationService } from './services/translation.service';
 
 @Component({
   selector: 'app-root',
@@ -7,7 +8,7 @@ import { AppShell } from './layout/app-shell';
   template: `
     @if (showSplash()) {
       <div class="splash-screen" aria-label="Java Turing Visual">
-        <img src="assets/images/JTVSplash.jpg" alt="Java Turing Visual" class="splash-image" />
+        <img [src]="splashImageSrc()" alt="Java Turing Visual" class="splash-image" />
       </div>
     } @else {
       <app-shell />
@@ -37,8 +38,13 @@ import { AppShell } from './layout/app-shell';
   `],
 })
 export class App implements OnInit {
+  private readonly i18n = inject(TranslationService);
   private readonly splashDurationMs = 1800;
+
   readonly showSplash = signal(true);
+  readonly splashImageSrc = computed(() =>
+    `assets/images/JTVSplash${this.i18n.currentLang().toUpperCase()}.png`,
+  );
 
   ngOnInit(): void {
     window.setTimeout(() => {

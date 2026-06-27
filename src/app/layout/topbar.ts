@@ -3,9 +3,11 @@ import { FormsModule } from '@angular/forms';
 import { MessageService, type MenuItem } from 'primeng/api';
 import { ToolbarModule } from 'primeng/toolbar';
 import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
 import { MenubarModule } from 'primeng/menubar';
 import { SelectModule, type SelectChangeEvent } from 'primeng/select';
 import { BurstSizeDialog } from '../components/burst-size-dialog';
+import { NotationChangeDialog } from '../components/notation-change-dialog';
 import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvFileService } from '../services/jtv-file.service';
@@ -22,7 +24,7 @@ interface LanguageOption {
 
 @Component({
   selector: 'app-topbar',
-  imports: [FormsModule, MenubarModule, ToolbarModule, ButtonModule, SelectModule, BurstSizeDialog, ParameterAssignmentDialog, TranslatePipe],
+  imports: [FormsModule, MenubarModule, ToolbarModule, ButtonModule, DialogModule, SelectModule, BurstSizeDialog, NotationChangeDialog, ParameterAssignmentDialog, TranslatePipe],
   template: `
     <div class="topbar-shell">
       <p-menubar [model]="menuItems" class="jtv-menubar">
@@ -86,6 +88,82 @@ interface LanguageOption {
                 <button type="button" role="menuitem" class="file-menu-item" (click)="runSettingsMenuAction($event, 'notationChange')">
                   <span class="pi pi-language"></span>
                   <span>{{ 'topbar.menu.settings.notationChange' | translate }}</span>
+                </button>
+              </div>
+            }
+          </div>
+
+          <div class="file-menu-shell">
+            <button
+              type="button"
+              class="file-menu-trigger"
+              [attr.aria-expanded]="editMenuOpen"
+              aria-haspopup="menu"
+              (click)="toggleEditMenu($event)"
+            >
+              <span class="pi pi-pencil"></span>
+              <span>{{ 'topbar.menu.edit' | translate }}</span>
+            </button>
+
+            @if (editMenuOpen) {
+              <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!canUndo" (click)="runEditMenuAction($event, 'undo')">
+                  <span class="pi pi-undo"></span>
+                  <span>{{ 'topbar.menu.edit.undo' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!canRedo" (click)="runEditMenuAction($event, 'redo')">
+                  <span class="pi pi-refresh"></span>
+                  <span>{{ 'topbar.menu.edit.redo' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item">
+                  <span class="pi pi-flag"></span>
+                  <span>{{ 'topbar.menu.edit.makeInitial' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item">
+                  <span class="pi pi-sliders-h"></span>
+                  <span>{{ 'topbar.menu.edit.changeTape' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item">
+                  <span class="pi pi-eraser"></span>
+                  <span>{{ 'topbar.menu.edit.cut' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item">
+                  <span class="pi pi-copy"></span>
+                  <span>{{ 'topbar.menu.edit.copy' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item">
+                  <span class="pi pi-clone"></span>
+                  <span>{{ 'topbar.menu.edit.paste' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runEditMenuAction($event, 'delete')">
+                  <span class="pi pi-trash"></span>
+                  <span>{{ 'topbar.menu.edit.delete' | translate }}</span>
+                </button>
+              </div>
+            }
+          </div>
+
+          <div class="file-menu-shell">
+            <button
+              type="button"
+              class="file-menu-trigger"
+              [attr.aria-expanded]="helpMenuOpen"
+              aria-haspopup="menu"
+              (click)="toggleHelpMenu($event)"
+            >
+              <span class="pi pi-question-circle"></span>
+              <span>{{ 'topbar.menu.help' | translate }}</span>
+            </button>
+
+            @if (helpMenuOpen) {
+              <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
+                <button type="button" role="menuitem" class="file-menu-item">
+                  <span class="pi pi-book"></span>
+                  <span>{{ 'topbar.menu.help.contents' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runHelpMenuAction($event, 'about')">
+                  <span class="pi pi-info-circle"></span>
+                  <span>{{ 'topbar.menu.help.about' | translate }}</span>
                 </button>
               </div>
             }
@@ -228,6 +306,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.delete' | translate"
               [title]="'topbar.menu.edit.delete' | translate"
+              (click)="deleteSelectedCanvasElement()"
             >
               <img src="assets/images/Delete24.gif" alt="" />
             </button>
@@ -315,6 +394,21 @@ interface LanguageOption {
       <app-burst-size-dialog
         [(visible)]="burstSizeDialogVisible"
       />
+
+      <app-notation-change-dialog
+        [(visible)]="notationChangeDialogVisible"
+      />
+
+      <p-dialog
+        [(visible)]="aboutDialogVisible"
+        [modal]="true"
+        [header]="'topbar.menu.help.about' | translate"
+        [draggable]="false"
+        [resizable]="false"
+        styleClass="about-dialog"
+      >
+        <img [src]="aboutSplashImageSrc" alt="Java Turing Visual" class="about-splash-image" />
+      </p-dialog>
     </div>
   `,
   styles: [`
@@ -543,6 +637,22 @@ interface LanguageOption {
     :host ::ng-deep .machine-select {
       width: 9.5rem;
     }
+
+    :host ::ng-deep .about-dialog {
+      width: min(92vw, 608px);
+    }
+
+    :host ::ng-deep .about-dialog .p-dialog-content {
+      padding: 0 10%;
+      overflow: hidden;
+    }
+
+    .about-splash-image {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin: 0 auto 10%;
+    }
   `],
 })
 export class Topbar {
@@ -592,8 +702,12 @@ export class Topbar {
   executionFinished = false;
   fileMenuOpen = false;
   settingsMenuOpen = false;
+  editMenuOpen = false;
+  helpMenuOpen = false;
   parameterAssignmentDialogVisible = false;
   burstSizeDialogVisible = false;
+  notationChangeDialogVisible = false;
+  aboutDialogVisible = false;
 
   get selectedSymbol(): string {
     return this.store.selectedSymbol();
@@ -643,12 +757,20 @@ export class Topbar {
     this.store.selectChildSubmachineByName(machineName);
   }
 
+  get aboutSplashImageSrc(): string {
+    return `assets/images/JTVSplash${this.i18n.currentLang().toUpperCase()}.png`;
+  }
+
   openParameterAssignmentDialog(): void {
     this.parameterAssignmentDialogVisible = true;
   }
 
   openBurstSizeDialog(): void {
     this.burstSizeDialogVisible = true;
+  }
+
+  openNotationChangeDialog(): void {
+    this.notationChangeDialogVisible = true;
   }
 
   saveParameterAssignments(assignments: Record<string, string>): void {
@@ -665,65 +787,12 @@ export class Topbar {
     this.store.redo();
   }
 
+  deleteSelectedCanvasElement(): void {
+    this.store.deleteSelectedCanvasElement();
+  }
+
   get menuItems(): MenuItem[] {
-    return [
-      {
-        label: this.i18n.translate('topbar.menu.edit'),
-        icon: 'pi pi-pencil',
-        items: [
-          {
-            label: this.i18n.translate('topbar.menu.edit.undo'),
-            icon: 'pi pi-undo',
-            disabled: !this.canUndo,
-            command: () => this.undo(),
-          },
-          {
-            label: this.i18n.translate('topbar.menu.edit.redo'),
-            icon: 'pi pi-refresh',
-            disabled: !this.canRedo,
-            command: () => this.redo(),
-          },
-          {
-            label: this.i18n.translate('topbar.menu.edit.makeInitial'),
-            icon: 'pi pi-flag',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.edit.changeTape'),
-            icon: 'pi pi-sliders-h',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.edit.cut'),
-            icon: 'pi pi-eraser',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.edit.copy'),
-            icon: 'pi pi-copy',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.edit.paste'),
-            icon: 'pi pi-clone',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.edit.delete'),
-            icon: 'pi pi-trash',
-          },
-        ],
-      },
-      {
-        label: this.i18n.translate('topbar.menu.help'),
-        icon: 'pi pi-question-circle',
-        items: [
-          {
-            label: this.i18n.translate('topbar.menu.help.contents'),
-            icon: 'pi pi-book',
-          },
-          {
-            label: this.i18n.translate('topbar.menu.help.about'),
-            icon: 'pi pi-info-circle',
-          },
-        ],
-      },
-    ];
+    return [];
   }
 
   readonly languageOptions: LanguageOption[] = [
@@ -757,18 +826,40 @@ export class Topbar {
   closeOpenMenus(): void {
     this.fileMenuOpen = false;
     this.settingsMenuOpen = false;
+    this.editMenuOpen = false;
+    this.helpMenuOpen = false;
   }
 
   toggleFileMenu(event: Event): void {
     event.stopPropagation();
     this.fileMenuOpen = !this.fileMenuOpen;
     this.settingsMenuOpen = false;
+    this.editMenuOpen = false;
+    this.helpMenuOpen = false;
   }
 
   toggleSettingsMenu(event: Event): void {
     event.stopPropagation();
     this.settingsMenuOpen = !this.settingsMenuOpen;
     this.fileMenuOpen = false;
+    this.editMenuOpen = false;
+    this.helpMenuOpen = false;
+  }
+
+  toggleEditMenu(event: Event): void {
+    event.stopPropagation();
+    this.editMenuOpen = !this.editMenuOpen;
+    this.fileMenuOpen = false;
+    this.settingsMenuOpen = false;
+    this.helpMenuOpen = false;
+  }
+
+  toggleHelpMenu(event: Event): void {
+    event.stopPropagation();
+    this.helpMenuOpen = !this.helpMenuOpen;
+    this.fileMenuOpen = false;
+    this.settingsMenuOpen = false;
+    this.editMenuOpen = false;
   }
 
   runFileMenuAction(event: Event, action: 'new' | 'open' | 'save' | 'saveAs' | 'exportJson'): void {
@@ -806,6 +897,37 @@ export class Topbar {
 
     if (action === 'burstSize') {
       this.openBurstSizeDialog();
+      return;
+    }
+
+    this.openNotationChangeDialog();
+  }
+
+  runEditMenuAction(event: Event, action: 'undo' | 'redo' | 'delete'): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.editMenuOpen = false;
+
+    if (action === 'undo') {
+      this.undo();
+      return;
+    }
+
+    if (action === 'redo') {
+      this.redo();
+      return;
+    }
+
+    this.deleteSelectedCanvasElement();
+  }
+
+  runHelpMenuAction(event: Event, action: 'about'): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.helpMenuOpen = false;
+
+    if (action === 'about') {
+      this.aboutDialogVisible = true;
     }
   }
 

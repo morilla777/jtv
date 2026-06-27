@@ -84,6 +84,10 @@ export const en: Record<string, string> = {
   'burstSizeDialog.burstSize': 'Burst Size',
   'burstSizeDialog.cancel': 'Cancel',
   'burstSizeDialog.validation.range': 'Enter a value between 5 and 1000.',
+  'notationChangeDialog.title': 'Notation Change',
+  'notationChangeDialog.old': 'Old',
+  'notationChangeDialog.new': 'New',
+  'notationChangeDialog.cancel': 'Cancel',
 
   // Properties
   'properties.tool': 'Tool',

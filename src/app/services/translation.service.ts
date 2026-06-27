@@ -15,6 +15,13 @@ export class TranslationService {
   private readonly translations = computed(() => TRANSLATIONS[this.currentLang()]);
 
   constructor() {
+    const queryLanguage = this.getQueryLanguage();
+
+    if (queryLanguage) {
+      this.setLanguage(queryLanguage);
+      return;
+    }
+
     const saved = localStorage.getItem('jtv-lang');
     if (saved && this.isValidLanguage(saved)) {
       this.currentLang.set(saved);
@@ -38,5 +45,11 @@ export class TranslationService {
 
   private isValidLanguage(value: string): value is Language {
     return (AVAILABLE_LANGUAGES as readonly string[]).includes(value);
+  }
+
+  private getQueryLanguage(): Language | null {
+    const language = new URLSearchParams(window.location.search).get('lang')?.toLowerCase();
+
+    return language && this.isValidLanguage(language) ? language : null;
   }
 }

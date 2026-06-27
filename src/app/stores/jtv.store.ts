@@ -1341,6 +1341,19 @@ export class JtvStore {
     this.markMachineDirty();
   }
 
+  deleteSelectedCanvasElement(): void {
+    const { selectedCanvasLinkId, selectedCanvasNodeId } = this.state();
+
+    if (selectedCanvasNodeId) {
+      this.deleteCanvasNode(selectedCanvasNodeId);
+      return;
+    }
+
+    if (selectedCanvasLinkId) {
+      this.deleteCanvasLink(selectedCanvasLinkId);
+    }
+  }
+
   moveCanvasLinkVertex(linkId: string, pointIndex: number, delta: ViewPoint): void {
     if (this.state().activeToolId !== 'pointer') {
       return;

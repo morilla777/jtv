@@ -4,9 +4,15 @@ import { TabsModule } from 'primeng/tabs';
 import { TreeModule } from 'primeng/tree';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { TranslationService } from '../services/translation.service';
+import { JtvSettingsService } from '../services/jtv-settings.service';
 import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { AteNode } from '../models/ate';
 import { JtvMachineTreeNode, JtvStore } from '../stores/jtv.store';
+
+const NEW_NOTATION_ATE_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
+  'assets/images/L_ATE.gif': 'assets/images/LN_ATE.gif',
+  'assets/images/R_ATE.gif': 'assets/images/RN_ATE.gif',
+};
 
 @Component({
   selector: 'app-explorer-panel',
@@ -48,6 +54,7 @@ import { JtvMachineTreeNode, JtvStore } from '../stores/jtv.store';
             <p-tabpanel value="ate">
               <div class="ate-tree-host" tabindex="0" (keydown)="handleAteKeydown($event)">
                 <p-tree
+                  class="ate-tree"
                   [value]="ateNodes()"
                   selectionMode="single"
                   [(selection)]="selectedAteNode"
@@ -191,6 +198,17 @@ import { JtvMachineTreeNode, JtvStore } from '../stores/jtv.store';
       min-height: 0 !important;
     }
 
+    :host ::ng-deep .ate-tree .p-tree-node-content.p-tree-node-selected {
+      background: red !important;
+      color: #fff !important;
+    }
+
+    :host ::ng-deep .ate-tree .p-tree-node-content.p-tree-node-selected .p-tree-node-label,
+    :host ::ng-deep .ate-tree .p-tree-node-content.p-tree-node-selected .ate-tree-node,
+    :host ::ng-deep .ate-tree .p-tree-node-content.p-tree-node-selected .ate-tree-node span {
+      color: #fff !important;
+    }
+
     :host ::ng-deep .p-tree-node-label {
       line-height: 1;
     }
@@ -266,6 +284,7 @@ export class ExplorerPanel {
 
   private readonly store = inject(JtvStore);
   private readonly i18n = inject(TranslationService);
+  private readonly settingsService = inject(JtvSettingsService);
   private readonly loading = inject(LoadingIndicatorService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
@@ -371,11 +390,11 @@ export class ExplorerPanel {
       key: node.id,
       label: node.kind === 'root' ? node.label || this.i18n.translate('explorer.ateRootLabel') : node.label,
       data: {
-        iconSrc: node.kind === 'root' ? this.getAteRootIconSrc() : node.iconSrc,
+        iconSrc: node.kind === 'root' ? this.getAteRootIconSrc() : this.getAteIconSrc(node.iconSrc),
         ateNodeId: node.id,
       },
       expanded: true,
-      selectable: node.kind !== 'root',
+      selectable: true,
       children: node.children.map((child) => this.toTreeNode(child)),
     };
   }
@@ -590,6 +609,14 @@ export class ExplorerPanel {
     const fileName = this.i18n.currentLang() === 'en' ? 'ETT_ATE.gif' : 'ATE_ATE.gif';
 
     return `assets/images/${fileName}`;
+  }
+
+  private getAteIconSrc(iconSrc: string): string {
+    if (this.settingsService.settings().oldNotation) {
+      return iconSrc;
+    }
+
+    return NEW_NOTATION_ATE_ICON_BY_OLD_ICON[iconSrc] ?? iconSrc;
   }
 
 }

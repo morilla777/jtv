@@ -84,6 +84,10 @@ export const es: Record<string, string> = {
   'burstSizeDialog.burstSize': 'Tama\u00f1o de R\u00e1faga',
   'burstSizeDialog.cancel': 'Cancelar',
   'burstSizeDialog.validation.range': 'Ingrese un valor entre 5 y 1000.',
+  'notationChangeDialog.title': 'Cambio de Notaci\u00f3n',
+  'notationChangeDialog.old': 'Antigua',
+  'notationChangeDialog.new': 'Nueva',
+  'notationChangeDialog.cancel': 'Cancelar',
 
   // Properties
   'properties.tool': 'Herramienta',
