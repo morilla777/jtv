@@ -2638,6 +2638,11 @@ export class JtvStore {
 
   private replayTapeSnapshotsToAteNode(targetNode: AteNode): readonly TapeSnapshot[] | null {
     const state = this.state();
+
+    if (targetNode.kind === 'root') {
+      return state.tapes.map((tapeState) => tapeState.tape.getInitialSnapshot());
+    }
+
     const traceNodes = this.getAteTraceNodes(state.ate);
     const targetIndex = traceNodes.findIndex((node) => node.id === targetNode.id);
 
