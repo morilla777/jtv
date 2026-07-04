@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { MessageService, type MenuItem } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
@@ -658,7 +658,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
   readonly nodeContextMenuItems: MenuItem[] = [
     {
-      label: 'Hacer Inicial',
+      label: this.i18n.translate('topbar.menu.edit.makeInitial'),
       data: {
         iconSrc: 'assets/images/Start16.gif',
       },
@@ -666,7 +666,35 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       command: () => this.makeContextNodeInitial(),
     },
     {
-      label: 'Eliminar',
+      label: this.i18n.translate('topbar.menu.edit.changeTape'),
+      data: {
+        iconSrc: 'assets/images/ChangeTape16.gif',
+      },
+      command: () => this.changeContextNodeTape(),
+    },
+    {
+      label: this.i18n.translate('topbar.menu.edit.cut'),
+      data: {
+        iconSrc: 'assets/images/Cut16.gif',
+      },
+      disabled: true,
+    },
+    {
+      label: this.i18n.translate('topbar.menu.edit.copy'),
+      data: {
+        iconSrc: 'assets/images/Copy16.gif',
+      },
+      disabled: true,
+    },
+    {
+      label: this.i18n.translate('topbar.menu.edit.paste'),
+      data: {
+        iconSrc: 'assets/images/Paste16.gif',
+      },
+      disabled: true,
+    },
+    {
+      label: this.i18n.translate('topbar.menu.edit.delete'),
       data: {
         iconSrc: 'assets/images/Delete16.gif',
       },
@@ -675,13 +703,24 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   ];
   readonly linkContextMenuItems: MenuItem[] = [
     {
-      label: 'Eliminar',
+      label: this.i18n.translate('topbar.menu.edit.delete'),
       data: {
         iconSrc: 'assets/images/Delete16.gif',
       },
       command: () => this.deleteContextLink(),
     },
   ];
+  private readonly updateContextMenuLabels = effect(() => {
+    this.i18n.currentLang();
+
+    this.nodeContextMenuItems[0].label = this.i18n.translate('topbar.menu.edit.makeInitial');
+    this.nodeContextMenuItems[1].label = this.i18n.translate('topbar.menu.edit.changeTape');
+    this.nodeContextMenuItems[2].label = this.i18n.translate('topbar.menu.edit.cut');
+    this.nodeContextMenuItems[3].label = this.i18n.translate('topbar.menu.edit.copy');
+    this.nodeContextMenuItems[4].label = this.i18n.translate('topbar.menu.edit.paste');
+    this.nodeContextMenuItems[5].label = this.i18n.translate('topbar.menu.edit.delete');
+    this.linkContextMenuItems[0].label = this.i18n.translate('topbar.menu.edit.delete');
+  });
 
   ngAfterViewInit(): void {
     this.updateCanvasSize();
@@ -698,6 +737,67 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
+  }
+
+  @HostListener('window:jtv-print-canvas')
+  printCanvas(): void {
+    const svg = this.designerSvg?.nativeElement;
+    const printWindow = window.open('', '_blank', 'width=1100,height=800');
+
+    if (!svg || !printWindow) {
+      return;
+    }
+
+    const printableSvg = this.createPrintableSvg(svg);
+    const machineName = this.escapeHtml(this.store.selectedMachine().name);
+
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${machineName}</title>
+  <style>
+    @page {
+      size: landscape;
+      margin: 10mm;
+    }
+
+    html,
+    body {
+      margin: 0;
+      background: #fff;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      max-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  ${printableSvg.outerHTML}
+  <script>
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        window.focus();
+        window.print();
+      }, 50);
+    });
+  </script>
+</body>
+</html>`);
+    printWindow.document.close();
   }
 
   getLinkPath(link: MachineLinkView): string {
@@ -1352,6 +1452,14 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.contextMenuNodeId = null;
   }
 
+  private changeContextNodeTape(): void {
+    if (!this.contextMenuNodeId) {
+      return;
+    }
+
+    this.store.changeCanvasNodeTape(this.contextMenuNodeId);
+  }
+
   private deleteContextLink(): void {
     if (!this.contextMenuLinkId) {
       return;
@@ -1363,6 +1471,71 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
   private canMakeContextNodeInitial(): boolean {
     return this.contextMenuNodeId ? this.store.canMakeCanvasNodeInitial(this.contextMenuNodeId) : false;
+  }
+
+  private createPrintableSvg(svg: SVGSVGElement): SVGSVGElement {
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+
+    this.inlineComputedSvgStyles(svg, clone);
+    clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    clone.setAttribute('width', String(this.canvasWidth()));
+    clone.setAttribute('height', String(this.canvasHeight()));
+
+    return clone;
+  }
+
+  private inlineComputedSvgStyles(sourceRoot: SVGSVGElement, targetRoot: SVGSVGElement): void {
+    const sourceElements = [sourceRoot, ...Array.from(sourceRoot.querySelectorAll('*'))];
+    const targetElements = [targetRoot, ...Array.from(targetRoot.querySelectorAll('*'))];
+    const properties = [
+      'alignment-baseline',
+      'display',
+      'dominant-baseline',
+      'fill',
+      'font-family',
+      'font-size',
+      'font-style',
+      'font-weight',
+      'line-height',
+      'opacity',
+      'paint-order',
+      'stroke',
+      'stroke-dasharray',
+      'stroke-linecap',
+      'stroke-linejoin',
+      'stroke-width',
+      'text-anchor',
+      'text-decoration',
+      'text-underline-offset',
+      'visibility',
+    ];
+
+    sourceElements.forEach((sourceElement, index) => {
+      const targetElement = targetElements[index] as SVGElement | undefined;
+
+      if (!targetElement) {
+        return;
+      }
+
+      const computedStyle = window.getComputedStyle(sourceElement);
+
+      for (const property of properties) {
+        const value = computedStyle.getPropertyValue(property);
+
+        if (value) {
+          targetElement.style.setProperty(property, value);
+        }
+      }
+    });
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
   }
 
   private updateCanvasSize(): void {

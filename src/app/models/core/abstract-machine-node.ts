@@ -8,7 +8,7 @@ export abstract class AbstractMachineNode implements MachineNode {
   constructor(
     public readonly id: string,
     public readonly name: string,
-    public readonly tapeIndex: number,
+    public tapeIndex: number,
     public isInitial: boolean = false,
   ) {}
 

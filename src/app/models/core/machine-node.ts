@@ -4,7 +4,7 @@ import { ExecutionContext } from './execution-context';
 export interface MachineNode extends AteTraceRenderable {
   readonly id: string;
   readonly name: string;
-  readonly tapeIndex: number;
+  tapeIndex: number;
 
   isInitial: boolean;
   previous: MachineNode | null;

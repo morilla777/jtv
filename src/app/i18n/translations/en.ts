@@ -5,6 +5,7 @@ export const en: Record<string, string> = {
   'topbar.save': 'Save',
   'topbar.import': 'Import',
   'topbar.export': 'Export',
+  'topbar.print': 'Print',
   'topbar.validate': 'Validate',
   'topbar.execute': 'Execute',
   'topbar.stop': 'Stop',

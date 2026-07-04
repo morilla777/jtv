@@ -108,35 +108,35 @@ interface LanguageOption {
             @if (editMenuOpen) {
               <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="!canUndo" (click)="runEditMenuAction($event, 'undo')">
-                  <span class="pi pi-undo"></span>
+                  <img class="file-menu-icon" src="assets/images/Undo16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.undo' | translate }}</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="!canRedo" (click)="runEditMenuAction($event, 'redo')">
-                  <span class="pi pi-refresh"></span>
+                  <img class="file-menu-icon" src="assets/images/Redo16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.redo' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item">
-                  <span class="pi pi-flag"></span>
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!canMakeSelectedCanvasNodeInitial" (click)="runEditMenuAction($event, 'makeInitial')">
+                  <img class="file-menu-icon" src="assets/images/Start16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.makeInitial' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item">
-                  <span class="pi pi-sliders-h"></span>
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!hasSelectedCanvasNode" (click)="runEditMenuAction($event, 'changeTape')">
+                  <img class="file-menu-icon" src="assets/images/ChangeTape16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.changeTape' | translate }}</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item">
-                  <span class="pi pi-eraser"></span>
+                  <img class="file-menu-icon" src="assets/images/Cut16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.cut' | translate }}</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item">
-                  <span class="pi pi-copy"></span>
+                  <img class="file-menu-icon" src="assets/images/Copy16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.copy' | translate }}</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item">
-                  <span class="pi pi-clone"></span>
+                  <img class="file-menu-icon" src="assets/images/Paste16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.paste' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runEditMenuAction($event, 'delete')">
-                  <span class="pi pi-trash"></span>
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!hasSelectedCanvasNode" (click)="runEditMenuAction($event, 'delete')">
+                  <img class="file-menu-icon" src="assets/images/Delete16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.delete' | translate }}</span>
                 </button>
               </div>
@@ -225,6 +225,16 @@ interface LanguageOption {
               pButton
               type="button"
               class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.menu.file.open' | translate"
+              [title]="'topbar.menu.file.open' | translate"
+              (click)="openMachine()"
+            >
+              <img src="assets/images/Open24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.save' | translate"
               [title]="'topbar.save' | translate"
               (click)="saveMachine()"
@@ -235,18 +245,9 @@ interface LanguageOption {
               pButton
               type="button"
               class="image-toolbar-button p-button-secondary"
-              [attr.aria-label]="'topbar.import' | translate"
-              [title]="'topbar.import' | translate"
-              (click)="openMachine()"
-            >
-              <img src="assets/images/Open24.gif" alt="" />
-            </button>
-            <button
-              pButton
-              type="button"
-              class="image-toolbar-button p-button-secondary"
-              [attr.aria-label]="'topbar.export' | translate"
-              [title]="'topbar.export' | translate"
+              [attr.aria-label]="'topbar.print' | translate"
+              [title]="'topbar.print' | translate"
+              (click)="printCanvas()"
             >
               <img src="assets/images/Print24.gif" alt="" />
             </button>
@@ -495,6 +496,24 @@ interface LanguageOption {
     .file-menu-item:hover {
       color: var(--p-menubar-item-focus-color, var(--p-text-color));
       background: var(--p-menubar-item-focus-background, var(--p-content-hover-background));
+    }
+
+    .file-menu-item:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    .file-menu-item:disabled:hover {
+      color: var(--p-menubar-item-color, var(--p-text-color));
+      background: transparent;
+    }
+
+    .file-menu-icon {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+      image-rendering: pixelated;
+      flex: 0 0 auto;
     }
 
     .jtv-topbar {
@@ -749,6 +768,14 @@ export class Topbar {
     return this.store.canRedo();
   }
 
+  get hasSelectedCanvasNode(): boolean {
+    return this.store.selectedCanvasNodeId() !== null;
+  }
+
+  get canMakeSelectedCanvasNodeInitial(): boolean {
+    return this.store.canMakeSelectedCanvasNodeInitial();
+  }
+
   get selectedSubmachineName(): string | null {
     return this.store.selectedChildMachineName();
   }
@@ -785,6 +812,18 @@ export class Topbar {
   redo(): void {
     this.executionFinished = false;
     this.store.redo();
+  }
+
+  printCanvas(): void {
+    window.dispatchEvent(new Event('jtv-print-canvas'));
+  }
+
+  makeSelectedCanvasNodeInitial(): void {
+    this.store.makeSelectedCanvasNodeInitial();
+  }
+
+  changeSelectedCanvasNodeTape(): void {
+    this.store.changeSelectedCanvasNodeTape();
   }
 
   deleteSelectedCanvasElement(): void {
@@ -903,7 +942,7 @@ export class Topbar {
     this.openNotationChangeDialog();
   }
 
-  runEditMenuAction(event: Event, action: 'undo' | 'redo' | 'delete'): void {
+  runEditMenuAction(event: Event, action: 'undo' | 'redo' | 'makeInitial' | 'changeTape' | 'delete'): void {
     event.preventDefault();
     event.stopPropagation();
     this.editMenuOpen = false;
@@ -915,6 +954,28 @@ export class Topbar {
 
     if (action === 'redo') {
       this.redo();
+      return;
+    }
+
+    if (action === 'makeInitial') {
+      if (!this.hasSelectedCanvasNode) {
+        return;
+      }
+
+      this.makeSelectedCanvasNodeInitial();
+      return;
+    }
+
+    if (action === 'changeTape') {
+      if (!this.hasSelectedCanvasNode) {
+        return;
+      }
+
+      this.changeSelectedCanvasNodeTape();
+      return;
+    }
+
+    if (!this.hasSelectedCanvasNode) {
       return;
     }
 

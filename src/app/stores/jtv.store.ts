@@ -424,6 +424,8 @@ export class JtvStore {
   readonly activeAteMachineNodeId = computed(() => this.selectedAteNode()?.machineNodeId ?? null);
   readonly activeAteLinkId = computed(() => this.selectedAteNode()?.linkId ?? null);
   readonly machineGraph = computed(() => this.state().machineGraph);
+  readonly selectedCanvasNodeId = computed(() => this.state().selectedCanvasNodeId);
+  readonly selectedCanvasLinkId = computed(() => this.state().selectedCanvasLinkId);
   readonly insertedParameters = computed(() => this.state().metaValues.parameters);
   readonly lastTapeReferenceCount = computed(() => {
     const lastTapeIndex = this.state().tapes.length - 1;
@@ -1174,6 +1176,67 @@ export class JtvStore {
     this.markMachineDirty();
   }
 
+  changeCanvasNodeTape(nodeId: string): void {
+    if (this.state().activeToolId !== 'pointer') {
+      return;
+    }
+
+    let changed = false;
+    const selectedTapeIndex = this.state().selectedTapeIndex;
+
+    this.state.update((current) => {
+      if (!current.tapes[selectedTapeIndex]) {
+        return current;
+      }
+
+      const nodeView = current.machineGraphView.nodes.find((node) => node.nodeId === nodeId);
+      const group = nodeView
+        ? current.machineGraph.groups.find((item) => item.id === nodeView.groupId)
+        : null;
+      const node = group ? this.findMachineNodeInGroup(group, nodeId) : null;
+
+      if (!nodeView || !node || node.tapeIndex === selectedTapeIndex) {
+        return current;
+      }
+
+      node.tapeIndex = selectedTapeIndex;
+      changed = true;
+
+      return {
+        ...current,
+        machineGraph: {
+          ...current.machineGraph,
+          groups: [...current.machineGraph.groups],
+        },
+        machineGraphView: {
+          ...current.machineGraphView,
+          nodes: current.machineGraphView.nodes.map((viewNode) => viewNode.nodeId === nodeId
+            ? {
+              ...viewNode,
+              tapeIndex: selectedTapeIndex,
+            }
+            : viewNode),
+        },
+        selectedCanvasLinkId: null,
+        selectedCanvasNodeId: nodeId,
+      };
+    });
+
+    if (changed) {
+      this.markMachineDirty();
+    }
+  }
+
+  changeSelectedCanvasNodeTape(): void {
+    const selectedCanvasNodeId = this.state().selectedCanvasNodeId;
+
+    if (!selectedCanvasNodeId) {
+      return;
+    }
+
+    this.changeCanvasNodeTape(selectedCanvasNodeId);
+  }
+
   canMakeCanvasNodeInitial(nodeId: string): boolean {
     const nodeView = this.state().machineGraphView.nodes.find((node) => node.nodeId === nodeId);
     const group = nodeView
@@ -1181,6 +1244,22 @@ export class JtvStore {
       : null;
 
     return group?.entry?.id === nodeId;
+  }
+
+  canMakeSelectedCanvasNodeInitial(): boolean {
+    const selectedCanvasNodeId = this.state().selectedCanvasNodeId;
+
+    return selectedCanvasNodeId ? this.canMakeCanvasNodeInitial(selectedCanvasNodeId) : false;
+  }
+
+  makeSelectedCanvasNodeInitial(): void {
+    const selectedCanvasNodeId = this.state().selectedCanvasNodeId;
+
+    if (!selectedCanvasNodeId) {
+      return;
+    }
+
+    this.makeCanvasNodeInitial(selectedCanvasNodeId);
   }
 
   deleteCanvasNode(nodeId: string): void {
