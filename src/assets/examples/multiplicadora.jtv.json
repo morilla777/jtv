@@ -3,7 +3,9 @@
   "version": 2,
   "machine": {
     "id": "f060d523-f5e7-4883-8282-217fefcd408a",
-    "name": "MULTIPLICADORA"
+    "name": "MULTIPLICADORA",
+    "shortName": "MULTI",
+    "description": "Multiplica dos numeros unarios"
   },
   "parameterAssignments": {},
   "metaValues": {
@@ -17,7 +19,9 @@
       "version": 2,
       "machine": {
         "id": "19051410-2775-45f9-8bbf-9b7461a0882b",
-        "name": "COPIADORA"
+        "name": "COPIADORA",
+        "shortName": "COPIA",
+        "description": "Copia una cadena en una cinta"
       },
       "parameterAssignments": {},
       "metaValues": {

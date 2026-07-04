@@ -5,6 +5,7 @@ import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
 
 import { ConditionDialog, ConditionDialogValue } from '../components/condition-dialog';
 import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
+import { JtvSettingsService } from '../services/jtv-settings.service';
 import { TranslationService } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
@@ -133,6 +134,40 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                   (click)="handleNodeClick(node.nodeId, $event); $event.stopPropagation()"
                   (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
                 ></circle>
+              } @else if (shouldRenderDirectionalTriangle(node)) {
+                <g
+                  class="machine-direction-node"
+                  (mouseenter)="hoverNode(node.nodeId, $event)"
+                  (mousemove)="hoverNode(node.nodeId, $event)"
+                  (mouseleave)="clearHoveredElement()"
+                  (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
+                  (click)="handleNodeClick(node.nodeId, $event); $event.stopPropagation()"
+                  (dblclick)="editSubmachineParameters(node.nodeId, $event)"
+                  (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
+                >
+                  <polygon
+                    [attr.points]="getDirectionalTrianglePoints(node)"
+                    class="machine-direction-triangle"
+                    [class.machine-direction-triangle-selected]="node.selected"
+                    [class.machine-direction-triangle-canvas-selected]="node.canvasSelected || isTransitionSourceNode(node.nodeId)"
+                    [class.machine-direction-triangle-hovered]="isHoveredNode(node.nodeId)"
+                  ></polygon>
+                  @if (node.subscriptLabel) {
+                    <text
+                      [attr.x]="node.position.x + 11"
+                      [attr.y]="node.position.y + 5"
+                      class="machine-text machine-node-subscript"
+                      [class.machine-node-subscript-overline]="node.subscriptOverline"
+                    >{{ node.subscriptLabel }}</text>
+                  }
+                  @if (showTapeIndexes()) {
+                    <text
+                      [attr.x]="node.position.x + 14"
+                      [attr.y]="node.position.y - 12"
+                      class="machine-text machine-node-tape-index"
+                    >({{ getNodeTapeNumber(node) }})</text>
+                  }
+                </g>
               } @else {
                 <text
                   [attr.x]="node.position.x"
@@ -405,6 +440,25 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
       fill: rgb(255, 0, 255);
     }
 
+    .machine-direction-triangle {
+      fill: #fff;
+      stroke: #000;
+      stroke-width: 1.25;
+      cursor: default;
+    }
+
+    .machine-direction-triangle-selected {
+      stroke: red;
+    }
+
+    .machine-direction-triangle-hovered {
+      stroke: rgb(255, 175, 175);
+    }
+
+    .machine-direction-triangle-canvas-selected {
+      stroke: rgb(255, 0, 255);
+    }
+
     .node-insertion-cursor {
       stroke: rgb(255, 0, 255);
       stroke-width: 1.5;
@@ -490,6 +544,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private readonly store = inject(JtvStore);
   private readonly messageService = inject(MessageService);
   private readonly i18n = inject(TranslationService);
+  private readonly settingsService = inject(JtvSettingsService);
   @ViewChild('nodeContextMenu') private nodeContextMenu?: ContextMenu;
   @ViewChild('linkContextMenu') private linkContextMenu?: ContextMenu;
   @ViewChild('designerSvg') private designerSvg?: ElementRef<SVGSVGElement>;
@@ -839,6 +894,36 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
   getNodeTapeNumber(node: MachineNodeView): number {
     return (node.tapeIndex ?? 0) + 1;
+  }
+
+  shouldRenderDirectionalTriangle(node: MachineNodeView): boolean {
+    return !this.settingsService.settings().oldNotation && this.getDirectionalTriangleDirection(node) !== null;
+  }
+
+  getDirectionalTrianglePoints(node: MachineNodeView): string {
+    const direction = this.getDirectionalTriangleDirection(node);
+    const x = node.position.x + 3;
+    const y = node.position.y - 10;
+    const halfWidth = 8;
+    const halfHeight = 8;
+
+    if (direction === 'left') {
+      return `${x - halfWidth},${y} ${x + halfWidth},${y - halfHeight} ${x + halfWidth},${y + halfHeight}`;
+    }
+
+    return `${x + halfWidth},${y} ${x - halfWidth},${y - halfHeight} ${x - halfWidth},${y + halfHeight}`;
+  }
+
+  private getDirectionalTriangleDirection(node: MachineNodeView): 'left' | 'right' | null {
+    if (node.label !== 'L' && node.label !== 'R') {
+      return null;
+    }
+
+    if (node.kind !== 'text' && node.kind !== 'submachine') {
+      return null;
+    }
+
+    return node.label === 'L' ? 'left' : 'right';
   }
 
   getLinkVertices(link: MachineLinkView): { point: ViewPoint; pointIndex: number }[] {

@@ -5,6 +5,7 @@ import { MetaValueDictionary } from './meta-value-dictionary';
 import { ParameterValue } from './parameter-value';
 import { SymbolValue } from './symbol-value';
 import { Tape } from './tape';
+import { AteSubtrace, AteTraceRecorder } from '../ate';
 
 export type PreinstalledSubmachineId =
   | 'buscadora_l'
@@ -16,6 +17,7 @@ export type PreinstalledSubmachineId =
 
 export class SubmachineNode extends AbstractMachineNode {
   private readonly runner = new MachineGraphRunner();
+  private lastAteSubtrace: AteSubtrace | null = null;
 
   constructor(
     id: string,
@@ -36,6 +38,7 @@ export class SubmachineNode extends AbstractMachineNode {
   }
 
   execute(context: ExecutionContext): boolean {
+    this.lastAteSubtrace = null;
     const definition = context.submachines?.get(this.submachineId);
     const callerTape = context.tapes[this.tapeIndex];
 
@@ -44,19 +47,39 @@ export class SubmachineNode extends AbstractMachineNode {
     }
 
     const submachineTapes = this.createSubmachineTapes(definition, callerTape);
+    const initialTapeSnapshots = submachineTapes.map((tape) => tape.getInitialSnapshot());
     const submachineContext = {
       tapes: submachineTapes,
       metaValues: this.createMetaValues(definition),
       submachines: context.submachines,
     };
-    const ok = this.runner.run(definition.graph, submachineContext);
+    const traceRecorder = new AteTraceRecorder(definition.name, { showTapeIndexes: submachineTapes.length > 1 });
+    const ok = this.runner.run(definition.graph, submachineContext, traceRecorder);
 
     if (!ok) {
       return false;
     }
 
+    traceRecorder.recordStop();
+    this.lastAteSubtrace = {
+      machineName: definition.name,
+      graph: definition.graph,
+      view: definition.view,
+      root: traceRecorder.root,
+      initialTapeSnapshots,
+      finalTapeSnapshots: submachineTapes.map((tape) => tape.getSnapshot()),
+      parameterAssignments: {
+        ...definition.parameterAssignments,
+        ...this.parameterAssignments,
+      },
+    };
+
     callerTape.restoreSnapshot(submachineTapes[0].getSnapshot());
     return true;
+  }
+
+  getAteSubtrace(): AteSubtrace | null {
+    return this.lastAteSubtrace;
   }
 
   override getAteIconName(): string {

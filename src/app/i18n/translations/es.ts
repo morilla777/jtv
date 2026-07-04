@@ -80,6 +80,14 @@ export const es: Record<string, string> = {
   'parameterDialog.cancel': 'Cancelar',
   'parameterDialog.empty': 'Sin par\u00e1metros',
 
+  // Dialogo de Propiedades de Maquina
+  'machinePropertiesDialog.title': 'Propiedades',
+  'machinePropertiesDialog.name': 'Nombre',
+  'machinePropertiesDialog.shortName': 'Nombre Corto',
+  'machinePropertiesDialog.description': 'Descripci\u00f3n',
+  'machinePropertiesDialog.accept': 'Aceptar',
+  'machinePropertiesDialog.cancel': 'Cancelar',
+
   // Dialogo de Tamano de Rafaga
   'burstSizeDialog.title': 'Tama\u00f1o de R\u00e1faga',
   'burstSizeDialog.burstSize': 'Tama\u00f1o de R\u00e1faga',

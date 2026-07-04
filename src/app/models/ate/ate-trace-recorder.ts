@@ -28,6 +28,7 @@ export class AteTraceRecorder {
       iconSrc: this.getIconSrc(node.getAteIconName()),
       kind: 'machine-node',
       machineNodeId: node.id,
+      subtrace: node.getAteSubtrace?.() ?? undefined,
       children: [],
     });
   }

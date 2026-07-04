@@ -29,7 +29,9 @@ export class PreinstalledSubmachineService {
     const restored = restoreMachineFromJtvFile(file);
 
     return {
+      name: restored.selectedMachine.name,
       graph: restored.machineGraph,
+      view: restored.machineGraphView,
       tapeCount: restored.tapeCount,
       parameterAssignments: restored.parameterAssignments,
     };

@@ -3,7 +3,9 @@
   "version": 2,
   "machine": {
     "id": "c6915c31-398b-47c0-a94b-41180e79e3ed",
-    "name": "PALINDROME"
+    "name": "PALINDROME",
+    "shortName": "PALIN",
+    "description": "Reconoce cadenas palindromes"
   },
   "parameterAssignments": {},
   "metaValues": {

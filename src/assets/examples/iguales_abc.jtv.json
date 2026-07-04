@@ -3,7 +3,9 @@
   "version": 2,
   "machine": {
     "id": "03f29008-4ad6-4b35-b044-e2cf88bbaee9",
-    "name": "IGUALES_ABC"
+    "name": "IGUALES_ABC",
+    "shortName": "I_ABC",
+    "description": "Reconoce igual cantidad de a b y c"
   },
   "parameterAssignments": {},
   "metaValues": {

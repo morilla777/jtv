@@ -1,4 +1,7 @@
 import { type AteNodeKind } from './ate-node-kind';
+import { type MachineGraph } from '../core/machine-graph';
+import { type TapeSnapshot } from '../core/tape';
+import { type MachineGraphView } from '../view';
 
 export interface AteContinuationSnapshot {
   readonly currentGroupId: string;
@@ -20,5 +23,16 @@ export interface AteNode {
   readonly machineNodeId?: string;
   readonly linkId?: string;
   readonly continuation?: AteContinuationSnapshot;
+  readonly subtrace?: AteSubtrace;
   readonly children: AteNode[];
+}
+
+export interface AteSubtrace {
+  readonly machineName: string;
+  readonly graph: MachineGraph;
+  readonly view: MachineGraphView;
+  readonly root: AteNode;
+  readonly initialTapeSnapshots: readonly TapeSnapshot[];
+  readonly finalTapeSnapshots: readonly TapeSnapshot[];
+  readonly parameterAssignments: Readonly<Record<string, string>>;
 }

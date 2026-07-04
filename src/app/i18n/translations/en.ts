@@ -80,6 +80,14 @@ export const en: Record<string, string> = {
   'parameterDialog.cancel': 'Cancel',
   'parameterDialog.empty': 'No parameters',
 
+  // Machine Properties Dialog
+  'machinePropertiesDialog.title': 'Properties',
+  'machinePropertiesDialog.name': 'Name',
+  'machinePropertiesDialog.shortName': 'Short Name',
+  'machinePropertiesDialog.description': 'Description',
+  'machinePropertiesDialog.accept': 'Accept',
+  'machinePropertiesDialog.cancel': 'Cancel',
+
   // Burst Size Dialog
   'burstSizeDialog.title': 'Burst Size',
   'burstSizeDialog.burstSize': 'Burst Size',

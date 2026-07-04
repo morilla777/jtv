@@ -671,6 +671,7 @@ describe('MachineGraphRunner', () => {
     const searchLeftNode = new MoveLeftNode('sub-left', 0, true);
     const searchLeftGroup = new LinearMachineGroup('sub-left-group', searchLeftNode, searchLeftNode);
     const submachine: SubmachineDefinition = {
+      name: 'BUSCADORA_L',
       graph: {
         groups: [searchLeftGroup],
         links: [],
@@ -683,6 +684,7 @@ describe('MachineGraphRunner', () => {
         ],
         initialGroupId: searchLeftGroup.id,
       },
+      view: { groups: [], nodes: [], links: [] },
       tapeCount: 1,
       parameterAssignments: {},
     };
@@ -707,6 +709,43 @@ describe('MachineGraphRunner', () => {
     expect(ok).toBe(true);
     expect(submachineNode.getAteIconName()).toBe('M_ATE.gif');
     expect(submachineNode.getAteLabel()).toBe('BUSCADORA_L()');
+    expect(submachineNode.getAteSubtrace()).toEqual(
+      expect.objectContaining({
+        machineName: 'BUSCADORA_L',
+        graph: submachine.graph,
+        root: expect.objectContaining({
+          label: 'BUSCADORA_L',
+          children: expect.arrayContaining([
+            expect.objectContaining({
+              iconSrc: 'assets/images/L_ATE.gif',
+              machineNodeId: 'sub-left',
+            }),
+            expect.objectContaining({
+              iconSrc: 'assets/images/stop_ATE.gif',
+              kind: 'stop',
+            }),
+          ]),
+        }),
+        initialTapeSnapshots: [
+          {
+            headPosition: 3,
+            cells: {
+              1: 'a',
+              2: 'b',
+            },
+          },
+        ],
+        finalTapeSnapshots: [
+          {
+            headPosition: 0,
+            cells: {
+              1: 'a',
+              2: 'b',
+            },
+          },
+        ],
+      }),
+    );
     expect(callerTape.getSnapshot()).toEqual({
       headPosition: 0,
       cells: {
@@ -724,6 +763,7 @@ describe('MachineGraphRunner', () => {
     const searchLeftNode = new MoveLeftNode('sub-left', 0, true);
     const searchLeftGroup = new LinearMachineGroup('sub-left-group', searchLeftNode, searchLeftNode);
     const submachine: SubmachineDefinition = {
+      name: 'BUSCADORA_L',
       graph: {
         groups: [searchLeftGroup],
         links: [],
@@ -736,6 +776,7 @@ describe('MachineGraphRunner', () => {
         ],
         initialGroupId: searchLeftGroup.id,
       },
+      view: { groups: [], nodes: [], links: [] },
       tapeCount: 1,
       parameterAssignments: {},
     };

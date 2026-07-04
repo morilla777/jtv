@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
-import { AteContinuationSnapshot, AteNode, AteTraceRecorder } from '../models/ate';
+import { AteContinuationSnapshot, AteNode, AteSubtrace, AteTraceRecorder } from '../models/ate';
 import { Autolink } from '../models/core/autolink';
 import { LinearMachineGroup } from '../models/core/linear-machine-group';
 import { Link } from '../models/core/link';
@@ -53,6 +53,8 @@ export interface JtvTapeState {
 export interface JtvMachineState {
   readonly id: string;
   readonly name: string;
+  readonly shortName?: string;
+  readonly description?: string;
 }
 
 export interface JtvLinkEditState {
@@ -113,6 +115,22 @@ interface JtvDesignMachine {
   readonly parameterAssignments: Readonly<Record<string, string>>;
   readonly tapeCount: number;
   readonly submachineIds: readonly string[];
+}
+
+interface AteNavigationFrame {
+  readonly activeDesignMachineId: string;
+  readonly ate: AteNode;
+  readonly parentAteNodeId: string;
+  readonly machineGraph: MachineGraph;
+  readonly machineGraphView: MachineGraphView;
+  readonly metaValues: JtvMetaValues;
+  readonly parameterAssignments: Readonly<Record<string, string>>;
+  readonly selectedAteNodeId: string | null;
+  readonly selectedCanvasLinkId: string | null;
+  readonly selectedCanvasNodeId: string | null;
+  readonly selectedMachine: JtvMachineState;
+  readonly selectedTapeIndex: number;
+  readonly tapes: readonly JtvTapeState[];
 }
 
 function createTapeState(index: number): JtvTapeState {
@@ -375,6 +393,7 @@ export class JtvStore {
   private activeDesignMachineId = this.state().selectedMachine.id;
   private selectedChildSubmachineId: string | null = null;
   private designMachines = new Map<string, JtvDesignMachine>();
+  private ateNavigationStack: AteNavigationFrame[] = [];
 
   readonly activeToolId = computed(() => this.state().activeToolId);
   readonly canUndo = computed(() => {
@@ -1563,6 +1582,7 @@ export class JtvStore {
 
   runMachineOnFirstTape(): boolean {
     this.saveActiveDesignMachine();
+    this.ateNavigationStack = [];
     const tapes = this.state().tapes;
 
     if (tapes.length === 0) {
@@ -1598,6 +1618,16 @@ export class JtvStore {
   continueAteExecution(expandNodeId: string): boolean {
     const state = this.state();
     const expandNode = this.findAteNode(state.ate, expandNodeId);
+
+    if (expandNode?.subtrace) {
+      this.enterAteSubtrace(expandNode, expandNode.subtrace);
+      return true;
+    }
+
+    if (expandNode?.kind === 'stop' && this.ateNavigationStack.length > 0) {
+      this.exitAteSubtrace();
+      return true;
+    }
 
     if (!expandNode?.continuation) {
       return false;
@@ -1644,7 +1674,72 @@ export class JtvStore {
     return result.status !== 'failed';
   }
 
+  private enterAteSubtrace(parentNode: AteNode, subtrace: AteSubtrace): void {
+    const current = this.state();
+
+    this.ateNavigationStack.push({
+      activeDesignMachineId: this.activeDesignMachineId,
+      ate: current.ate,
+      parentAteNodeId: parentNode.id,
+      machineGraph: current.machineGraph,
+      machineGraphView: current.machineGraphView,
+      metaValues: current.metaValues,
+      parameterAssignments: current.parameterAssignments,
+      selectedAteNodeId: current.selectedAteNodeId,
+      selectedCanvasLinkId: current.selectedCanvasLinkId,
+      selectedCanvasNodeId: current.selectedCanvasNodeId,
+      selectedMachine: current.selectedMachine,
+      selectedTapeIndex: current.selectedTapeIndex,
+      tapes: this.cloneTapeStates(current.tapes),
+    });
+
+    this.state.update((state) => ({
+      ...state,
+      activeToolId: null,
+      ate: subtrace.root,
+      machineGraph: subtrace.graph,
+      machineGraphView: subtrace.view,
+      metaValues: collectMachineMetaValues(subtrace.graph, subtrace.parameterAssignments),
+      parameterAssignments: subtrace.parameterAssignments,
+      selectedAteNodeId: null,
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: null,
+      selectedMachine: {
+        id: `ate-subtrace-${this.ateNavigationStack.length}`,
+        name: subtrace.machineName,
+      },
+      selectedTapeIndex: 0,
+      tapes: this.createTapeStatesFromSnapshots(subtrace.initialTapeSnapshots, subtrace.finalTapeSnapshots),
+    }));
+  }
+
+  private exitAteSubtrace(): void {
+    const frame = this.ateNavigationStack.pop();
+
+    if (!frame) {
+      return;
+    }
+
+    this.activeDesignMachineId = frame.activeDesignMachineId;
+    this.state.update((current) => ({
+      ...current,
+      activeToolId: null,
+      ate: frame.ate,
+      machineGraph: frame.machineGraph,
+      machineGraphView: frame.machineGraphView,
+      metaValues: frame.metaValues,
+      parameterAssignments: frame.parameterAssignments,
+      selectedAteNodeId: frame.parentAteNodeId,
+      selectedCanvasLinkId: frame.selectedCanvasLinkId,
+      selectedCanvasNodeId: frame.selectedCanvasNodeId,
+      selectedMachine: frame.selectedMachine,
+      selectedTapeIndex: Math.min(frame.selectedTapeIndex, frame.tapes.length - 1),
+      tapes: this.cloneTapeStates(frame.tapes),
+    }));
+  }
+
   clearAte(): void {
+    this.ateNavigationStack = [];
     this.state.update((current) => ({
       ...current,
       ate: new AteTraceRecorder(current.selectedMachine.name).root,
@@ -1820,16 +1915,55 @@ export class JtvStore {
     this.saveActiveDesignMachine();
 
     const submachine = this.createDesignMachineFromFile(file);
-    const rootMachine = this.designMachines.get(this.rootDesignMachineId);
+    const parentMachine = this.designMachines.get(this.activeDesignMachineId);
 
-    if (!rootMachine) {
+    if (!parentMachine) {
       return;
     }
 
     this.designMachines.set(submachine.id, submachine);
-    this.designMachines.set(rootMachine.id, {
-      ...rootMachine,
-      submachineIds: [...rootMachine.submachineIds, submachine.id],
+    this.designMachines.set(parentMachine.id, {
+      ...parentMachine,
+      submachineIds: [...parentMachine.submachineIds, submachine.id],
+    });
+    this.selectedChildSubmachineId = submachine.id;
+    this.activeDesignMachineId = submachine.id;
+    this.loadDesignMachine(submachine.id, { saveCurrent: false });
+    this.bumpMachineWorkspaceRevision();
+    this.fileService.markDirty();
+  }
+
+  addNewSubmachine(properties: Pick<JtvMachineState, 'name' | 'shortName' | 'description'>): void {
+    this.saveActiveDesignMachine();
+
+    const parentMachine = this.designMachines.get(this.activeDesignMachineId);
+
+    if (!parentMachine) {
+      return;
+    }
+
+    const id = this.createUuid();
+    const emptyMachine = createEmptyMachine();
+    const submachine: JtvDesignMachine = {
+      id,
+      selectedMachine: {
+        id,
+        name: properties.name,
+        shortName: properties.shortName,
+        description: properties.description,
+      },
+      machineGraph: emptyMachine.graph,
+      machineGraphView: emptyMachine.view,
+      metaValues: { variables: [], parameters: [] },
+      parameterAssignments: {},
+      tapeCount: 1,
+      submachineIds: [],
+    };
+
+    this.designMachines.set(submachine.id, submachine);
+    this.designMachines.set(parentMachine.id, {
+      ...parentMachine,
+      submachineIds: [...parentMachine.submachineIds, submachine.id],
     });
     this.selectedChildSubmachineId = submachine.id;
     this.activeDesignMachineId = submachine.id;
@@ -1912,6 +2046,8 @@ export class JtvStore {
   }
 
   private loadDesignMachine(machineId: string, options: { saveCurrent?: boolean } = {}): void {
+    this.ateNavigationStack = [];
+
     if (options.saveCurrent ?? true) {
       this.saveActiveDesignMachine();
     }
@@ -2798,12 +2934,46 @@ export class JtvStore {
     };
   }
 
+  private cloneTapeStates(tapes: readonly JtvTapeState[]): JtvTapeState[] {
+    return tapes.map((tapeState) => {
+      const tape = Tape.fromInitialSnapshot(tapeState.tape.getInitialSnapshot());
+      tape.restoreSnapshot(tapeState.tape.getSnapshot());
+
+      return {
+        ...tapeState,
+        tape,
+      };
+    });
+  }
+
+  private createTapeStatesFromSnapshots(
+    initialSnapshots: readonly TapeSnapshot[],
+    finalSnapshots: readonly TapeSnapshot[],
+  ): JtvTapeState[] {
+    const count = Math.max(1, initialSnapshots.length, finalSnapshots.length);
+
+    return Array.from({ length: count }, (_, index) => {
+      const initialSnapshot = initialSnapshots[index] ?? { headPosition: 0, cells: {} };
+      const finalSnapshot = finalSnapshots[index] ?? initialSnapshot;
+      const tape = Tape.fromInitialSnapshot(initialSnapshot);
+      tape.restoreSnapshot(finalSnapshot);
+
+      return {
+        id: `tape-${index + 1}`,
+        name: `Cinta ${index + 1}`,
+        tape,
+      };
+    });
+  }
+
   private createExecutionSubmachines(): ReadonlyMap<string, SubmachineDefinition> {
     const submachines = new Map<string, SubmachineDefinition>(this.preinstalledSubmachineService.getSubmachines());
 
     for (const machine of this.designMachines.values()) {
       submachines.set(machine.id, {
+        name: machine.selectedMachine.name,
         graph: machine.machineGraph,
+        view: machine.machineGraphView,
         tapeCount: machine.tapeCount,
         parameterAssignments: machine.parameterAssignments,
       });

@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, ViewChild, computed, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, ViewChild, computed, effect, inject } from '@angular/core';
 import { ConfirmationService, MenuItem, MessageService, TreeNode } from 'primeng/api';
 import { TabsModule } from 'primeng/tabs';
 import { TreeModule } from 'primeng/tree';
@@ -6,6 +6,7 @@ import { TranslatePipe } from '../pipes/translate.pipe';
 import { TranslationService } from '../services/translation.service';
 import { JtvSettingsService } from '../services/jtv-settings.service';
 import { LoadingIndicatorService } from '../services/loading-indicator.service';
+import { MachinePropertiesDialog, MachinePropertiesDialogValue } from '../components/machine-properties-dialog';
 import { AteNode } from '../models/ate';
 import { JtvMachineTreeNode, JtvStore } from '../stores/jtv.store';
 
@@ -16,7 +17,7 @@ const NEW_NOTATION_ATE_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
 
 @Component({
   selector: 'app-explorer-panel',
-  imports: [TabsModule, TreeModule, TranslatePipe],
+  imports: [TabsModule, TreeModule, TranslatePipe, MachinePropertiesDialog],
   template: `
     <div class="panel">
       @if (machineContextMenuOpen) {
@@ -41,6 +42,10 @@ const NEW_NOTATION_ATE_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
         accept=".jtv,.json,application/json"
         class="hidden-file-input"
         (change)="loadExistingSubmachineFromInput($event)"
+      />
+      <app-machine-properties-dialog
+        [(visible)]="newSubmachineDialogVisible"
+        (acceptProperties)="createNewSubmachine($event)"
       />
 
       <div class="panel-body">
@@ -288,6 +293,7 @@ export class ExplorerPanel {
   private readonly loading = inject(LoadingIndicatorService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
+  private readonly hostElement = inject(ElementRef<HTMLElement>);
 
   readonly tabsStyle = {
     width: '100%',
@@ -311,6 +317,7 @@ export class ExplorerPanel {
   readonly mainMachineNodes = computed<TreeNode[]>(() => [this.toMachineTreeNode(this.store.machineTree())]);
   machineContextMenuOpen = false;
   machineContextMenuPosition = { x: 0, y: 0 };
+  newSubmachineDialogVisible = false;
 
   get machineContextMenuItems(): MenuItem[] {
     return [
@@ -384,6 +391,16 @@ export class ExplorerPanel {
 
   selectedMachineNode: TreeNode | null = null;
   selectedAteNode: TreeNode | null = null;
+  private readonly syncSelectedAteTreeNode = effect(() => {
+    const selectedNodeId = this.store.selectedAteNode()?.id ?? null;
+    const nodes = this.ateNodes();
+
+    this.selectedAteNode = selectedNodeId ? this.findTreeNodeByAteNodeId(nodes, selectedNodeId) : null;
+
+    if (this.selectedAteNode) {
+      this.scrollSelectedAteNodeIntoView();
+    }
+  });
 
   private toTreeNode(node: AteNode): TreeNode {
     return {
@@ -434,7 +451,19 @@ export class ExplorerPanel {
     this.machineContextMenuOpen = false;
   }
 
-  addNewSubmachine(): void {}
+  addNewSubmachine(): void {
+    this.newSubmachineDialogVisible = true;
+  }
+
+  createNewSubmachine(properties: MachinePropertiesDialogValue): void {
+    this.store.addNewSubmachine(properties);
+    queueMicrotask(() => {
+      this.selectedMachineNode = this.findTreeNodeByMachineId(
+        this.mainMachineNodes(),
+        this.store.activeMachineTreeNodeId(),
+      );
+    });
+  }
 
   addExistingSubmachine(): void {
     const input = this.existingSubmachineFileInput?.nativeElement;
@@ -567,6 +596,19 @@ export class ExplorerPanel {
     }
 
     return null;
+  }
+
+  private scrollSelectedAteNodeIntoView(): void {
+    window.requestAnimationFrame(() => {
+      const selectedElement = this.hostElement.nativeElement.querySelector(
+        '.ate-tree .p-tree-node-content.p-tree-node-selected',
+      );
+
+      selectedElement?.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    });
   }
 
   private toMachineTreeNode(node: JtvMachineTreeNode): TreeNode {

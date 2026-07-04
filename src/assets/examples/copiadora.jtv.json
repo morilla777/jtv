@@ -3,7 +3,9 @@
   "version": 2,
   "machine": {
     "id": "19051410-2775-45f9-8bbf-9b7461a0882b",
-    "name": "COPIADORA"
+    "name": "COPIADORA",
+    "shortName": "COPIA",
+    "description": "Copia una cadena en una cinta"
   },
   "parameterAssignments": {},
   "metaValues": {
