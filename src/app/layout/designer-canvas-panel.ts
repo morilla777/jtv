@@ -2,6 +2,7 @@ import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, ViewChil
 import { MessageService, type MenuItem } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
+import { TooltipModule } from 'primeng/tooltip';
 
 import { ConditionDialog, ConditionDialogValue } from '../components/condition-dialog';
 import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
@@ -12,9 +13,20 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
 
 @Component({
   selector: 'app-designer-canvas-panel',
-  imports: [ButtonModule, ContextMenuModule, ConditionDialog, ParameterAssignmentDialog],
+  imports: [ButtonModule, ContextMenuModule, TooltipModule, ConditionDialog, ParameterAssignmentDialog],
   template: `
     <div class="panel">
+      <ng-template #submachineTooltip>
+        @if (hoveredSubmachineTooltip(); as tooltip) {
+          <div class="submachine-tooltip">
+            <div class="submachine-tooltip-name">{{ tooltip.name }}</div>
+            @if (tooltip.description) {
+              <div class="submachine-tooltip-description">{{ tooltip.description }}</div>
+            }
+          </div>
+        }
+      </ng-template>
+
       <p-contextMenu #nodeContextMenu [model]="nodeContextMenuItems">
         <ng-template #item let-item>
           <div class="node-context-menu-item">
@@ -177,9 +189,12 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                   [class.machine-text-selected]="node.selected"
                   [class.machine-text-canvas-selected]="node.canvasSelected || isTransitionSourceNode(node.nodeId)"
                   [class.machine-text-hovered]="isHoveredNode(node.nodeId)"
-                  (mouseenter)="hoverNode(node.nodeId, $event)"
+                  [pTooltip]="node.submachineTooltip ? submachineTooltip : undefined"
+                  tooltipPosition="top"
+                  [showDelay]="250"
+                  (mouseenter)="hoverNode(node.nodeId, $event); setHoveredSubmachineTooltip(node)"
                   (mousemove)="hoverNode(node.nodeId, $event)"
-                  (mouseleave)="clearHoveredElement()"
+                  (mouseleave)="clearHoveredElement(); clearHoveredSubmachineTooltip()"
                   (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
                   (click)="handleNodeClick(node.nodeId, $event); $event.stopPropagation()"
                   (dblclick)="editSubmachineParameters(node.nodeId, $event)"
@@ -197,6 +212,27 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                     <tspan class="machine-node-tape-index" baseline-shift="super" dy="-8">({{ getNodeTapeNumber(node) }})</tspan>
                   }
                 </text>
+                @if (node.submachineShortName) {
+                  <text
+                    [attr.x]="node.position.x + 11"
+                    [attr.y]="node.position.y + 10"
+                    class="machine-submachine-short-name"
+                    [class.machine-submachine-short-name-selected]="node.selected"
+                    [class.machine-submachine-short-name-canvas-selected]="node.canvasSelected || isTransitionSourceNode(node.nodeId)"
+                    [class.machine-submachine-short-name-hovered]="isHoveredNode(node.nodeId)"
+                    text-anchor="middle"
+                    [pTooltip]="node.submachineTooltip ? submachineTooltip : undefined"
+                    tooltipPosition="top"
+                    [showDelay]="250"
+                    (mouseenter)="hoverNode(node.nodeId, $event); setHoveredSubmachineTooltip(node)"
+                    (mousemove)="hoverNode(node.nodeId, $event)"
+                    (mouseleave)="clearHoveredElement(); clearHoveredSubmachineTooltip()"
+                    (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
+                    (click)="handleNodeClick(node.nodeId, $event); $event.stopPropagation()"
+                    (dblclick)="editSubmachineParameters(node.nodeId, $event)"
+                    (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
+                  >{{ node.submachineShortName }}</text>
+                }
               }
             }
 
@@ -412,6 +448,45 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
       text-underline-offset: -2px;
     }
 
+    .machine-submachine-short-name {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 8px;
+      font-style: normal;
+      fill: #000;
+      pointer-events: auto;
+    }
+
+    .machine-submachine-short-name-selected {
+      fill: red;
+    }
+
+    .machine-submachine-short-name-hovered {
+      fill: rgb(255, 175, 175);
+    }
+
+    .machine-submachine-short-name-canvas-selected {
+      fill: rgb(255, 0, 255);
+    }
+
+    .submachine-tooltip {
+      display: grid;
+      gap: 0.25rem;
+      max-width: 16rem;
+      font-size: 0.75rem;
+      line-height: 1.2;
+    }
+
+    .submachine-tooltip-name {
+      font-weight: 700;
+    }
+
+    .submachine-tooltip-description {
+      max-width: 16rem;
+      white-space: normal;
+      word-break: break-word;
+      opacity: 0.95;
+    }
+
     .machine-text-selected {
       fill: red;
     }
@@ -550,6 +625,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   @ViewChild('designerSvg') private designerSvg?: ElementRef<SVGSVGElement>;
   private readonly hoveredNodeId = signal<string | null>(null);
   private readonly hoveredLinkId = signal<string | null>(null);
+  readonly hoveredSubmachineTooltip = signal<MachineNodeView['submachineTooltip'] | null>(null);
   private readonly hoveredNodeCursorSide = signal<'left' | 'right'>('right');
   private readonly transitionSourceNodeId = signal<string | null>(null);
   private readonly transitionDraftEndPoint = signal<ViewPoint | null>(null);
@@ -976,6 +1052,14 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   clearHoveredElement(): void {
     this.hoveredNodeId.set(null);
     this.hoveredLinkId.set(null);
+  }
+
+  setHoveredSubmachineTooltip(node: MachineNodeView): void {
+    this.hoveredSubmachineTooltip.set(node.submachineTooltip ?? null);
+  }
+
+  clearHoveredSubmachineTooltip(): void {
+    this.hoveredSubmachineTooltip.set(null);
   }
 
   handleNodeClick(nodeId: string, event?: MouseEvent): void {

@@ -4,7 +4,7 @@
   "machine": {
     "id": "c6915c31-398b-47c0-a94b-41180e79e3ed",
     "name": "PALINDROME",
-    "shortName": "PALIN",
+    "shortName": "PALI",
     "description": "Reconoce cadenas palindromes"
   },
   "parameterAssignments": {},

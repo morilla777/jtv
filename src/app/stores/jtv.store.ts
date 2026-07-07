@@ -453,6 +453,7 @@ export class JtvStore {
   });
   readonly parameterAssignments = computed(() => this.state().parameterAssignments);
   readonly machineGraphView = computed(() => {
+    this.machineWorkspaceRevision();
     const view = this.state().machineGraphView;
     const activeNodeId = this.activeAteMachineNodeId();
     const activeLinkId = this.activeAteLinkId();
@@ -465,6 +466,8 @@ export class JtvStore {
         ...node,
         selected: node.nodeId === activeNodeId,
         canvasSelected: node.nodeId === selectedCanvasNodeId,
+        submachineShortName: this.getSubmachineShortNameForNodeView(node.nodeId),
+        submachineTooltip: this.getSubmachineTooltipForNodeView(node.nodeId),
       })),
       links: view.links.map((link) => ({
         ...link,
@@ -1810,6 +1813,12 @@ export class JtvStore {
     return this.createFileFromDesignMachine(this.rootDesignMachineId);
   }
 
+  exportDesignMachineFile(machineId: string): JtvFile | null {
+    this.saveActiveDesignMachine();
+
+    return this.designMachines.has(machineId) ? this.createFileFromDesignMachine(machineId) : null;
+  }
+
   importMachineFile(file: JtvFile): void {
     this.importDesignMachineWorkspace(file);
     const rootMachine = this.designMachines.get(this.rootDesignMachineId);
@@ -1972,6 +1981,67 @@ export class JtvStore {
     this.fileService.markDirty();
   }
 
+  getDesignMachineProperties(machineId: string): Pick<JtvMachineState, 'name' | 'shortName' | 'description'> | null {
+    const machine = this.designMachines.get(machineId);
+
+    return machine
+      ? {
+        name: machine.selectedMachine.name,
+        shortName: machine.selectedMachine.shortName ?? '',
+        description: machine.selectedMachine.description ?? '',
+      }
+      : null;
+  }
+
+  hasDesignMachineName(machineName: string, options: { exceptMachineId?: string } = {}): boolean {
+    const normalizedMachineName = machineName.trim().toLocaleUpperCase();
+
+    return Array.from(this.designMachines.values()).some((machine) =>
+      machine.id !== options.exceptMachineId &&
+      machine.selectedMachine.name.trim().toLocaleUpperCase() === normalizedMachineName,
+    );
+  }
+
+  updateDesignMachineProperties(
+    machineId: string,
+    properties: Pick<JtvMachineState, 'name' | 'shortName' | 'description'>,
+  ): void {
+    this.saveActiveDesignMachine();
+
+    const machine = this.designMachines.get(machineId);
+
+    if (!machine) {
+      return;
+    }
+
+    const selectedMachine = {
+      ...machine.selectedMachine,
+      name: properties.name,
+      shortName: properties.shortName,
+      description: properties.description,
+    };
+
+    this.designMachines.set(machineId, {
+      ...machine,
+      selectedMachine,
+    });
+    this.updateSubmachineNodeReferences(machineId, properties.name);
+
+    if (machineId === this.activeDesignMachineId) {
+      this.state.update((current) => ({
+        ...current,
+        ate: {
+          ...current.ate,
+          label: properties.name,
+        },
+        selectedMachine,
+      }));
+    }
+
+    this.bumpMachineWorkspaceRevision();
+    this.fileService.markDirty();
+  }
+
   private resetMachineWorkspaceFromCurrentState(): void {
     const current = this.state();
     const designMachine = this.createDesignMachineFromState(current, []);
@@ -2098,6 +2168,32 @@ export class JtvStore {
     };
   }
 
+  private getSubmachineShortNameForNodeView(nodeId: string): string | undefined {
+    const shortName = this.getSubmachineTooltipForNodeView(nodeId)?.shortName.trim();
+
+    return shortName ? shortName : undefined;
+  }
+
+  private getSubmachineTooltipForNodeView(
+    nodeId: string,
+  ): { name: string; shortName: string; description: string } | undefined {
+    const machineNode = this.findMachineNode(nodeId);
+
+    if (!(machineNode instanceof SubmachineNode) || machineNode.name !== 'M') {
+      return undefined;
+    }
+
+    const machine = this.designMachines.get(machineNode.submachineId)?.selectedMachine;
+
+    return machine
+      ? {
+        name: machine.name,
+        shortName: machine.shortName ?? '',
+        description: machine.description ?? '',
+      }
+      : undefined;
+  }
+
   private getSelectedChildSubmachine(): JtvDesignMachine | null {
     const activeMachine = this.designMachines.get(this.activeDesignMachineId);
     const selectedId = this.selectedChildSubmachineId && activeMachine?.submachineIds.includes(this.selectedChildSubmachineId)
@@ -2121,6 +2217,18 @@ export class JtvStore {
     return machine.machineGraph.groups.some((group) =>
       getMachineGroupNodes(group).some((node) => node instanceof SubmachineNode && node.submachineId === submachineId),
     );
+  }
+
+  private updateSubmachineNodeReferences(submachineId: string, submachineName: string): void {
+    for (const machine of this.designMachines.values()) {
+      for (const group of machine.machineGraph.groups) {
+        for (const node of getMachineGroupNodes(group)) {
+          if (node instanceof SubmachineNode && node.submachineId === submachineId) {
+            node.submachineName = submachineName;
+          }
+        }
+      }
+    }
   }
 
   private collectDesignMachineSubtreeIds(machineId: string): string[] {
@@ -2932,6 +3040,18 @@ export class JtvStore {
       metaValues: this.createMetaValuesFromContinuation(continuation),
       submachines: this.createExecutionSubmachines(),
     };
+  }
+
+  private findMachineNode(nodeId: string): MachineNode | null {
+    for (const group of this.state().machineGraph.groups) {
+      const node = this.findMachineNodeInGroup(group, nodeId);
+
+      if (node) {
+        return node;
+      }
+    }
+
+    return null;
   }
 
   private cloneTapeStates(tapes: readonly JtvTapeState[]): JtvTapeState[] {

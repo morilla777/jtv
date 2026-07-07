@@ -126,6 +126,28 @@ export class JtvFileService {
     this.download(this.createJsonBlob(file), suggestedName);
   }
 
+  async exportJsonWithSavePicker(file: JtvFile, suggestedName: string): Promise<string> {
+    const pickerWindow = window as FilePickerWindow;
+    const fileName = this.ensureJtvJsonFileName(suggestedName);
+
+    if (pickerWindow.showSaveFilePicker) {
+      const handle = await pickerWindow.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [this.getFilePickerType()],
+      });
+
+      const writable = await handle.createWritable();
+
+      await writable.write(this.createJsonBlob(file));
+      await writable.close();
+
+      return this.ensureJtvJsonFileName(handle.name);
+    }
+
+    this.download(this.createJsonBlob(file), fileName);
+    return fileName;
+  }
+
   private openWithFileInput(options: { trackCurrentFile: boolean }): Promise<OpenedJtvFile | null> {
     return new Promise((resolve, reject) => {
       const input = document.createElement('input');

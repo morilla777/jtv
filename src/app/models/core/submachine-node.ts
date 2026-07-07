@@ -22,7 +22,7 @@ export class SubmachineNode extends AbstractMachineNode {
   constructor(
     id: string,
     readonly submachineId: string,
-    readonly submachineName: string,
+    public submachineName: string,
     readonly displaySymbol: string,
     readonly parameterName: string,
     private localParameterAssignments: Readonly<Record<string, string>>,

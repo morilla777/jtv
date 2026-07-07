@@ -7,6 +7,12 @@ export interface MachineNodeView {
   readonly label: string;
   readonly subscriptLabel?: string;
   readonly subscriptOverline?: boolean;
+  readonly submachineShortName?: string;
+  readonly submachineTooltip?: {
+    readonly name: string;
+    readonly shortName: string;
+    readonly description: string;
+  };
   readonly tapeIndex?: number;
   readonly initial?: boolean;
   readonly position: ViewPoint;

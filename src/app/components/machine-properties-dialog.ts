@@ -13,7 +13,6 @@ export interface MachinePropertiesDialogValue {
 }
 
 const MACHINE_NAME_PATTERN = /^[A-Za-z0-9_]+$/;
-const OPTIONAL_MACHINE_NAME_PATTERN = /^[A-Za-z0-9_]*$/;
 
 @Component({
   selector: 'app-machine-properties-dialog',
@@ -51,7 +50,7 @@ const OPTIONAL_MACHINE_NAME_PATTERN = /^[A-Za-z0-9_]*$/;
             id="machineShortNameInput"
             type="text"
             formControlName="shortName"
-            maxlength="5"
+            maxlength="4"
             autocomplete="off"
           />
         </label>
@@ -146,6 +145,7 @@ const OPTIONAL_MACHINE_NAME_PATTERN = /^[A-Za-z0-9_]*$/;
 })
 export class MachinePropertiesDialog {
   @Input() visible = false;
+  @Input() properties: MachinePropertiesDialogValue | null = null;
 
   @Output() visibleChange = new EventEmitter<boolean>();
   @Output() acceptProperties = new EventEmitter<MachinePropertiesDialogValue>();
@@ -163,7 +163,7 @@ export class MachinePropertiesDialog {
       nonNullable: true,
       validators: [
         Validators.required,
-        Validators.maxLength(5),
+        Validators.maxLength(4),
         Validators.pattern(MACHINE_NAME_PATTERN),
       ],
     }),
@@ -174,10 +174,16 @@ export class MachinePropertiesDialog {
   });
 
   resetForm(): void {
-    this.form.reset({
+    const properties = this.properties ?? {
       name: '',
       shortName: '',
       description: '',
+    };
+
+    this.form.reset({
+      name: properties.name,
+      shortName: properties.shortName,
+      description: properties.description,
     });
   }
 

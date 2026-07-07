@@ -5,6 +5,7 @@ import { TreeModule } from 'primeng/tree';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { TranslationService } from '../services/translation.service';
 import { JtvSettingsService } from '../services/jtv-settings.service';
+import { JtvFileService } from '../services/jtv-file.service';
 import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { MachinePropertiesDialog, MachinePropertiesDialogValue } from '../components/machine-properties-dialog';
 import { AteNode } from '../models/ate';
@@ -44,8 +45,9 @@ const NEW_NOTATION_ATE_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
         (change)="loadExistingSubmachineFromInput($event)"
       />
       <app-machine-properties-dialog
-        [(visible)]="newSubmachineDialogVisible"
-        (acceptProperties)="createNewSubmachine($event)"
+        [(visible)]="machinePropertiesDialogVisible"
+        [properties]="machinePropertiesDialogValue"
+        (acceptProperties)="saveMachineProperties($event)"
       />
 
       <div class="panel-body">
@@ -290,6 +292,7 @@ export class ExplorerPanel {
   private readonly store = inject(JtvStore);
   private readonly i18n = inject(TranslationService);
   private readonly settingsService = inject(JtvSettingsService);
+  private readonly fileService = inject(JtvFileService);
   private readonly loading = inject(LoadingIndicatorService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
@@ -317,7 +320,10 @@ export class ExplorerPanel {
   readonly mainMachineNodes = computed<TreeNode[]>(() => [this.toMachineTreeNode(this.store.machineTree())]);
   machineContextMenuOpen = false;
   machineContextMenuPosition = { x: 0, y: 0 };
-  newSubmachineDialogVisible = false;
+  machinePropertiesDialogVisible = false;
+  machinePropertiesDialogValue: MachinePropertiesDialogValue | null = null;
+  private machinePropertiesDialogMode: 'create' | 'edit' = 'create';
+  private machinePropertiesDialogMachineId: string | null = null;
 
   get machineContextMenuItems(): MenuItem[] {
     return [
@@ -335,6 +341,27 @@ export class ExplorerPanel {
           action: 'add-existing',
         },
         command: () => this.addExistingSubmachine(),
+      },
+      {
+        label: this.i18n.translate('explorer.machineMenu.cut'),
+        data: {
+          iconSrc: 'assets/images/Cut16.gif',
+        },
+        command: () => undefined,
+      },
+      {
+        label: this.i18n.translate('explorer.machineMenu.copy'),
+        data: {
+          iconSrc: 'assets/images/Copy16.gif',
+        },
+        command: () => undefined,
+      },
+      {
+        label: this.i18n.translate('explorer.machineMenu.paste'),
+        data: {
+          iconSrc: 'assets/images/Paste16.gif',
+        },
+        command: () => undefined,
       },
       {
         label: this.i18n.translate('explorer.machineMenu.delete'),
@@ -452,11 +479,31 @@ export class ExplorerPanel {
   }
 
   addNewSubmachine(): void {
-    this.newSubmachineDialogVisible = true;
+    this.machinePropertiesDialogMode = 'create';
+    this.machinePropertiesDialogMachineId = null;
+    this.machinePropertiesDialogValue = null;
+    this.machinePropertiesDialogVisible = true;
   }
 
-  createNewSubmachine(properties: MachinePropertiesDialogValue): void {
-    this.store.addNewSubmachine(properties);
+  saveMachineProperties(properties: MachinePropertiesDialogValue): void {
+    if (this.machinePropertiesDialogMode === 'edit' && this.machinePropertiesDialogMachineId) {
+      this.store.updateDesignMachineProperties(this.machinePropertiesDialogMachineId, properties);
+    } else {
+      if (this.store.hasDesignMachineName(properties.name)) {
+        this.messageService.add({
+          key: 'simulation',
+          severity: 'warn',
+          summary: 'JTV',
+          detail: this.i18n.translate('toast.machineNameExists', { machineName: properties.name }),
+          sticky: true,
+          closable: true,
+        });
+        return;
+      }
+
+      this.store.addNewSubmachine(properties);
+    }
+
     queueMicrotask(() => {
       this.selectedMachineNode = this.findTreeNodeByMachineId(
         this.mainMachineNodes(),
@@ -529,9 +576,55 @@ export class ExplorerPanel {
     });
   }
 
-  saveSubmachineAs(): void {}
+  async saveSubmachineAs(): Promise<void> {
+    const machineId = this.selectedMachineNode?.data?.machineId ?? '';
+    const file = this.store.exportDesignMachineFile(machineId);
 
-  openSubmachineProperties(): void {}
+    if (!file) {
+      return;
+    }
+
+    try {
+      const fileName = this.getSuggestedMachineFileName(file.machine.name);
+
+      const savedFileName = await this.fileService.exportJsonWithSavePicker(file, fileName);
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'success',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.machineExported', { fileName: savedFileName }),
+        sticky: true,
+        closable: true,
+      });
+    } catch {
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'error',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.machineSaveError'),
+        sticky: true,
+        closable: true,
+      });
+    }
+  }
+
+  openSubmachineProperties(): void {
+    const machineId = this.selectedMachineNode?.data?.machineId ?? '';
+    const properties = this.store.getDesignMachineProperties(machineId);
+
+    if (!properties) {
+      return;
+    }
+
+    this.machinePropertiesDialogMode = 'edit';
+    this.machinePropertiesDialogMachineId = machineId;
+    this.machinePropertiesDialogValue = {
+      name: properties.name,
+      shortName: properties.shortName ?? '',
+      description: properties.description ?? '',
+    };
+    this.machinePropertiesDialogVisible = true;
+  }
 
   async continueAteExecution(node: TreeNode, event: MouseEvent): Promise<void> {
     event.preventDefault();
@@ -623,6 +716,10 @@ export class ExplorerPanel {
       },
       children: node.children.map((child) => this.toMachineTreeNode(child)),
     };
+  }
+
+  private getSuggestedMachineFileName(machineName: string): string {
+    return `${(machineName || 'jtv-machine').toLowerCase()}.jtv.json`;
   }
 
   private findTreeNodeByMachineId(nodes: readonly TreeNode[], machineId: string): TreeNode | null {

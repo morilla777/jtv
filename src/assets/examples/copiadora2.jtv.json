@@ -4,7 +4,7 @@
   "machine": {
     "id": "988c9483-1f75-4866-a49a-f85c139e5fd9",
     "name": "COPIADORA2",
-    "shortName": "COPI2",
+    "shortName": "COP2",
     "description": "Copia una cadena usando dos cintas"
   },
   "parameterAssignments": {},
