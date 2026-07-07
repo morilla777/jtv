@@ -30,9 +30,11 @@ export class LinkCondition {
       }
 
       const readSymbol = tape.read();
-
-      const matches = clause.acceptedValues.some((acceptedValue) => this.matchesAcceptedValue(readSymbol, acceptedValue, context));
-      const clausePassed = clause.negated ? !matches : matches;
+      const hasAcceptedValues = clause.acceptedValues.length > 0;
+      const matches = hasAcceptedValues
+        ? clause.acceptedValues.some((acceptedValue) => this.matchesAcceptedValue(readSymbol, acceptedValue, context))
+        : true;
+      const clausePassed = hasAcceptedValues && clause.negated ? !matches : matches;
 
       if (!clausePassed) {
         return {

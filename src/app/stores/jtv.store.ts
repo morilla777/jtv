@@ -2062,12 +2062,53 @@ export class JtvStore {
 
   private createDesignMachineFromFile(file: JtvFile): JtvDesignMachine {
     const restored = restoreMachineFromJtvFile(file);
-    const submachineIds = restored.submachines.map((submachineFile) => this.createDesignMachineFromFile(submachineFile).id);
+    const submachineIdByOriginalId = new Map<string, string>();
+    const submachineIds = restored.submachines.map((submachineFile) => {
+      const submachine = this.createDesignMachineFromFile(submachineFile);
+
+      submachineIdByOriginalId.set(submachineFile.machine.id, submachine.id);
+
+      return submachine.id;
+    });
+
+    this.remapSubmachineNodeReferences(restored.machineGraph, submachineIdByOriginalId);
     const designMachine = this.createDesignMachineFromRestored(restored, submachineIds);
 
     this.designMachines.set(designMachine.id, designMachine);
 
     return designMachine;
+  }
+
+  private remapSubmachineNodeReferences(
+    machineGraph: MachineGraph,
+    submachineIdByOriginalId: ReadonlyMap<string, string>,
+  ): void {
+    for (const group of machineGraph.groups) {
+      for (const node of this.getGroupNodes(group)) {
+        if (node instanceof SubmachineNode) {
+          node.submachineId = submachineIdByOriginalId.get(node.submachineId) ?? node.submachineId;
+        }
+      }
+    }
+  }
+
+  private getGroupNodes(group: MachineGroup): MachineNode[] {
+    const nodes: MachineNode[] = [];
+    const visitedNodeIds = new Set<string>();
+    let current = group.entry;
+
+    while (current && !visitedNodeIds.has(current.id)) {
+      visitedNodeIds.add(current.id);
+      nodes.push(current);
+
+      if (current.id === group.exit?.id) {
+        break;
+      }
+
+      current = current.next;
+    }
+
+    return nodes;
   }
 
   private createDesignMachineFromRestored(
@@ -2267,13 +2308,17 @@ export class JtvStore {
   }
 
   private createUniqueDesignMachineId(preferredId: string): string {
-    let candidate = preferredId || this.createUuid();
+    let candidate = this.isUuid(preferredId) ? preferredId : this.createUuid();
 
     while (this.designMachines.has(candidate)) {
       candidate = this.createUuid();
     }
 
     return candidate;
+  }
+
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
   }
 
   private patchState(patch: Partial<JtvState>): void {

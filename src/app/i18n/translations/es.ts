@@ -165,6 +165,8 @@ export const es: Record<string, string> = {
   'toast.machineExported': 'M\u00e1quina exportada a {{fileName}}',
   'toast.machineSaveError': 'No se pudo guardar el archivo de m\u00e1quina',
   'toast.machineNameExists': 'El nombre {{machineName}} ya existe',
+  'toast.legacyMachineImported': 'M\u00e1quina legacy importada desde {{fileName}}',
+  'toast.legacyMachineImportError': 'No se pudo importar el archivo legacy',
   'toast.submachineReferenced': 'No puede eliminar esta m\u00e1quina ya que est\u00e1 referenciada desde la m\u00e1quina invocadora',
   'confirm.yes': 'S\u00ed',
   'confirm.no': 'No',

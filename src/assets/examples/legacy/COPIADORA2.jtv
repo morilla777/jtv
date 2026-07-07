@@ -1,0 +1,220 @@
+<jtv>
+<maquina
+  nombre-largo="COPIADORA2"
+  nombre-corto="CPI2"
+  descripcion=""
+  numero-cintas="2"
+  principal="true"
+  dependencia="null"
+>
+<R 
+    id="60"
+    id-previa="null"
+    id-proxima="61"
+    x="239"
+    y="83"
+    cinta="0"
+    inicial="false"
+/>
+
+<R 
+    id="61"
+    id-previa="60"
+    id-proxima="69"
+    x="259"
+    y="83"
+    cinta="1"
+    inicial="false"
+/>
+
+<R 
+    id="62"
+    id-previa="63"
+    id-proxima="72"
+    x="300"
+    y="198"
+    cinta="1"
+    inicial="false"
+/>
+
+<R 
+    id="63"
+    id-previa="null"
+    id-proxima="62"
+    x="280"
+    y="198"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="64"
+    id-previa="null"
+    id-proxima="74"
+    x="174"
+    y="83"
+    cinta="1"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="HELLADA_18"
+    id="65"
+    id-previa="null"
+    id-proxima="76"
+    x="410"
+    y="83"
+    cinta="1"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="HELLADA_18"
+    id="66"
+    id-previa="null"
+    id-proxima="78"
+    x="435"
+    y="197"
+    cinta="0"
+    inicial="false"
+/>
+
+<buscadora-L
+    nombre-repositorio="BUSCADORA_L"
+    id="67"
+    id-previa="null"
+    id-proxima="80"
+    x="50"
+    y="83"
+    cinta="0"
+    inicial="true"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-L>
+<buscadora-L
+    nombre-repositorio="BUSCADORA_L"
+    id="68"
+    id-previa="null"
+    id-proxima="82"
+    x="205"
+    y="198"
+    cinta="1"
+    inicial="false"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-L>
+<enlace-compuesto 
+    id="69"
+    id-previa="61"
+>
+<enlace 
+    id="70"
+    id-previa="61"
+    id-proxima="65"
+>
+
+    <condicion cinta="0" not="true" operando-izquierdo="HELLADA_18">
+          <operando-derecho nombre="#"/>
+     </condicion>
+</enlace>
+<enlace 
+    id="71"
+    id-previa="61"
+    id-proxima="68"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="#"/>
+     </condicion>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="72"
+    id-previa="62"
+>
+<enlace 
+    id="73"
+    id-previa="62"
+    id-proxima="66"
+>
+
+    <condicion cinta="1" not="true" operando-izquierdo="HELLADA_18">
+          <operando-derecho nombre="#"/>
+     </condicion>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="74"
+    id-previa="64"
+>
+<enlace 
+    id="75"
+    id-previa="64"
+    id-proxima="60"
+/>
+
+</enlace-compuesto>
+<enlace-compuesto 
+    id="76"
+    id-previa="65"
+>
+<enlace 
+    id="77"
+    id-previa="65"
+    id-proxima="60"
+>
+
+     <punto x="463" y="68"/>
+     <punto x="463" y="18"/>
+     <punto x="246" y="18"/>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="78"
+    id-previa="66"
+>
+<enlace 
+    id="79"
+    id-previa="66"
+    id-proxima="63"
+>
+
+     <punto x="481" y="182"/>
+     <punto x="481" y="139"/>
+     <punto x="287" y="139"/>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="80"
+    id-previa="67"
+>
+<enlace 
+    id="81"
+    id-previa="67"
+    id-proxima="64"
+/>
+
+</enlace-compuesto>
+<enlace-compuesto 
+    id="82"
+    id-previa="68"
+>
+<enlace 
+    id="83"
+    id-previa="68"
+    id-proxima="63"
+/>
+
+</enlace-compuesto>
+</maquina>
+<maquina
+  nombre-largo="COPIADORA"
+  nombre-corto="COPI"
+  descripcion="ESTA ES LA MAQUINA COPIADORA"
+  numero-cintas="4"
+  principal="false"
+  dependencia="NUEVA"
+>
+</maquina>
+</jtv>

@@ -1,0 +1,730 @@
+<jtv>
+<maquina
+  nombre-largo="MULTIPLICADORA2"
+  nombre-corto="MULT"
+  descripcion=""
+  numero-cintas="1"
+  principal="true"
+  dependencia="null"
+>
+<R 
+    id="194"
+    id-previa="null"
+    id-proxima="209"
+    x="74"
+    y="248"
+    cinta="0"
+    inicial="false"
+/>
+
+<R 
+    id="195"
+    id-previa="null"
+    id-proxima="223"
+    x="140"
+    y="249"
+    cinta="0"
+    inicial="false"
+/>
+
+<L 
+    id="196"
+    id-previa="215"
+    id-proxima="226"
+    x="83"
+    y="74"
+    cinta="0"
+    inicial="false"
+/>
+
+<L 
+    id="197"
+    id-previa="null"
+    id-proxima="229"
+    x="234"
+    y="75"
+    cinta="0"
+    inicial="false"
+/>
+
+<L 
+    id="198"
+    id-previa="222"
+    id-proxima="213"
+    x="484"
+    y="184"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="a"
+    id="199"
+    id-previa="null"
+    id-proxima="215"
+    x="43"
+    y="74"
+    cinta="0"
+    inicial="true"
+/>
+
+<escritora 
+    nombre="a"
+    id="200"
+    id-previa="null"
+    id-proxima="219"
+    x="328"
+    y="75"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="201"
+    id-previa="219"
+    id-proxima="360"
+    x="368"
+    y="75"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="a"
+    id="202"
+    id-previa="360"
+    id-proxima="216"
+    x="408"
+    y="75"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="203"
+    id-previa="216"
+    id-proxima="232"
+    x="448"
+    y="75"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="204"
+    id-previa="null"
+    id-proxima="234"
+    x="190"
+    y="75"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="a"
+    id="205"
+    id-previa="null"
+    id-proxima="220"
+    x="261"
+    y="181"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="206"
+    id-previa="220"
+    id-proxima="236"
+    x="301"
+    y="181"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="1"
+    id="207"
+    id-previa="null"
+    id-proxima="222"
+    x="444"
+    y="184"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="208"
+    id-previa="null"
+    id-proxima="221"
+    x="338"
+    y="297"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="a"
+    id="209"
+    id-previa="194"
+    id-proxima="238"
+    x="94"
+    y="248"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="210"
+    id-previa="null"
+    id-proxima="240"
+    x="249"
+    y="248"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="211"
+    id-previa="null"
+    id-proxima="217"
+    x="154"
+    y="308"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="212"
+    id-previa="217"
+    id-proxima="null"
+    x="194"
+    y="308"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="213"
+    id-previa="198"
+    id-proxima="242"
+    x="504"
+    y="184"
+    cinta="0"
+    inicial="false"
+/>
+
+<submaquina
+    nombre-repositorio="COPIADORA2"
+    id="360"
+    id-previa="201"
+    id-proxima="202"
+    x="388"
+    y="75"
+    cinta="0"
+    inicial="false"
+>
+</submaquina>
+<buscadora-L
+    nombre-repositorio="BUSCADORA_L"
+    id="215"
+    id-previa="199"
+    id-proxima="196"
+    x="63"
+    y="74"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-L>
+<buscadora-L
+    nombre-repositorio="BUSCADORA_L"
+    id="216"
+    id-previa="202"
+    id-proxima="203"
+    x="428"
+    y="75"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="a"/>
+</buscadora-L>
+<buscadora-L
+    nombre-repositorio="BUSCADORA_L"
+    id="217"
+    id-previa="211"
+    id-proxima="212"
+    x="174"
+    y="308"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="a"/>
+</buscadora-L>
+<buscadora-L-NOT
+    nombre-repositorio="BUSCADORA_L_NOT"
+    id="218"
+    id-previa="null"
+    id-proxima="244"
+    x="355"
+    y="182"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="1"/>
+</buscadora-L-NOT>
+<buscadora-R
+    nombre-repositorio="BUSCADORA_R"
+    id="219"
+    id-previa="200"
+    id-proxima="201"
+    x="348"
+    y="75"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="a"/>
+</buscadora-R>
+<buscadora-R
+    nombre-repositorio="BUSCADORA_R"
+    id="220"
+    id-previa="205"
+    id-proxima="206"
+    x="281"
+    y="181"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="a"/>
+</buscadora-R>
+<buscadora-R
+    nombre-repositorio="BUSCADORA_R"
+    id="221"
+    id-previa="208"
+    id-proxima="null"
+    x="358"
+    y="297"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-R>
+<buscadora-R
+    nombre-repositorio="BUSCADORA_R"
+    id="222"
+    id-previa="207"
+    id-proxima="198"
+    x="464"
+    y="184"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-R>
+<enlace-compuesto 
+    id="223"
+    id-previa="195"
+>
+<enlace 
+    id="224"
+    id-previa="195"
+    id-proxima="211"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="a"/>
+     </condicion>
+</enlace>
+<enlace 
+    id="225"
+    id-previa="195"
+    id-proxima="210"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="1"/>
+     </condicion>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="226"
+    id-previa="196"
+>
+<enlace 
+    id="227"
+    id-previa="196"
+    id-proxima="204"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="1"/>
+     </condicion>
+</enlace>
+<enlace 
+    id="228"
+    id-previa="196"
+    id-proxima="194"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="#"/>
+     </condicion>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="229"
+    id-previa="197"
+>
+<enlace 
+    id="230"
+    id-previa="197"
+    id-proxima="200"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="1"/>
+     </condicion>
+</enlace>
+<enlace 
+    id="231"
+    id-previa="197"
+    id-proxima="205"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="#"/>
+     </condicion>
+     <punto x="211" y="167"/>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="232"
+    id-previa="203"
+>
+<enlace 
+    id="233"
+    id-previa="203"
+    id-proxima="197"
+>
+
+     <punto x="489" y="60"/>
+     <punto x="489" y="17"/>
+     <punto x="247" y="17"/>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="234"
+    id-previa="204"
+>
+<enlace 
+    id="235"
+    id-previa="204"
+    id-proxima="197"
+/>
+
+</enlace-compuesto>
+<enlace-compuesto 
+    id="236"
+    id-previa="206"
+>
+<enlace 
+    id="237"
+    id-previa="206"
+    id-proxima="218"
+/>
+
+</enlace-compuesto>
+<enlace-compuesto 
+    id="238"
+    id-previa="209"
+>
+<enlace 
+    id="239"
+    id-previa="209"
+    id-proxima="195"
+/>
+
+</enlace-compuesto>
+<enlace-compuesto 
+    id="240"
+    id-previa="210"
+>
+<enlace 
+    id="241"
+    id-previa="210"
+    id-proxima="195"
+>
+
+     <punto x="298" y="233"/>
+     <punto x="297" y="202"/>
+     <punto x="147" y="202"/>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="242"
+    id-previa="213"
+>
+<enlace 
+    id="243"
+    id-previa="213"
+    id-proxima="218"
+>
+
+     <punto x="537" y="169"/>
+     <punto x="537" y="124"/>
+     <punto x="368" y="124"/>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="244"
+    id-previa="218"
+>
+<enlace 
+    id="245"
+    id-previa="218"
+    id-proxima="207"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="#"/>
+     </condicion>
+</enlace>
+<enlace 
+    id="246"
+    id-previa="218"
+    id-proxima="208"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="a"/>
+     </condicion>
+</enlace>
+</enlace-compuesto>
+</maquina>
+<maquina
+  nombre-largo="COPIADORA2"
+  nombre-corto="CPI2"
+  descripcion=""
+  numero-cintas="2"
+  principal="false"
+  dependencia="MULTIPLICADORA2"
+>
+<R 
+    id="336"
+    id-previa="null"
+    id-proxima="337"
+    x="239"
+    y="83"
+    cinta="0"
+    inicial="false"
+/>
+
+<R 
+    id="337"
+    id-previa="336"
+    id-proxima="345"
+    x="259"
+    y="83"
+    cinta="1"
+    inicial="false"
+/>
+
+<R 
+    id="338"
+    id-previa="339"
+    id-proxima="348"
+    x="300"
+    y="198"
+    cinta="1"
+    inicial="false"
+/>
+
+<R 
+    id="339"
+    id-previa="null"
+    id-proxima="338"
+    x="280"
+    y="198"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="340"
+    id-previa="null"
+    id-proxima="350"
+    x="174"
+    y="83"
+    cinta="1"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="HELLADA_18"
+    id="341"
+    id-previa="null"
+    id-proxima="352"
+    x="410"
+    y="83"
+    cinta="1"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="HELLADA_18"
+    id="342"
+    id-previa="null"
+    id-proxima="354"
+    x="435"
+    y="197"
+    cinta="0"
+    inicial="false"
+/>
+
+<buscadora-L
+    nombre-repositorio="BUSCADORA_L"
+    id="343"
+    id-previa="null"
+    id-proxima="356"
+    x="50"
+    y="83"
+    cinta="0"
+    inicial="true"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-L>
+<buscadora-L
+    nombre-repositorio="BUSCADORA_L"
+    id="344"
+    id-previa="null"
+    id-proxima="358"
+    x="205"
+    y="198"
+    cinta="1"
+    inicial="false"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-L>
+<enlace-compuesto 
+    id="345"
+    id-previa="337"
+>
+<enlace 
+    id="346"
+    id-previa="337"
+    id-proxima="341"
+>
+
+    <condicion cinta="0" not="true" operando-izquierdo="HELLADA_18">
+          <operando-derecho nombre="#"/>
+     </condicion>
+</enlace>
+<enlace 
+    id="347"
+    id-previa="337"
+    id-proxima="344"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="#"/>
+     </condicion>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="348"
+    id-previa="338"
+>
+<enlace 
+    id="349"
+    id-previa="338"
+    id-proxima="342"
+>
+
+    <condicion cinta="1" not="true" operando-izquierdo="HELLADA_18">
+          <operando-derecho nombre="#"/>
+     </condicion>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="350"
+    id-previa="340"
+>
+<enlace 
+    id="351"
+    id-previa="340"
+    id-proxima="336"
+/>
+
+</enlace-compuesto>
+<enlace-compuesto 
+    id="352"
+    id-previa="341"
+>
+<enlace 
+    id="353"
+    id-previa="341"
+    id-proxima="336"
+>
+
+     <punto x="463" y="68"/>
+     <punto x="463" y="18"/>
+     <punto x="246" y="18"/>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="354"
+    id-previa="342"
+>
+<enlace 
+    id="355"
+    id-previa="342"
+    id-proxima="339"
+>
+
+     <punto x="481" y="182"/>
+     <punto x="481" y="139"/>
+     <punto x="287" y="139"/>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="356"
+    id-previa="343"
+>
+<enlace 
+    id="357"
+    id-previa="343"
+    id-proxima="340"
+/>
+
+</enlace-compuesto>
+<enlace-compuesto 
+    id="358"
+    id-previa="344"
+>
+<enlace 
+    id="359"
+    id-previa="344"
+    id-proxima="339"
+/>
+
+</enlace-compuesto>
+</maquina>
+<maquina
+  nombre-largo="COPIADORA"
+  nombre-corto="COPI"
+  descripcion="ESTA ES LA MAQUINA COPIADORA"
+  numero-cintas="4"
+  principal="false"
+  dependencia="NUEVA"
+>
+</maquina>
+</jtv>

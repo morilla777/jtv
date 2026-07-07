@@ -21,7 +21,7 @@ export class SubmachineNode extends AbstractMachineNode {
 
   constructor(
     id: string,
-    readonly submachineId: string,
+    public submachineId: string,
     public submachineName: string,
     readonly displaySymbol: string,
     readonly parameterName: string,

@@ -1,0 +1,177 @@
+<jtv>
+<maquina
+  nombre-largo="COPIADORA"
+  nombre-corto="COPI"
+  descripcion=""
+  numero-cintas="1"
+  principal="true"
+  dependencia="null"
+>
+<R 
+    id="59"
+    id-previa="null"
+    id-proxima="49"
+    x="175"
+    y="103"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="#"
+    id="40"
+    id-previa="null"
+    id-proxima="46"
+    x="314"
+    y="103"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="HELLADA_18"
+    id="41"
+    id-previa="47"
+    id-proxima="44"
+    x="374"
+    y="103"
+    cinta="0"
+    inicial="false"
+/>
+
+<escritora 
+    nombre="HELLADA_18"
+    id="42"
+    id-previa="45"
+    id-proxima="52"
+    x="434"
+    y="103"
+    cinta="0"
+    inicial="false"
+/>
+
+<buscadora-L
+    nombre-repositorio="BUSCADORA_L"
+    id="43"
+    id-previa="null"
+    id-proxima="54"
+    x="64"
+    y="103"
+    cinta="0"
+    inicial="true"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-L>
+<buscadora-L
+    nombre-repositorio="BUSCADORA_L"
+    id="44"
+    id-previa="41"
+    id-proxima="45"
+    x="394"
+    y="103"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-L>
+<buscadora-L
+    nombre-repositorio="BUSCADORA_L"
+    id="45"
+    id-previa="44"
+    id-proxima="42"
+    x="414"
+    y="103"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-L>
+<buscadora-R
+    nombre-repositorio="BUSCADORA_R"
+    id="46"
+    id-previa="40"
+    id-proxima="47"
+    x="334"
+    y="103"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-R>
+<buscadora-R
+    nombre-repositorio="BUSCADORA_R"
+    id="47"
+    id-previa="46"
+    id-proxima="41"
+    x="354"
+    y="103"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-R>
+<buscadora-R
+    nombre-repositorio="BUSCADORA_R"
+    id="48"
+    id-previa="null"
+    id-proxima="null"
+    x="175"
+    y="222"
+    cinta="0"
+    inicial="false"
+>
+   <parametro nombre="A" valor="#"/>
+</buscadora-R>
+<enlace-compuesto 
+    id="52"
+    id-previa="42"
+>
+<enlace 
+    id="53"
+    id-previa="42"
+    id-proxima="59"
+>
+
+     <punto x="466" y="88"/>
+     <punto x="466" y="35"/>
+     <punto x="182" y="35"/>
+</enlace>
+</enlace-compuesto>
+<enlace-compuesto 
+    id="54"
+    id-previa="43"
+>
+<enlace 
+    id="55"
+    id-previa="43"
+    id-proxima="59"
+/>
+
+</enlace-compuesto>
+<enlace-compuesto 
+    id="49"
+    id-previa="57"
+>
+<enlace 
+    id="50"
+    id-previa="59"
+    id-proxima="40"
+>
+
+    <condicion cinta="0" not="true" operando-izquierdo="HELLADA_18">
+          <operando-derecho nombre="#"/>
+     </condicion>
+</enlace>
+<enlace 
+    id="51"
+    id-previa="59"
+    id-proxima="48"
+>
+
+    <condicion cinta="0" not="false">
+          <operando-derecho nombre="#"/>
+     </condicion>
+</enlace>
+</enlace-compuesto>
+</maquina>
+</jtv>

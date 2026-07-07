@@ -11,6 +11,7 @@ import { NotationChangeDialog } from '../components/notation-change-dialog';
 import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvFileService } from '../services/jtv-file.service';
+import { LegacyJtvImporter } from '../services/legacy-jtv-importer';
 import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { TranslationService, type Language } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
@@ -240,6 +241,16 @@ interface LanguageOption {
               (click)="saveMachine()"
             >
               <img src="assets/images/Save24.gif" alt="" />
+            </button>
+            <button
+              pButton
+              type="button"
+              class="image-toolbar-button p-button-secondary"
+              [attr.aria-label]="'topbar.import' | translate"
+              [title]="'topbar.import' | translate"
+              (click)="importLegacyMachine()"
+            >
+              <img src="assets/images/Import24.gif" alt="" />
             </button>
             <button
               pButton
@@ -677,6 +688,7 @@ interface LanguageOption {
 export class Topbar {
   readonly i18n = inject(TranslationService);
   private readonly fileService = inject(JtvFileService);
+  private readonly legacyImporter = inject(LegacyJtvImporter);
   private readonly loading = inject(LoadingIndicatorService);
   private readonly messageService = inject(MessageService);
   private readonly store = inject(JtvStore);
@@ -816,6 +828,49 @@ export class Topbar {
 
   printCanvas(): void {
     window.dispatchEvent(new Event('jtv-print-canvas'));
+  }
+
+  importLegacyMachine(): void {
+    const input = document.createElement('input');
+
+    input.type = 'file';
+    input.accept = '.jtv,.xml,text/xml,application/xml';
+    input.style.display = 'none';
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0] ?? null;
+
+      input.remove();
+
+      if (!file) {
+        return;
+      }
+
+      try {
+        const importedFile = this.legacyImporter.importXml(await file.text());
+
+        this.store.importMachineFile(importedFile);
+        this.fileService.clearCurrentFile();
+        this.messageService.add({
+          key: 'simulation',
+          severity: 'success',
+          summary: 'JTV',
+          detail: this.i18n.translate('toast.legacyMachineImported', { fileName: file.name }),
+          sticky: true,
+          closable: true,
+        });
+      } catch {
+        this.messageService.add({
+          key: 'simulation',
+          severity: 'error',
+          summary: 'JTV',
+          detail: this.i18n.translate('toast.legacyMachineImportError'),
+          sticky: true,
+          closable: true,
+        });
+      }
+    }, { once: true });
+    document.body.appendChild(input);
+    input.click();
   }
 
   makeSelectedCanvasNodeInitial(): void {

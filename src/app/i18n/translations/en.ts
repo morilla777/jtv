@@ -165,6 +165,8 @@ export const en: Record<string, string> = {
   'toast.machineExported': 'Machine exported to {{fileName}}',
   'toast.machineSaveError': 'The machine file could not be saved',
   'toast.machineNameExists': 'The name {{machineName}} already exists',
+  'toast.legacyMachineImported': 'Legacy machine imported from {{fileName}}',
+  'toast.legacyMachineImportError': 'The legacy file could not be imported',
   'toast.submachineReferenced': 'This machine cannot be deleted because it is referenced from the invoking machine',
   'confirm.yes': 'Yes',
   'confirm.no': 'No',

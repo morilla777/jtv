@@ -344,6 +344,21 @@ describe('MachineGraphRunner', () => {
     expect(context.metaValues.getVariable(sigma)?.resolve().getName()).toBe('a');
   });
 
+  it('assigns a read symbol to a variable when the condition has no accepted values', () => {
+    const tape = new Tape();
+    const sigma = '\u03c3';
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    tape.load('x');
+    tape.setHeadPosition(1);
+    const condition = new LinkCondition([{ tapeIndex: 0, acceptedValues: [], assignToVariableName: sigma }]);
+
+    expect(condition.evaluate(context).success).toBe(true);
+    expect(context.metaValues.getVariable(sigma)?.resolve().getName()).toBe('x');
+  });
+
   it('records variable assignment links with the link icon in the execution trace', () => {
     const tape = new Tape();
     const sigma = '\u03c3';

@@ -44,10 +44,12 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
         </ng-template>
       </p-contextMenu>
 
-      <div class="canvas-container">
+      <div #canvasContainer class="canvas-container">
         <svg
           #designerSvg
           class="designer-svg"
+          [style.width.px]="canvasWidth()"
+          [style.height.px]="canvasHeight()"
           [attr.viewBox]="viewBox()"
           preserveAspectRatio="xMinYMin slice"
           aria-label="Maquina de Turing modular"
@@ -383,10 +385,9 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
     }
 
     .designer-svg {
-      width: 100%;
-      height: 100%;
       min-width: 560px;
       min-height: 340px;
+      display: block;
     }
 
     .canvas-background {
@@ -622,6 +623,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private readonly settingsService = inject(JtvSettingsService);
   @ViewChild('nodeContextMenu') private nodeContextMenu?: ContextMenu;
   @ViewChild('linkContextMenu') private linkContextMenu?: ContextMenu;
+  @ViewChild('canvasContainer') private canvasContainer?: ElementRef<HTMLDivElement>;
   @ViewChild('designerSvg') private designerSvg?: ElementRef<SVGSVGElement>;
   private readonly hoveredNodeId = signal<string | null>(null);
   private readonly hoveredLinkId = signal<string | null>(null);
@@ -852,18 +854,22 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.nodeContextMenuItems[5].label = this.i18n.translate('topbar.menu.edit.delete');
     this.linkContextMenuItems[0].label = this.i18n.translate('topbar.menu.edit.delete');
   });
+  private readonly updateCanvasSizeWhenGraphChanges = effect(() => {
+    this.machineGraphView();
+    queueMicrotask(() => this.updateCanvasSize());
+  });
 
   ngAfterViewInit(): void {
     this.updateCanvasSize();
 
-    const svg = this.designerSvg?.nativeElement;
+    const container = this.canvasContainer?.nativeElement;
 
-    if (!svg) {
+    if (!container) {
       return;
     }
 
     this.resizeObserver = new ResizeObserver(() => this.updateCanvasSize());
-    this.resizeObserver.observe(svg);
+    this.resizeObserver.observe(container);
   }
 
   ngOnDestroy(): void {
@@ -1708,14 +1714,40 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   }
 
   private updateCanvasSize(): void {
-    const bounds = this.designerSvg?.nativeElement.getBoundingClientRect();
+    const bounds = this.canvasContainer?.nativeElement.getBoundingClientRect();
 
     if (!bounds) {
       return;
     }
 
-    this.canvasWidth.set(Math.max(560, Math.ceil(bounds.width)));
-    this.canvasHeight.set(Math.max(340, Math.ceil(bounds.height)));
+    const contentBounds = this.getCanvasContentBounds();
+
+    this.canvasWidth.set(Math.max(560, Math.ceil(bounds.width), Math.ceil(contentBounds.maxX)));
+    this.canvasHeight.set(Math.max(340, Math.ceil(bounds.height), Math.ceil(contentBounds.maxY)));
+  }
+
+  private getCanvasContentBounds(): { maxX: number; maxY: number } {
+    const view = this.machineGraphView();
+    const margin = 96;
+    let maxX = 0;
+    let maxY = 0;
+
+    for (const node of view.nodes) {
+      const width = node.kind === 'hub' ? 12 : node.width ?? Math.max(24, node.label.length * 16);
+      const height = node.kind === 'hub' ? 12 : node.height ?? 32;
+
+      maxX = Math.max(maxX, node.position.x + width + margin);
+      maxY = Math.max(maxY, node.position.y + height + margin);
+    }
+
+    for (const link of view.links) {
+      for (const point of link.points ?? []) {
+        maxX = Math.max(maxX, point.x + margin);
+        maxY = Math.max(maxY, point.y + margin);
+      }
+    }
+
+    return { maxX, maxY };
   }
 
   private getSvgPoint(svg: SVGSVGElement, event: MouseEvent | PointerEvent): ViewPoint {
