@@ -64,6 +64,72 @@
             ]
           },
           "configurations": {
+            "local": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.local.ts"
+                }
+              ]
+            },
+            "develop": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.develop.ts"
+                }
+              ]
+            },
+            "qa": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.qa.ts"
+                }
+              ]
+            },
+            "demo": {
+              "optimization": true,
+              "extractLicenses": true,
+              "sourceMap": false,
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.demo.ts"
+                }
+              ]
+            },
+            "prod": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.prod.ts"
+                }
+              ]
+            },
             "production": {
               "budgets": [
                 {
@@ -77,19 +143,46 @@
                   "maximumError": "8kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.prod.ts"
+                }
+              ]
             },
             "development": {
               "optimization": false,
               "extractLicenses": false,
-              "sourceMap": true
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.local.ts"
+                }
+              ]
             }
           },
-          "defaultConfiguration": "production"
+          "defaultConfiguration": "local"
         },
         "serve": {
           "builder": "@angular/build:dev-server",
           "configurations": {
+            "local": {
+              "buildTarget": "jtv:build:local"
+            },
+            "develop": {
+              "buildTarget": "jtv:build:develop"
+            },
+            "qa": {
+              "buildTarget": "jtv:build:qa"
+            },
+            "demo": {
+              "buildTarget": "jtv:build:demo"
+            },
+            "prod": {
+              "buildTarget": "jtv:build:prod"
+            },
             "production": {
               "buildTarget": "jtv:build:production"
             },
@@ -97,7 +190,7 @@
               "buildTarget": "jtv:build:development"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "local"
         },
         "test": {
           "builder": "@angular/build:unit-test",

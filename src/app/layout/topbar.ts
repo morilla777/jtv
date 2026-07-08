@@ -15,6 +15,7 @@ import { LegacyJtvImporter } from '../services/legacy-jtv-importer';
 import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { TranslationService, type Language } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
+import { environment } from '../../environments/environment';
 
 interface LanguageOption {
   code: Language;
@@ -45,24 +46,28 @@ interface LanguageOption {
             @if (fileMenuOpen) {
               <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
                 <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'new')">
-                  <span class="pi pi-plus"></span>
+                  <img class="file-menu-icon" src="assets/images/New16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.new' | translate }}</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'open')">
-                  <span class="pi pi-folder-open"></span>
+                  <img class="file-menu-icon" src="assets/images/Open16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.open' | translate }}</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'save')">
-                  <span class="pi pi-save"></span>
+                  <img class="file-menu-icon" src="assets/images/Save16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.save' | translate }}</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'saveAs')">
-                  <span class="pi pi-save"></span>
+                  <img class="file-menu-icon" src="assets/images/SaveAs16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.saveAs' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'exportJson')">
-                  <span class="pi pi-code"></span>
-                  <span>{{ 'topbar.menu.file.exportTo.json' | translate }}</span>
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'import')">
+                  <img class="file-menu-icon" src="assets/images/Import16.gif" alt="" />
+                  <span>{{ 'topbar.import' | translate }}</span>
+                </button>
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'print')">
+                  <img class="file-menu-icon" src="assets/images/Print16.gif" alt="" />
+                  <span>{{ 'topbar.menu.file.print' | translate }}</span>
                 </button>
               </div>
             }
@@ -87,7 +92,7 @@ interface LanguageOption {
                   <span>{{ 'topbar.menu.settings.burstSize' | translate }}</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" (click)="runSettingsMenuAction($event, 'notationChange')">
-                  <span class="pi pi-language"></span>
+                  <img class="file-menu-icon" src="assets/images/NotationChange16.gif" alt="" />
                   <span>{{ 'topbar.menu.settings.notationChange' | translate }}</span>
                 </button>
               </div>
@@ -158,12 +163,12 @@ interface LanguageOption {
 
             @if (helpMenuOpen) {
               <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
-                <button type="button" role="menuitem" class="file-menu-item">
+                <button type="button" role="menuitem" class="file-menu-item" (click)="runHelpMenuAction($event, 'contents')">
                   <span class="pi pi-book"></span>
                   <span>{{ 'topbar.menu.help.contents' | translate }}</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" (click)="runHelpMenuAction($event, 'about')">
-                  <span class="pi pi-info-circle"></span>
+                  <img class="file-menu-icon" src="assets/images/Info16.gif" alt="" />
                   <span>{{ 'topbar.menu.help.about' | translate }}</span>
                 </button>
               </div>
@@ -956,7 +961,7 @@ export class Topbar {
     this.editMenuOpen = false;
   }
 
-  runFileMenuAction(event: Event, action: 'new' | 'open' | 'save' | 'saveAs' | 'exportJson'): void {
+  runFileMenuAction(event: Event, action: 'new' | 'open' | 'save' | 'saveAs' | 'import' | 'print'): void {
     event.preventDefault();
     event.stopPropagation();
     this.fileMenuOpen = false;
@@ -981,7 +986,12 @@ export class Topbar {
       return;
     }
 
-    void this.exportMachineJson();
+    if (action === 'import') {
+      this.importLegacyMachine();
+      return;
+    }
+
+    this.printCanvas();
   }
 
   runSettingsMenuAction(event: Event, action: 'burstSize' | 'notationChange'): void {
@@ -1037,10 +1047,15 @@ export class Topbar {
     this.deleteSelectedCanvasElement();
   }
 
-  runHelpMenuAction(event: Event, action: 'about'): void {
+  runHelpMenuAction(event: Event, action: 'contents' | 'about'): void {
     event.preventDefault();
     event.stopPropagation();
     this.helpMenuOpen = false;
+
+    if (action === 'contents') {
+      window.open(environment.jtvSite, '_blank', 'noopener');
+      return;
+    }
 
     if (action === 'about') {
       this.aboutDialogVisible = true;
