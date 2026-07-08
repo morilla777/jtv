@@ -73,4 +73,30 @@ export class MetaValueDictionary {
   getParameters(): Map<string, ParameterValue> {
     return new Map(this.parameters);
   }
+
+  cloneResolved(): MetaValueDictionary {
+    const clone = new MetaValueDictionary();
+
+    for (const [name, variable] of this.variables.entries()) {
+      const clonedVariable = new VariableValue(name);
+
+      if (variable.isSet()) {
+        clonedVariable.setValue(variable.resolve());
+      }
+
+      clone.addVariable(clonedVariable);
+    }
+
+    for (const [name, parameter] of this.parameters.entries()) {
+      const clonedParameter = new ParameterValue(name);
+
+      if (parameter.isSet()) {
+        clonedParameter.setValue(parameter.resolve());
+      }
+
+      clone.addParameter(clonedParameter);
+    }
+
+    return clone;
+  }
 }

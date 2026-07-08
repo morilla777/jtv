@@ -1,4 +1,5 @@
 import { ExecutionContext } from './execution-context';
+import { Autolink } from './autolink';
 import { Link } from './link';
 import { MachineGraph } from './machine-graph';
 import { MachineGroup } from './machine-group';
@@ -9,13 +10,15 @@ export interface MachineGraphExecutionPoint {
   readonly currentGroupId: string;
   readonly currentNodeId: string | null;
   readonly phase: 'node' | 'after-node' | 'after-group';
+  readonly forcedTransitionId?: string;
 }
 
-export type MachineGraphRunStatus = 'completed' | 'failed' | 'suspended';
+export type MachineGraphRunStatus = 'completed' | 'failed' | 'suspended' | 'nondeterministic';
 
 export interface MachineGraphRunResult {
   readonly status: MachineGraphRunStatus;
   readonly continuation?: MachineGraphExecutionPoint;
+  readonly continuations?: readonly MachineGraphExecutionPoint[];
 }
 
 export interface MachineGraphRunOptions {
@@ -43,22 +46,24 @@ export class MachineGraphRunner {
     }
 
     while (point) {
+      const currentPoint: MachineGraphExecutionPoint = point;
+
       if (recordedSteps >= maxSteps) {
         return {
           status: 'suspended',
-          continuation: point,
+          continuation: currentPoint,
         };
       }
 
-      const currentGroup = this.findGroupById(graph, point.currentGroupId);
+      const currentGroup = this.findGroupById(graph, currentPoint.currentGroupId);
 
       if (!currentGroup) {
         return { status: 'failed' };
       }
 
-      if (point.phase === 'node') {
-        const currentNode: MachineNode | null = point.currentNodeId
-          ? this.findNodeInGroup(currentGroup, point.currentNodeId)
+      if (currentPoint.phase === 'node') {
+        const currentNode: MachineNode | null = currentPoint.currentNodeId
+          ? this.findNodeInGroup(currentGroup, currentPoint.currentNodeId)
           : null;
 
         if (!currentNode) {
@@ -86,18 +91,41 @@ export class MachineGraphRunner {
         continue;
       }
 
-      if (point.phase === 'after-node') {
-        const currentNode: MachineNode | null = point.currentNodeId
-          ? this.findNodeInGroup(currentGroup, point.currentNodeId)
+      if (currentPoint.phase === 'after-node') {
+        const currentNode: MachineNode | null = currentPoint.currentNodeId
+          ? this.findNodeInGroup(currentGroup, currentPoint.currentNodeId)
           : null;
 
         if (!currentNode) {
           return { status: 'failed' };
         }
 
-        const autolink = this.findTraversableAutolink(graph.autolinks ?? [], currentNode, context);
+        const autolinks = this.findTraversableAutolinks(graph.autolinks ?? [], currentNode, context);
+        const autolink: Autolink | undefined = currentPoint.forcedTransitionId
+          ? autolinks.find((item) => item.id === currentPoint.forcedTransitionId)
+          : autolinks[0];
+
+        if (currentPoint.forcedTransitionId && !autolink) {
+          return { status: 'failed' };
+        }
+
+        if (!currentPoint.forcedTransitionId && autolinks.length > 1) {
+          return {
+            status: 'nondeterministic',
+            continuations: autolinks.map((item) => ({
+              currentGroupId: currentGroup.id,
+              currentNodeId: currentNode.id,
+              phase: 'after-node',
+              forcedTransitionId: item.id,
+            })),
+          };
+        }
 
         if (autolink) {
+          if (!autolink.canTraverse(context)) {
+            return { status: 'failed' };
+          }
+
           traceRecorder?.recordLink(autolink);
           recordedSteps++;
           point = {
@@ -123,22 +151,45 @@ export class MachineGraphRunner {
         continue;
       }
 
-      const nextLink = this.findTraversableOutgoingLink(graph.links, currentGroup, context);
+      const nextLinks = this.findTraversableOutgoingLinks(graph.links, currentGroup, context);
+      const nextLink: Link | undefined = currentPoint.forcedTransitionId
+        ? nextLinks.find((item) => item.id === currentPoint.forcedTransitionId)
+        : nextLinks[0];
+
+      if (currentPoint.forcedTransitionId && !nextLink) {
+        return { status: 'failed' };
+      }
+
+      if (!currentPoint.forcedTransitionId && nextLinks.length > 1) {
+        return {
+          status: 'nondeterministic',
+          continuations: nextLinks.map((item) => ({
+            currentGroupId: currentGroup.id,
+            currentNodeId: null,
+            phase: 'after-group',
+            forcedTransitionId: item.id,
+          })),
+        };
+      }
 
       if (!nextLink) {
         return { status: 'completed' };
       }
 
+      if (!nextLink.canTraverse(context)) {
+        return { status: 'failed' };
+      }
+
       traceRecorder?.recordLink(nextLink);
       recordedSteps++;
 
-      const targetGroup = nextLink.targetGroup;
+      const targetGroup: MachineGroup | null = nextLink.targetGroup;
 
       if (!targetGroup) {
         return { status: 'completed' };
       }
 
-      const targetNode = nextLink.targetNode ?? this.findInitialNode(targetGroup);
+      const targetNode: MachineNode | null = nextLink.targetNode ?? this.findInitialNode(targetGroup);
 
       point = {
         currentGroupId: targetGroup.id,
@@ -214,27 +265,44 @@ export class MachineGraphRunner {
     return null;
   }
 
-  private findTraversableAutolink(
+  private findTraversableAutolinks(
     autolinks: NonNullable<MachineGraph['autolinks']>,
     currentNode: MachineNode,
     context: ExecutionContext,
-  ) {
-    return autolinks.find(
+  ): Autolink[] {
+    const candidates = autolinks.filter(
       (autolink) =>
         autolink.node?.id === currentNode.id &&
-        autolink.canTraverse(context),
+        this.canTraverseWithoutMutating(autolink, context),
     );
+
+    return this.prioritizeConditionalTransitions(candidates);
   }
 
-  private findTraversableOutgoingLink(
+  private findTraversableOutgoingLinks(
     links: Link[],
     currentGroup: MachineGroup,
     context: ExecutionContext,
-  ): Link | undefined {
-    return links.find(
+  ): Link[] {
+    const candidates = links.filter(
       (link) =>
         link.sourceGroup?.id === currentGroup.id &&
-        link.canTraverse(context),
+        this.canTraverseWithoutMutating(link, context),
     );
+
+    return this.prioritizeConditionalTransitions(candidates);
+  }
+
+  private canTraverseWithoutMutating(link: Link | Autolink, context: ExecutionContext): boolean {
+    return link.canTraverse({
+      ...context,
+      metaValues: context.metaValues.cloneResolved(),
+    });
+  }
+
+  private prioritizeConditionalTransitions<T extends Link | Autolink>(transitions: T[]): T[] {
+    const conditionalTransitions = transitions.filter((transition) => transition.condition);
+
+    return conditionalTransitions.length > 0 ? conditionalTransitions : transitions;
   }
 }

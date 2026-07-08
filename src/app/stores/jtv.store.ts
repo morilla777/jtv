@@ -226,6 +226,14 @@ function deleteMutableContinuation(node: AteNode): void {
   delete (node as { continuation?: AteContinuationSnapshot }).continuation;
 }
 
+function keepMutableReplayContinuation(node: AteNode): void {
+  const continuation = node.continuation;
+
+  if (continuation) {
+    (node as { replayContinuation?: AteContinuationSnapshot }).replayContinuation = continuation;
+  }
+}
+
 function createInitialState(): JtvState {
   const initialTape = createTapeState(1);
   const emptyMachine = createEmptyMachine();
@@ -1606,6 +1614,8 @@ export class JtvStore {
       traceRecorder.recordStop();
     } else if (result.status === 'suspended' && result.continuation) {
       traceRecorder.recordExpand(this.createAteContinuationSnapshot(result.continuation, context));
+    } else if (result.status === 'nondeterministic' && result.continuations) {
+      this.recordNondeterministicContinuations(traceRecorder, result.continuations, context);
     }
 
     this.state.update((current) => ({
@@ -1648,14 +1658,21 @@ export class JtvStore {
         currentGroupId: expandNode.continuation.currentGroupId,
         currentNodeId: expandNode.continuation.currentNodeId,
         phase: expandNode.continuation.phase,
+        forcedTransitionId: expandNode.continuation.forcedTransitionId,
       },
     });
 
     if (result.status === 'completed') {
       traceRecorder.recordStop();
+      keepMutableReplayContinuation(expandNode);
       deleteMutableContinuation(expandNode);
     } else if (result.status === 'suspended' && result.continuation) {
       traceRecorder.recordExpand(this.createAteContinuationSnapshot(result.continuation, context));
+      keepMutableReplayContinuation(expandNode);
+      deleteMutableContinuation(expandNode);
+    } else if (result.status === 'nondeterministic' && result.continuations) {
+      this.recordNondeterministicContinuations(traceRecorder, result.continuations, context);
+      keepMutableReplayContinuation(expandNode);
       deleteMutableContinuation(expandNode);
     }
 
@@ -3011,17 +3028,39 @@ export class JtvStore {
       return state.tapes.map((tapeState) => tapeState.tape.getInitialSnapshot());
     }
 
-    const traceNodes = this.getAteTraceNodes(state.ate);
+    const targetPath = this.findAteNodePath(state.ate, targetNode.id);
+
+    if (!targetPath) {
+      return null;
+    }
+
+    const continuationAncestor = [...targetPath]
+      .reverse()
+      .find((node) => node.replayContinuation ?? node.continuation);
+    const containerNode = continuationAncestor ?? state.ate;
+    const replayContinuation = continuationAncestor?.replayContinuation ?? continuationAncestor?.continuation;
+    const baseSnapshots = replayContinuation?.tapeSnapshots ??
+      state.tapes.map((tapeState) => tapeState.tape.getInitialSnapshot());
+
+    if (continuationAncestor?.id === targetNode.id) {
+      return baseSnapshots;
+    }
+
+    const traceNodes = this.getAteTraceNodes(containerNode);
     const targetIndex = traceNodes.findIndex((node) => node.id === targetNode.id);
 
     if (targetIndex < 0) {
       return null;
     }
 
-    const tapes = state.tapes.map((tapeState) => Tape.fromInitialSnapshot(tapeState.tape.getInitialSnapshot()));
+    const tapes = state.tapes.map((tapeState, index) =>
+      Tape.fromInitialSnapshot(baseSnapshots[index] ?? tapeState.tape.getInitialSnapshot()),
+    );
     const context = {
       tapes,
-      metaValues: this.createExecutionMetaValues(),
+      metaValues: replayContinuation
+        ? this.createMetaValuesFromContinuation(replayContinuation)
+        : this.createExecutionMetaValues(),
       submachines: this.createExecutionSubmachines(),
     };
     const machineNodes = this.getMachineNodesById(state.machineGraph);
@@ -3050,6 +3089,22 @@ export class JtvStore {
     return tapes.map((tape) => tape.getSnapshot());
   }
 
+  private findAteNodePath(root: AteNode, nodeId: string): AteNode[] | null {
+    if (root.id === nodeId) {
+      return [root];
+    }
+
+    for (const child of root.children) {
+      const childPath = this.findAteNodePath(child, nodeId);
+
+      if (childPath) {
+        return [root, ...childPath];
+      }
+    }
+
+    return null;
+  }
+
   private createAteContinuationSnapshot(
     point: MachineGraphExecutionPoint,
     context: { tapes: readonly Tape[]; metaValues: MetaValueDictionary },
@@ -3058,10 +3113,43 @@ export class JtvStore {
       currentGroupId: point.currentGroupId,
       currentNodeId: point.currentNodeId,
       phase: point.phase,
+      forcedTransitionId: point.forcedTransitionId,
       tapeSnapshots: context.tapes.map((tape) => tape.getSnapshot()),
       variableAssignments: this.createMetaValueAssignmentsSnapshot(context.metaValues.getVariables()),
       parameterAssignments: this.createMetaValueAssignmentsSnapshot(context.metaValues.getParameters()),
     };
+  }
+
+  private recordNondeterministicContinuations(
+    traceRecorder: AteTraceRecorder,
+    continuations: readonly MachineGraphExecutionPoint[],
+    context: { tapes: readonly Tape[]; metaValues: MetaValueDictionary },
+  ): void {
+    traceRecorder.recordNondeterminism();
+
+    for (const continuation of continuations) {
+      traceRecorder.recordExpand(
+        this.createAteContinuationSnapshot(continuation, context),
+        this.getContinuationTransitionLabel(continuation),
+      );
+    }
+  }
+
+  private getContinuationTransitionLabel(continuation: MachineGraphExecutionPoint): string {
+    if (!continuation.forcedTransitionId) {
+      return '';
+    }
+
+    const showTapeIndexes = this.state().tapes.length > 1;
+    const autolink = this.state().machineGraph.autolinks?.find((item) => item.id === continuation.forcedTransitionId);
+
+    if (autolink) {
+      return autolink.getAteLabel(showTapeIndexes);
+    }
+
+    return this.state().machineGraph.links
+      .find((item) => item.id === continuation.forcedTransitionId)
+      ?.getAteLabel(showTapeIndexes) ?? '';
   }
 
   private createContinuationExecutionContext(continuation: AteContinuationSnapshot): {
@@ -3071,7 +3159,7 @@ export class JtvStore {
   } {
     return {
       tapes: this.state().tapes.map((tapeState, index) => {
-        const tape = tapeState.tape;
+        const tape = Tape.fromInitialSnapshot(tapeState.tape.getInitialSnapshot());
         const snapshot = continuation.tapeSnapshots[index];
 
         if (snapshot) {

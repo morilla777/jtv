@@ -19,6 +19,7 @@ export class LoadingIndicatorService {
       await this.waitForPaint();
       return await task();
     } finally {
+      await this.waitForPaint();
       await this.waitForMinimumVisibleTime(startedAt);
       this.hide();
     }

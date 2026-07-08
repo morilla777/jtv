@@ -207,6 +207,93 @@ describe('MachineGraphRunner', () => {
     });
   });
 
+  it('suspends with nondeterministic continuations when multiple outgoing links can traverse', () => {
+    const tape = new Tape();
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const startNode = new HubNode('start', 0, true);
+    const firstTargetNode = new WriterNode('write-a', 'a', 0, true);
+    const secondTargetNode = new WriterNode('write-b', 'b', 0, true);
+    const startGroup = new LinearMachineGroup('start-group', startNode, startNode);
+    const firstTargetGroup = new LinearMachineGroup('first-target-group', firstTargetNode, firstTargetNode);
+    const secondTargetGroup = new LinearMachineGroup('second-target-group', secondTargetNode, secondTargetNode);
+    const firstLink = new Link('first-branch', startGroup, firstTargetGroup);
+    const secondLink = new Link('second-branch', startGroup, secondTargetGroup);
+    const graph: MachineGraph = {
+      groups: [startGroup, firstTargetGroup, secondTargetGroup],
+      links: [firstLink, secondLink],
+      autolinks: [],
+      initialGroupId: startGroup.id,
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA');
+
+    const result = new MachineGraphRunner().runBurst(graph, context, traceRecorder);
+
+    expect(result.status).toBe('nondeterministic');
+    expect(result.continuations).toEqual([
+      {
+        currentGroupId: startGroup.id,
+        currentNodeId: null,
+        phase: 'after-group',
+        forcedTransitionId: 'first-branch',
+      },
+      {
+        currentGroupId: startGroup.id,
+        currentNodeId: null,
+        phase: 'after-group',
+        forcedTransitionId: 'second-branch',
+      },
+    ]);
+    expect(traceRecorder.root.children.map((child) => child.kind)).toEqual(['machine-node']);
+  });
+
+  it('continues a selected nondeterministic branch using the forced transition', () => {
+    const tape = new Tape();
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const startNode = new HubNode('start', 0, true);
+    const firstTargetNode = new WriterNode('write-a', 'a', 0, true);
+    const secondTargetNode = new WriterNode('write-b', 'b', 0, true);
+    const startGroup = new LinearMachineGroup('start-group', startNode, startNode);
+    const firstTargetGroup = new LinearMachineGroup('first-target-group', firstTargetNode, firstTargetNode);
+    const secondTargetGroup = new LinearMachineGroup('second-target-group', secondTargetNode, secondTargetNode);
+    const graph: MachineGraph = {
+      groups: [startGroup, firstTargetGroup, secondTargetGroup],
+      links: [
+        new Link('first-branch', startGroup, firstTargetGroup),
+        new Link('second-branch', startGroup, secondTargetGroup),
+      ],
+      autolinks: [],
+      initialGroupId: startGroup.id,
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA');
+
+    const result = new MachineGraphRunner().runBurst(graph, context, traceRecorder, {
+      startAt: {
+        currentGroupId: startGroup.id,
+        currentNodeId: null,
+        phase: 'after-group',
+        forcedTransitionId: 'second-branch',
+      },
+    });
+
+    expect(result.status).toBe('completed');
+    expect(traceRecorder.root.children.map((child) => child.linkId ?? child.machineNodeId)).toEqual([
+      'second-branch',
+      'write-b',
+    ]);
+    expect(tape.getSnapshot()).toEqual({
+      headPosition: 0,
+      cells: {
+        0: 'b',
+      },
+    });
+  });
+
   it('renders empty labels for unconditional links', () => {
     expect(new Link('unconditional', null, null).getAteLabel()).toBe('');
     expect(new Autolink('unconditional-autolink', null).getAteLabel()).toBe('');

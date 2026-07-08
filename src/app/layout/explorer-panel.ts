@@ -1,5 +1,6 @@
-import { Component, ElementRef, HostListener, ViewChild, computed, effect, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { ConfirmationService, MenuItem, MessageService, TreeNode } from 'primeng/api';
+import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TabsModule } from 'primeng/tabs';
 import { TreeModule } from 'primeng/tree';
 import { TranslatePipe } from '../pipes/translate.pipe';
@@ -16,9 +17,11 @@ const NEW_NOTATION_ATE_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
   'assets/images/R_ATE.gif': 'assets/images/RN_ATE.gif',
 };
 
+const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
+
 @Component({
   selector: 'app-explorer-panel',
-  imports: [TabsModule, TreeModule, TranslatePipe, MachinePropertiesDialog],
+  imports: [TabsModule, TreeModule, ProgressSpinnerModule, TranslatePipe, MachinePropertiesDialog],
   template: `
     <div class="panel">
       @if (machineContextMenuOpen) {
@@ -59,7 +62,12 @@ const NEW_NOTATION_ATE_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
 
           <p-tabpanels>
             <p-tabpanel value="ate">
-              <div class="ate-tree-host" tabindex="0" (keydown)="handleAteKeydown($event)">
+              <div
+                class="ate-tree-host"
+                tabindex="0"
+                (keydown)="handleAteKeydown($event)"
+                (pointerdown)="handleAteTreePointerDown($event)"
+              >
                 <p-tree
                   class="ate-tree"
                   [value]="ateNodes()"
@@ -67,6 +75,8 @@ const NEW_NOTATION_ATE_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
                   [(selection)]="selectedAteNode"
                   (onNodeSelect)="selectAteNode($event.node)"
                   (onNodeUnselect)="restoreAteSelection()"
+                  (onNodeExpand)="handleAteNodeExpand($event.node)"
+                  (onNodeCollapse)="handleAteNodeCollapse($event.node)"
                   [style]="treeStyle"
                   [indentation]="0.25"
                 >
@@ -77,6 +87,15 @@ const NEW_NOTATION_ATE_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
                     </span>
                   </ng-template>
                 </p-tree>
+                @if (ateTreeBusy()) {
+                  <div class="ate-tree-render-overlay" role="status" aria-live="polite">
+                    <p-progress-spinner
+                      ariaLabel="loading"
+                      strokeWidth="5"
+                      [style]="{ width: '2rem', height: '2rem' }"
+                    />
+                  </div>
+                }
               </div>
             </p-tabpanel>
 
@@ -183,8 +202,24 @@ const NEW_NOTATION_ATE_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
     }
 
     .ate-tree-host {
+      position: relative;
       height: 100%;
       outline: none;
+    }
+
+    .ate-tree-render-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.32);
+      pointer-events: none;
+    }
+
+    :host ::ng-deep .ate-tree-render-overlay .p-progressspinner-circle {
+      stroke: var(--p-primary-color);
     }
 
     :host ::ng-deep .p-tree-root-children {
@@ -414,10 +449,13 @@ export class ExplorerPanel {
     },
   ];
 
+  private readonly expandedAteNodeIds = signal<ReadonlySet<string>>(new Set<string>());
+  readonly ateTreeBusy = signal(false);
   readonly ateNodes = computed<TreeNode[]>(() => [this.toTreeNode(this.store.ate())]);
 
   selectedMachineNode: TreeNode | null = null;
   selectedAteNode: TreeNode | null = null;
+  private ateTreeBusyToken = 0;
   private readonly syncSelectedAteTreeNode = effect(() => {
     const selectedNodeId = this.store.selectedAteNode()?.id ?? null;
     const nodes = this.ateNodes();
@@ -437,7 +475,7 @@ export class ExplorerPanel {
         iconSrc: node.kind === 'root' ? this.getAteRootIconSrc() : this.getAteIconSrc(node.iconSrc),
         ateNodeId: node.id,
       },
-      expanded: true,
+      expanded: node.kind === 'root' || this.expandedAteNodeIds().has(node.id),
       selectable: true,
       children: node.children.map((child) => this.toTreeNode(child)),
     };
@@ -445,6 +483,58 @@ export class ExplorerPanel {
 
   selectAteNode(node: TreeNode): void {
     this.store.selectAteNode(node.data?.ateNodeId ?? null);
+  }
+
+  showAteTreeRenderSpinner(): void {
+    const token = ++this.ateTreeBusyToken;
+    const startedAt = Date.now();
+
+    this.ateTreeBusy.set(true);
+    void this.waitForAteTreeRender().then(() => {
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, ATE_TREE_RENDER_SPINNER_MIN_MS - elapsed);
+
+      window.setTimeout(() => {
+        if (token === this.ateTreeBusyToken) {
+          this.ateTreeBusy.set(false);
+        }
+      }, remaining);
+    });
+  }
+
+  handleAteTreePointerDown(event: PointerEvent): void {
+    const target = event.target instanceof Element ? event.target : null;
+
+    if (!target?.closest('.p-tree-node-toggle-button')) {
+      return;
+    }
+
+    this.showAteTreeRenderSpinner();
+  }
+
+  handleAteNodeExpand(node: TreeNode): void {
+    const nodeId = node.data?.ateNodeId;
+
+    if (nodeId) {
+      this.expandedAteNodeIds.update((current) => new Set([...current, nodeId]));
+    }
+
+    this.showAteTreeRenderSpinner();
+  }
+
+  handleAteNodeCollapse(node: TreeNode): void {
+    const collapsedIds = this.flattenAteTreeNodeIds(node);
+
+    this.expandedAteNodeIds.update((current) => {
+      const next = new Set(current);
+
+      for (const nodeId of collapsedIds) {
+        next.delete(nodeId);
+      }
+
+      return next;
+    });
+    this.showAteTreeRenderSpinner();
   }
 
   selectMachineNode(node: TreeNode): void {
@@ -629,10 +719,15 @@ export class ExplorerPanel {
   async continueAteExecution(node: TreeNode, event: MouseEvent): Promise<void> {
     event.preventDefault();
     event.stopPropagation();
-    await this.loading.run(
+    const expandedNodeId = node.data?.ateNodeId ?? '';
+    const continued = await this.loading.run(
       () => this.store.continueAteExecution(node.data?.ateNodeId ?? ''),
       this.i18n.translate('loading.executing'),
     );
+
+    if (continued) {
+      this.focusAteExpandedBranch(expandedNodeId);
+    }
   }
 
   restoreAteSelection(): void {
@@ -689,6 +784,43 @@ export class ExplorerPanel {
     }
 
     return null;
+  }
+
+  private focusAteExpandedBranch(ateNodeId: string): void {
+    const path = this.findTreeNodePathByAteNodeId(this.ateNodes(), ateNodeId);
+
+    this.expandedAteNodeIds.set(new Set(path.map((item) => item.data?.ateNodeId).filter(Boolean)));
+  }
+
+  private findTreeNodePathByAteNodeId(nodes: readonly TreeNode[], ateNodeId: string): TreeNode[] {
+    for (const node of nodes) {
+      if (node.data?.ateNodeId === ateNodeId) {
+        return [node];
+      }
+
+      const childPath = this.findTreeNodePathByAteNodeId(node.children ?? [], ateNodeId);
+
+      if (childPath.length > 0) {
+        return [node, ...childPath];
+      }
+    }
+
+    return [];
+  }
+
+  private flattenAteTreeNodeIds(node: TreeNode): string[] {
+    const nodeId = node.data?.ateNodeId;
+    const childIds = node.children?.flatMap((child) => this.flattenAteTreeNodeIds(child)) ?? [];
+
+    return nodeId ? [nodeId, ...childIds] : childIds;
+  }
+
+  private waitForAteTreeRender(): Promise<void> {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => resolve());
+      });
+    });
   }
 
   private scrollSelectedAteNodeIntoView(): void {

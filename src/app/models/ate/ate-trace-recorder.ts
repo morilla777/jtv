@@ -54,10 +54,20 @@ export class AteTraceRecorder {
     });
   }
 
-  recordExpand(continuation: AteContinuationSnapshot): void {
+  recordNondeterminism(): void {
+    this.root.children.push({
+      id: this.createEntryId('nd'),
+      label: '',
+      iconSrc: this.getIconSrc('ND_ATE.gif'),
+      kind: 'nondeterminism',
+      children: [],
+    });
+  }
+
+  recordExpand(continuation: AteContinuationSnapshot, label: string = ''): void {
     this.root.children.push({
       id: this.createEntryId('expand'),
-      label: '',
+      label,
       iconSrc: this.getIconSrc('expand_ATE.gif'),
       kind: 'expand',
       continuation,
