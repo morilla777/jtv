@@ -20,7 +20,16 @@ import { Tape, TapeSnapshot } from '../models/core/tape';
 import { WriterNode } from '../models/core/writer-node';
 import { SubmachineDefinition } from '../models/core/execution-context';
 import { AutolinkOrientation, MachineGraphView, MachineLinkKind, MachineLinkView, ViewPoint } from '../models/view';
-import { createJtvFileFromState, restoreMachineFromJtvFile, type JtvFile, type JtvMetaValues } from '../services/jtv-file-serializer';
+import {
+  createJtvCanvasFragment,
+  createJtvFileFromState,
+  removeJtvCanvasNodes,
+  restoreJtvCanvasFragment,
+  restoreMachineFromJtvFile,
+  type JtvCanvasFragment,
+  type JtvFile,
+  type JtvMetaValues,
+} from '../services/jtv-file-serializer';
 import { JtvFileService } from '../services/jtv-file.service';
 import { JtvSettingsService } from '../services/jtv-settings.service';
 import { PreinstalledSubmachineService } from '../services/preinstalled-submachine.service';
@@ -100,10 +109,23 @@ interface JtvHistorySnapshot {
   readonly tapes: readonly JtvHistoryTapeState[];
 }
 
+interface JtvMachineHistory {
+  readonly undoStack: JtvHistorySnapshot[];
+  readonly redoStack: JtvHistorySnapshot[];
+  lastSnapshot: JtvHistorySnapshot | null;
+  transactionStart: JtvHistorySnapshot | null;
+}
+
 export interface JtvMachineTreeNode {
   readonly id: string;
   readonly name: string;
   readonly children: readonly JtvMachineTreeNode[];
+}
+
+export interface JtvMachineTab {
+  readonly id: string;
+  readonly name: string;
+  readonly isRoot: boolean;
 }
 
 interface JtvDesignMachine {
@@ -115,6 +137,16 @@ interface JtvDesignMachine {
   readonly parameterAssignments: Readonly<Record<string, string>>;
   readonly tapeCount: number;
   readonly submachineIds: readonly string[];
+}
+
+interface DesignMachineClipboard {
+  readonly file: JtvFile;
+  readonly operation: 'copy' | 'cut';
+}
+
+interface CanvasClipboard {
+  readonly fragment: JtvCanvasFragment;
+  readonly operation: 'copy' | 'cut';
 }
 
 interface AteNavigationFrame {
@@ -393,26 +425,31 @@ export class JtvStore {
   private readonly machineGraphRunner = new MachineGraphRunner();
   private readonly historyRevision = signal(0);
   private readonly machineWorkspaceRevision = signal(0);
-  private undoStack: JtvHistorySnapshot[] = [];
-  private redoStack: JtvHistorySnapshot[] = [];
-  private lastHistorySnapshot: JtvHistorySnapshot | null = null;
-  private historyTransactionStart: JtvHistorySnapshot | null = null;
+  private machineHistories = new Map<string, JtvMachineHistory>();
   private rootDesignMachineId = this.state().selectedMachine.id;
   private activeDesignMachineId = this.state().selectedMachine.id;
+  private readonly openDesignMachineTabIds = signal<readonly string[]>([this.state().selectedMachine.id]);
   private selectedChildSubmachineId: string | null = null;
   private designMachines = new Map<string, JtvDesignMachine>();
+  private designMachineClipboard: DesignMachineClipboard | null = null;
+  private readonly designMachineClipboardRevision = signal(0);
+  private canvasClipboard: CanvasClipboard | null = null;
+  private readonly canvasClipboardRevision = signal(0);
+  private readonly selectedCanvasNodeIds = signal<ReadonlySet<string>>(new Set<string>());
+  private readonly selectedCanvasLinkIds = signal<ReadonlySet<string>>(new Set<string>());
+  private canvasPastePoint: ViewPoint = { x: 30, y: 30 };
   private ateNavigationStack: AteNavigationFrame[] = [];
 
   readonly activeToolId = computed(() => this.state().activeToolId);
   readonly canUndo = computed(() => {
     this.historyRevision();
 
-    return this.undoStack.length > 0;
+    return (this.machineHistories.get(this.activeDesignMachineId)?.undoStack.length ?? 0) > 0;
   });
   readonly canRedo = computed(() => {
     this.historyRevision();
 
-    return this.redoStack.length > 0;
+    return (this.machineHistories.get(this.activeDesignMachineId)?.redoStack.length ?? 0) > 0;
   });
   readonly activeMachineTreeNodeId = computed(() => {
     this.machineWorkspaceRevision();
@@ -423,6 +460,28 @@ export class JtvStore {
     this.machineWorkspaceRevision();
 
     return this.rootDesignMachineId;
+  });
+  readonly activeDesignMachineTabId = computed(() => {
+    this.machineWorkspaceRevision();
+
+    return this.activeDesignMachineId;
+  });
+  readonly designMachineTabs = computed<JtvMachineTab[]>(() => {
+    this.machineWorkspaceRevision();
+
+    return this.openDesignMachineTabIds()
+      .map((machineId) => this.designMachines.get(machineId))
+      .filter((machine): machine is JtvDesignMachine => !!machine)
+      .map((machine) => ({
+        id: machine.id,
+        name: machine.selectedMachine.name,
+        isRoot: machine.id === this.rootDesignMachineId,
+      }));
+  });
+  readonly canPasteDesignMachine = computed(() => {
+    this.designMachineClipboardRevision();
+
+    return this.designMachineClipboard !== null;
   });
   readonly machineTree = computed(() => {
     this.machineWorkspaceRevision();
@@ -453,6 +512,17 @@ export class JtvStore {
   readonly machineGraph = computed(() => this.state().machineGraph);
   readonly selectedCanvasNodeId = computed(() => this.state().selectedCanvasNodeId);
   readonly selectedCanvasLinkId = computed(() => this.state().selectedCanvasLinkId);
+  readonly hasCanvasSelection = computed(() =>
+    this.state().selectedCanvasNodeId !== null ||
+    this.state().selectedCanvasLinkId !== null ||
+    this.selectedCanvasNodeIds().size > 0 ||
+    this.selectedCanvasLinkIds().size > 0,
+  );
+  readonly canPasteCanvasElements = computed(() => {
+    this.canvasClipboardRevision();
+
+    return this.canvasClipboard !== null;
+  });
   readonly insertedParameters = computed(() => this.state().metaValues.parameters);
   readonly lastTapeReferenceCount = computed(() => {
     const lastTapeIndex = this.state().tapes.length - 1;
@@ -465,7 +535,8 @@ export class JtvStore {
     const view = this.state().machineGraphView;
     const activeNodeId = this.activeAteMachineNodeId();
     const activeLinkId = this.activeAteLinkId();
-    const { machineGraph, selectedCanvasLinkId, selectedCanvasNodeId, tapes } = this.state();
+    const { activeToolId, machineGraph, selectedCanvasLinkId, selectedCanvasNodeId, tapes } = this.state();
+    const showCanvasSelection = activeToolId === 'pointer';
     const linkLabels = this.getMachineLinkLabels(machineGraph, tapes.length > 1);
 
     return {
@@ -473,7 +544,9 @@ export class JtvStore {
       nodes: view.nodes.map((node) => ({
         ...node,
         selected: node.nodeId === activeNodeId,
-        canvasSelected: node.nodeId === selectedCanvasNodeId,
+        canvasSelected: showCanvasSelection && (
+          node.nodeId === selectedCanvasNodeId || this.selectedCanvasNodeIds().has(node.nodeId)
+        ),
         submachineShortName: this.getSubmachineShortNameForNodeView(node.nodeId),
         submachineTooltip: this.getSubmachineTooltipForNodeView(node.nodeId),
       })),
@@ -481,7 +554,9 @@ export class JtvStore {
         ...link,
         label: linkLabels.get(link.linkId) ?? link.label,
         selected: link.linkId === activeLinkId,
-        canvasSelected: link.linkId === selectedCanvasLinkId,
+        canvasSelected: showCanvasSelection && (
+          link.linkId === selectedCanvasLinkId || this.selectedCanvasLinkIds().has(link.linkId)
+        ),
       })),
     };
   });
@@ -518,6 +593,8 @@ export class JtvStore {
   }
 
   selectTool(toolId: JtvToolId | null): void {
+    this.selectedCanvasNodeIds.set(new Set());
+    this.selectedCanvasLinkIds.set(new Set());
     this.patchState({
       activeToolId: toolId,
       selectedCanvasLinkId: null,
@@ -528,6 +605,8 @@ export class JtvStore {
   toggleTool(toolId: JtvToolId): void {
     const nextToolId = this.state().activeToolId === toolId ? null : toolId;
 
+    this.selectedCanvasNodeIds.set(new Set());
+    this.selectedCanvasLinkIds.set(new Set());
     this.patchState({
       activeToolId: nextToolId,
       selectedCanvasLinkId: null,
@@ -552,7 +631,7 @@ export class JtvStore {
       },
     }));
     this.saveActiveDesignMachine();
-    this.lastHistorySnapshot = this.captureHistorySnapshot();
+    this.syncCurrentHistorySnapshot();
   }
 
   selectParameter(parameter: string): void {
@@ -603,6 +682,10 @@ export class JtvStore {
       return;
     }
 
+    this.selectedCanvasNodeIds.set(new Set());
+    this.selectedCanvasLinkIds.set(new Set());
+    this.selectedCanvasNodeIds.set(new Set());
+    this.selectedCanvasLinkIds.set(new Set());
     this.patchState({
       selectedCanvasLinkId: null,
       selectedCanvasNodeId: nodeId,
@@ -614,6 +697,8 @@ export class JtvStore {
       return;
     }
 
+    this.selectedCanvasNodeIds.set(new Set());
+    this.selectedCanvasLinkIds.set(new Set());
     this.patchState({
       selectedCanvasLinkId: linkId,
       selectedCanvasNodeId: null,
@@ -621,6 +706,8 @@ export class JtvStore {
   }
 
   clearCanvasSelection(): void {
+    this.selectedCanvasNodeIds.set(new Set());
+    this.selectedCanvasLinkIds.set(new Set());
     this.patchState({
       selectedCanvasLinkId: null,
       selectedCanvasNodeId: null,
@@ -1206,6 +1293,139 @@ export class JtvStore {
     this.markMachineDirty();
   }
 
+  selectCanvasRegion(bounds: { x: number; y: number; width: number; height: number }): void {
+    if (this.state().activeToolId !== 'pointer') {
+      return;
+    }
+
+    const selectedNodeIds = new Set(
+      this.state().machineGraphView.nodes
+        .filter((node) => this.canvasRegionIntersectsNode(bounds, node))
+        .map((node) => node.nodeId),
+    );
+    const selectedLinkIds = new Set<string>();
+
+    for (const autolink of this.state().machineGraph.autolinks ?? []) {
+      if (autolink.node?.id && selectedNodeIds.has(autolink.node.id)) {
+        selectedLinkIds.add(autolink.id);
+      }
+    }
+
+    for (const link of this.state().machineGraph.links) {
+      const sourceNodeId = link.sourceGroup?.exit?.id ?? null;
+      const targetNodeId = link.targetNode?.id ?? link.targetGroup?.entry?.id ?? null;
+
+      if (sourceNodeId && targetNodeId && selectedNodeIds.has(sourceNodeId) && selectedNodeIds.has(targetNodeId)) {
+        selectedLinkIds.add(link.id);
+      }
+    }
+
+    this.selectedCanvasNodeIds.set(selectedNodeIds);
+    this.selectedCanvasLinkIds.set(selectedLinkIds);
+    this.canvasPastePoint = { x: bounds.x, y: bounds.y };
+    this.patchState({
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: null,
+    });
+  }
+
+  setCanvasPastePoint(point: ViewPoint): void {
+    this.canvasPastePoint = point;
+  }
+
+  copySelectedCanvasElements(): boolean {
+    if (this.state().activeToolId !== 'pointer') {
+      return false;
+    }
+
+    const selectedNodeIds = this.getCanvasClipboardNodeIds();
+    const fragment = createJtvCanvasFragment(this.state(), selectedNodeIds);
+
+    if (!fragment) {
+      return false;
+    }
+
+    this.canvasClipboard = { fragment, operation: 'copy' };
+    this.bumpCanvasClipboardRevision();
+
+    return true;
+  }
+
+  cutSelectedCanvasElements(): boolean {
+    if (!this.copySelectedCanvasElements()) {
+      return false;
+    }
+
+    const selectedNodeIds = this.getCanvasClipboardNodeIds();
+
+    this.canvasClipboard = {
+      fragment: this.canvasClipboard!.fragment,
+      operation: 'cut',
+    };
+    this.applyRemovedCanvasNodes(selectedNodeIds);
+
+    return true;
+  }
+
+  pasteCanvasElements(): boolean {
+    if (this.state().activeToolId !== 'pointer' || !this.canvasClipboard) {
+      return false;
+    }
+
+    const pasted = restoreJtvCanvasFragment(this.canvasClipboard.fragment, this.canvasPastePoint);
+    const pastedNodeIds = new Set(pasted.machineGraphView.nodes.map((node) => node.nodeId));
+    const pastedLinkIds = new Set(pasted.machineGraphView.links.map((link) => link.linkId));
+    const currentGraphIsEmpty = this.state().machineGraph.groups.length === 0;
+
+    if (currentGraphIsEmpty) {
+      const initialGroup = pasted.machineGraph.groups[0];
+
+      if (initialGroup?.entry) {
+        initialGroup.entry.isInitial = true;
+      }
+    }
+
+    this.state.update((current) => ({
+      ...current,
+      machineGraph: {
+        groups: [...current.machineGraph.groups, ...pasted.machineGraph.groups],
+        links: [...current.machineGraph.links, ...pasted.machineGraph.links],
+        autolinks: [...(current.machineGraph.autolinks ?? []), ...(pasted.machineGraph.autolinks ?? [])],
+        initialGroupId: currentGraphIsEmpty
+          ? pasted.machineGraph.groups[0]?.id ?? ''
+          : current.machineGraph.initialGroupId,
+      },
+      machineGraphView: {
+        groups: [...current.machineGraphView.groups, ...pasted.machineGraphView.groups],
+        nodes: [
+          ...current.machineGraphView.nodes,
+          ...pasted.machineGraphView.nodes.map((node) => ({
+            ...node,
+            initial: currentGraphIsEmpty && node.nodeId === pasted.machineGraph.groups[0]?.entry?.id,
+          })),
+        ],
+        links: [...current.machineGraphView.links, ...pasted.machineGraphView.links],
+      },
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: null,
+    }));
+    this.selectedCanvasNodeIds.set(pastedNodeIds);
+    this.selectedCanvasLinkIds.set(pastedLinkIds);
+    this.canvasPastePoint = {
+      x: this.canvasPastePoint.x + 20,
+      y: this.canvasPastePoint.y + 20,
+    };
+
+    if (this.canvasClipboard.operation === 'cut') {
+      this.canvasClipboard = null;
+      this.bumpCanvasClipboardRevision();
+    }
+
+    this.markMachineDirty();
+
+    return true;
+  }
+
   changeCanvasNodeTape(nodeId: string): void {
     if (this.state().activeToolId !== 'pointer') {
       return;
@@ -1452,6 +1672,11 @@ export class JtvStore {
 
   deleteSelectedCanvasElement(): void {
     const { selectedCanvasLinkId, selectedCanvasNodeId } = this.state();
+
+    if (this.selectedCanvasNodeIds().size > 0) {
+      this.applyRemovedCanvasNodes(this.selectedCanvasNodeIds());
+      return;
+    }
 
     if (selectedCanvasNodeId) {
       this.deleteCanvasNode(selectedCanvasNodeId);
@@ -1768,57 +1993,65 @@ export class JtvStore {
   }
 
   undo(): void {
-    if (this.undoStack.length === 0) {
+    const history = this.getActiveMachineHistory();
+
+    if (history.undoStack.length === 0) {
       return;
     }
 
     const currentSnapshot = this.captureHistorySnapshot();
-    const previousSnapshot = this.undoStack.pop()!;
+    const previousSnapshot = history.undoStack.pop()!;
 
-    this.redoStack.push(currentSnapshot);
+    history.redoStack.push(currentSnapshot);
     this.applyHistorySnapshot(previousSnapshot);
-    this.lastHistorySnapshot = previousSnapshot;
+    history.lastSnapshot = previousSnapshot;
     this.bumpHistoryRevision();
     this.markMachineDirty();
   }
 
   redo(): void {
-    if (this.redoStack.length === 0) {
+    const history = this.getActiveMachineHistory();
+
+    if (history.redoStack.length === 0) {
       return;
     }
 
     const currentSnapshot = this.captureHistorySnapshot();
-    const nextSnapshot = this.redoStack.pop()!;
+    const nextSnapshot = history.redoStack.pop()!;
 
-    this.undoStack.push(currentSnapshot);
+    history.undoStack.push(currentSnapshot);
     this.applyHistorySnapshot(nextSnapshot);
-    this.lastHistorySnapshot = nextSnapshot;
+    history.lastSnapshot = nextSnapshot;
     this.bumpHistoryRevision();
     this.markMachineDirty();
   }
 
   beginMachineHistoryTransaction(): void {
-    if (this.historyTransactionStart) {
+    const history = this.getActiveMachineHistory();
+
+    if (history.transactionStart) {
       return;
     }
 
-    this.historyTransactionStart = this.lastHistorySnapshot ?? this.captureHistorySnapshot();
+    history.transactionStart = history.lastSnapshot ?? this.captureHistorySnapshot();
   }
 
   commitMachineHistoryTransaction(): void {
-    if (!this.historyTransactionStart) {
+    const history = this.getActiveMachineHistory();
+
+    if (!history.transactionStart) {
       return;
     }
 
-    const transactionStart = this.historyTransactionStart;
+    const transactionStart = history.transactionStart;
     const currentSnapshot = this.captureHistorySnapshot();
 
-    this.historyTransactionStart = null;
+    history.transactionStart = null;
 
     if (!this.areHistorySnapshotsEqual(transactionStart, currentSnapshot)) {
-      this.pushUndoSnapshot(transactionStart);
-      this.redoStack = [];
-      this.lastHistorySnapshot = currentSnapshot;
+      this.pushUndoSnapshot(history, transactionStart);
+      history.redoStack.length = 0;
+      history.lastSnapshot = currentSnapshot;
       this.bumpHistoryRevision();
       this.fileService.markDirty();
     }
@@ -1880,12 +2113,43 @@ export class JtvStore {
   }
 
   selectDesignMachine(machineId: string): void {
-    if (machineId === this.activeDesignMachineId || !this.designMachines.has(machineId)) {
+    if (!this.designMachines.has(machineId)) {
+      return;
+    }
+
+    this.openDesignMachineTab(machineId);
+
+    if (machineId === this.activeDesignMachineId) {
       return;
     }
 
     this.loadDesignMachine(machineId);
     this.selectChildSubmachineByName(null);
+  }
+
+  closeDesignMachineTab(machineId: string): boolean {
+    const openTabIds = this.openDesignMachineTabIds();
+
+    if (machineId === this.rootDesignMachineId || !openTabIds.includes(machineId)) {
+      return false;
+    }
+
+    const closedTabIndex = openTabIds.indexOf(machineId);
+    const remainingTabIds = openTabIds.filter((openMachineId) => openMachineId !== machineId);
+
+    this.openDesignMachineTabIds.set(remainingTabIds);
+
+    if (machineId === this.activeDesignMachineId) {
+      const nextMachineId = remainingTabIds[Math.min(closedTabIndex, remainingTabIds.length - 1)]
+        ?? this.rootDesignMachineId;
+
+      this.loadDesignMachine(nextMachineId);
+      this.selectChildSubmachineByName(null);
+    } else {
+      this.bumpMachineWorkspaceRevision();
+    }
+
+    return true;
   }
 
   selectChildSubmachineByName(machineName: string | null): void {
@@ -1905,6 +2169,67 @@ export class JtvStore {
     return parent ? this.hasSubmachineReference(parent.machine, machineId) : false;
   }
 
+  copyDesignMachine(machineId: string): boolean {
+    this.saveActiveDesignMachine();
+
+    if (!this.designMachines.has(machineId)) {
+      return false;
+    }
+
+    this.designMachineClipboard = {
+      file: this.createFileFromDesignMachine(machineId),
+      operation: 'copy',
+    };
+    this.bumpDesignMachineClipboardRevision();
+
+    return true;
+  }
+
+  cutDesignMachine(machineId: string): boolean {
+    this.saveActiveDesignMachine();
+    const parent = this.findParentDesignMachine(machineId);
+
+    if (!parent || machineId === this.rootDesignMachineId || this.hasSubmachineReference(parent.machine, machineId)) {
+      return false;
+    }
+
+    this.designMachineClipboard = {
+      file: this.createFileFromDesignMachine(machineId),
+      operation: 'cut',
+    };
+    this.bumpDesignMachineClipboardRevision();
+
+    return this.removeDesignMachineSubtree(machineId, parent);
+  }
+
+  pasteDesignMachine(parentMachineId: string): string | null {
+    this.saveActiveDesignMachine();
+    const parentMachine = this.designMachines.get(parentMachineId);
+    const clipboard = this.designMachineClipboard;
+
+    if (!parentMachine || !clipboard) {
+      return null;
+    }
+
+    const submachine = this.createDesignMachineFromFile(clipboard.file);
+
+    this.ensureUniqueDesignMachineSubtreeNames(submachine.id);
+    this.designMachines.set(parentMachine.id, {
+      ...parentMachine,
+      submachineIds: [...parentMachine.submachineIds, submachine.id],
+    });
+    this.designMachineClipboard = null;
+    this.bumpDesignMachineClipboardRevision();
+    this.selectedChildSubmachineId = submachine.id;
+    this.activeDesignMachineId = submachine.id;
+    this.openDesignMachineTab(submachine.id);
+    this.loadDesignMachine(submachine.id, { saveCurrent: false });
+    this.bumpMachineWorkspaceRevision();
+    this.fileService.markDirty();
+
+    return submachine.id;
+  }
+
   deleteDesignMachine(machineId: string): boolean {
     this.saveActiveDesignMachine();
     const parent = this.findParentDesignMachine(machineId);
@@ -1913,6 +2238,23 @@ export class JtvStore {
       return false;
     }
 
+    const deletedMachineIds = this.collectDesignMachineSubtreeIds(machineId);
+    const deleted = this.removeDesignMachineSubtree(machineId, parent);
+
+    if (deleted) {
+      for (const deletedMachineId of deletedMachineIds) {
+        this.machineHistories.delete(deletedMachineId);
+      }
+      this.bumpHistoryRevision();
+    }
+
+    return deleted;
+  }
+
+  private removeDesignMachineSubtree(
+    machineId: string,
+    parent: { id: string; machine: JtvDesignMachine },
+  ): boolean {
     const deletedMachineIds = this.collectDesignMachineSubtreeIds(machineId);
 
     this.designMachines.set(parent.id, {
@@ -1923,6 +2265,9 @@ export class JtvStore {
     for (const deletedMachineId of deletedMachineIds) {
       this.designMachines.delete(deletedMachineId);
     }
+    this.openDesignMachineTabIds.update((machineIds) =>
+      machineIds.filter((openMachineId) => !deletedMachineIds.includes(openMachineId)),
+    );
 
     if (this.selectedChildSubmachineId && deletedMachineIds.includes(this.selectedChildSubmachineId)) {
       this.selectedChildSubmachineId = null;
@@ -1954,6 +2299,7 @@ export class JtvStore {
     });
     this.selectedChildSubmachineId = submachine.id;
     this.activeDesignMachineId = submachine.id;
+    this.openDesignMachineTab(submachine.id);
     this.loadDesignMachine(submachine.id, { saveCurrent: false });
     this.bumpMachineWorkspaceRevision();
     this.fileService.markDirty();
@@ -2066,6 +2412,9 @@ export class JtvStore {
     this.rootDesignMachineId = designMachine.id;
     this.activeDesignMachineId = designMachine.id;
     this.designMachines = new Map([[designMachine.id, designMachine]]);
+    this.openDesignMachineTabIds.set([designMachine.id]);
+    this.selectedCanvasNodeIds.set(new Set());
+    this.selectedCanvasLinkIds.set(new Set());
     this.bumpMachineWorkspaceRevision();
   }
 
@@ -2075,6 +2424,7 @@ export class JtvStore {
 
     this.rootDesignMachineId = rootMachine.id;
     this.activeDesignMachineId = rootMachine.id;
+    this.openDesignMachineTabIds.set([rootMachine.id]);
   }
 
   private createDesignMachineFromFile(file: JtvFile): JtvDesignMachine {
@@ -2189,6 +2539,9 @@ export class JtvStore {
     const tapes = createTapeStates(machine.tapeCount);
 
     this.activeDesignMachineId = machine.id;
+    this.openDesignMachineTab(machine.id);
+    this.selectedCanvasNodeIds.set(new Set());
+    this.selectedCanvasLinkIds.set(new Set());
     this.state.update((current) => ({
       ...current,
       activeToolId: null,
@@ -2224,6 +2577,14 @@ export class JtvStore {
       name: machine.selectedMachine.name,
       children: machine.submachineIds.map((submachineId) => this.createMachineTreeNode(submachineId)),
     };
+  }
+
+  private openDesignMachineTab(machineId: string): void {
+    if (!this.designMachines.has(machineId) || this.openDesignMachineTabIds().includes(machineId)) {
+      return;
+    }
+
+    this.openDesignMachineTabIds.update((machineIds) => [...machineIds, machineId]);
   }
 
   private getSubmachineShortNameForNodeView(nodeId: string): string | undefined {
@@ -2302,6 +2663,38 @@ export class JtvStore {
     ];
   }
 
+  private ensureUniqueDesignMachineSubtreeNames(machineId: string): void {
+    for (const subtreeMachineId of this.collectDesignMachineSubtreeIds(machineId)) {
+      const machine = this.designMachines.get(subtreeMachineId);
+
+      if (!machine) {
+        continue;
+      }
+
+      const baseName = machine.selectedMachine.name;
+      let uniqueName = baseName;
+      let suffix = 1;
+
+      while (this.hasDesignMachineName(uniqueName, { exceptMachineId: subtreeMachineId })) {
+        uniqueName = `${baseName}_${suffix}`;
+        suffix++;
+      }
+
+      if (uniqueName === baseName) {
+        continue;
+      }
+
+      this.designMachines.set(subtreeMachineId, {
+        ...machine,
+        selectedMachine: {
+          ...machine.selectedMachine,
+          name: uniqueName,
+        },
+      });
+      this.updateSubmachineNodeReferences(subtreeMachineId, uniqueName);
+    }
+  }
+
   private createFileFromDesignMachine(machineId: string): JtvFile {
     const machine = this.designMachines.get(machineId);
 
@@ -2322,6 +2715,14 @@ export class JtvStore {
 
   private bumpMachineWorkspaceRevision(): void {
     this.machineWorkspaceRevision.update((revision) => revision + 1);
+  }
+
+  private bumpDesignMachineClipboardRevision(): void {
+    this.designMachineClipboardRevision.update((revision) => revision + 1);
+  }
+
+  private bumpCanvasClipboardRevision(): void {
+    this.canvasClipboardRevision.update((revision) => revision + 1);
   }
 
   private createUniqueDesignMachineId(preferredId: string): string {
@@ -2345,20 +2746,86 @@ export class JtvStore {
     }));
   }
 
+  private getCanvasClipboardNodeIds(): ReadonlySet<string> {
+    if (this.selectedCanvasNodeIds().size > 0) {
+      return new Set(this.selectedCanvasNodeIds());
+    }
+
+    const selectedNodeId = this.state().selectedCanvasNodeId;
+
+    if (selectedNodeId) {
+      return new Set([selectedNodeId]);
+    }
+
+    const selectedLinkId = this.state().selectedCanvasLinkId;
+
+    if (!selectedLinkId) {
+      return new Set();
+    }
+
+    const autolink = (this.state().machineGraph.autolinks ?? []).find((item) => item.id === selectedLinkId);
+
+    if (autolink?.node?.id) {
+      return new Set([autolink.node.id]);
+    }
+
+    const link = this.state().machineGraph.links.find((item) => item.id === selectedLinkId);
+    const nodeIds = [
+      ...(link?.sourceGroup ? getMachineGroupNodes(link.sourceGroup).map((node) => node.id) : []),
+      ...(link?.targetGroup ? getMachineGroupNodes(link.targetGroup).map((node) => node.id) : []),
+    ];
+
+    return new Set(nodeIds);
+  }
+
+  private applyRemovedCanvasNodes(removedNodeIds: ReadonlySet<string>): void {
+    const restored = removeJtvCanvasNodes(this.state(), removedNodeIds);
+
+    this.state.update((current) => ({
+      ...current,
+      machineGraph: restored.machineGraph,
+      machineGraphView: restored.machineGraphView,
+      metaValues: restored.metaValues,
+      selectedCanvasLinkId: null,
+      selectedCanvasNodeId: null,
+    }));
+    this.selectedCanvasNodeIds.set(new Set());
+    this.selectedCanvasLinkIds.set(new Set());
+    this.markMachineDirty();
+  }
+
+  private canvasRegionIntersectsNode(
+    bounds: { x: number; y: number; width: number; height: number },
+    node: MachineGraphView['nodes'][number],
+  ): boolean {
+    const nodeWidth = node.kind === 'hub' ? 12 : node.width ?? Math.max(16, node.label.length * 14);
+    const nodeHeight = node.kind === 'hub' ? 12 : node.height ?? 32;
+    const nodeLeft = node.kind === 'hub' ? node.position.x - 6 : node.position.x - 5;
+    const nodeTop = node.kind === 'hub' ? node.position.y - 6 : node.position.y - 26;
+
+    return (
+      nodeLeft < bounds.x + bounds.width &&
+      nodeLeft + nodeWidth > bounds.x &&
+      nodeTop < bounds.y + bounds.height &&
+      nodeTop + nodeHeight > bounds.y
+    );
+  }
+
   private markMachineDirty(): void {
     this.refreshMachineMetaValues();
+    const history = this.getActiveMachineHistory();
 
-    if (this.historyTransactionStart) {
+    if (history.transactionStart) {
       this.fileService.markDirty();
       return;
     }
 
     const currentSnapshot = this.captureHistorySnapshot();
 
-    if (this.lastHistorySnapshot && !this.areHistorySnapshotsEqual(this.lastHistorySnapshot, currentSnapshot)) {
-      this.pushUndoSnapshot(this.lastHistorySnapshot);
-      this.redoStack = [];
-      this.lastHistorySnapshot = currentSnapshot;
+    if (history.lastSnapshot && !this.areHistorySnapshotsEqual(history.lastSnapshot, currentSnapshot)) {
+      this.pushUndoSnapshot(history, history.lastSnapshot);
+      history.redoStack.length = 0;
+      history.lastSnapshot = currentSnapshot;
       this.bumpHistoryRevision();
     }
 
@@ -2384,24 +2851,49 @@ export class JtvStore {
   }
 
   private resetHistory(): void {
-    this.undoStack = [];
-    this.redoStack = [];
-    this.historyTransactionStart = null;
-    this.lastHistorySnapshot = this.captureHistorySnapshot();
+    this.machineHistories = new Map([
+      [this.activeDesignMachineId, this.createMachineHistory(this.captureHistorySnapshot())],
+    ]);
     this.bumpHistoryRevision();
   }
 
-  private pushUndoSnapshot(snapshot: JtvHistorySnapshot): void {
-    this.undoStack.push(snapshot);
+  private pushUndoSnapshot(history: JtvMachineHistory, snapshot: JtvHistorySnapshot): void {
+    history.undoStack.push(snapshot);
 
-    if (this.undoStack.length > JtvStore.MAX_HISTORY_SIZE) {
-      this.undoStack.shift();
+    if (history.undoStack.length > JtvStore.MAX_HISTORY_SIZE) {
+      history.undoStack.shift();
     }
   }
 
   private syncCurrentHistorySnapshot(): void {
-    this.lastHistorySnapshot = this.captureHistorySnapshot();
+    const history = this.getActiveMachineHistory();
+
+    history.lastSnapshot = this.captureHistorySnapshot();
+    history.transactionStart = null;
     this.bumpHistoryRevision();
+  }
+
+  private getActiveMachineHistory(): JtvMachineHistory {
+    const existing = this.machineHistories.get(this.activeDesignMachineId);
+
+    if (existing) {
+      return existing;
+    }
+
+    const history = this.createMachineHistory(this.captureHistorySnapshot());
+
+    this.machineHistories.set(this.activeDesignMachineId, history);
+
+    return history;
+  }
+
+  private createMachineHistory(lastSnapshot: JtvHistorySnapshot | null): JtvMachineHistory {
+    return {
+      undoStack: [],
+      redoStack: [],
+      lastSnapshot,
+      transactionStart: null,
+    };
   }
 
   private captureHistorySnapshot(): JtvHistorySnapshot {

@@ -129,19 +129,19 @@ interface LanguageOption {
                   <img class="file-menu-icon" src="assets/images/ChangeTape16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.changeTape' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!hasCanvasSelection" (click)="runEditMenuAction($event, 'cut')">
                   <img class="file-menu-icon" src="assets/images/Cut16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.cut' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!hasCanvasSelection" (click)="runEditMenuAction($event, 'copy')">
                   <img class="file-menu-icon" src="assets/images/Copy16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.copy' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!canPasteCanvasElements" (click)="runEditMenuAction($event, 'paste')">
                   <img class="file-menu-icon" src="assets/images/Paste16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.paste' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!hasSelectedCanvasNode" (click)="runEditMenuAction($event, 'delete')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!hasCanvasSelection" (click)="runEditMenuAction($event, 'delete')">
                   <img class="file-menu-icon" src="assets/images/Delete16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.delete' | translate }}</span>
                 </button>
@@ -296,6 +296,8 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.cut' | translate"
               [title]="'topbar.menu.edit.cut' | translate"
+              [disabled]="!hasCanvasSelection"
+              (click)="cutSelectedCanvasElements()"
             >
               <img src="assets/images/Cut24.gif" alt="" />
             </button>
@@ -305,6 +307,8 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.copy' | translate"
               [title]="'topbar.menu.edit.copy' | translate"
+              [disabled]="!hasCanvasSelection"
+              (click)="copySelectedCanvasElements()"
             >
               <img src="assets/images/Copy24.gif" alt="" />
             </button>
@@ -314,6 +318,8 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.paste' | translate"
               [title]="'topbar.menu.edit.paste' | translate"
+              [disabled]="!canPasteCanvasElements"
+              (click)="pasteCanvasElements()"
             >
               <img src="assets/images/Paste24.gif" alt="" />
             </button>
@@ -323,6 +329,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.delete' | translate"
               [title]="'topbar.menu.edit.delete' | translate"
+              [disabled]="!hasCanvasSelection"
               (click)="deleteSelectedCanvasElement()"
             >
               <img src="assets/images/Delete24.gif" alt="" />
@@ -789,6 +796,14 @@ export class Topbar {
     return this.store.selectedCanvasNodeId() !== null;
   }
 
+  get hasCanvasSelection(): boolean {
+    return this.store.hasCanvasSelection();
+  }
+
+  get canPasteCanvasElements(): boolean {
+    return this.store.canPasteCanvasElements();
+  }
+
   get canMakeSelectedCanvasNodeInitial(): boolean {
     return this.store.canMakeSelectedCanvasNodeInitial();
   }
@@ -888,6 +903,18 @@ export class Topbar {
 
   deleteSelectedCanvasElement(): void {
     this.store.deleteSelectedCanvasElement();
+  }
+
+  cutSelectedCanvasElements(): void {
+    this.store.cutSelectedCanvasElements();
+  }
+
+  copySelectedCanvasElements(): void {
+    this.store.copySelectedCanvasElements();
+  }
+
+  pasteCanvasElements(): void {
+    this.store.pasteCanvasElements();
   }
 
   get menuItems(): MenuItem[] {
@@ -1007,7 +1034,10 @@ export class Topbar {
     this.openNotationChangeDialog();
   }
 
-  runEditMenuAction(event: Event, action: 'undo' | 'redo' | 'makeInitial' | 'changeTape' | 'delete'): void {
+  runEditMenuAction(
+    event: Event,
+    action: 'undo' | 'redo' | 'makeInitial' | 'changeTape' | 'cut' | 'copy' | 'paste' | 'delete',
+  ): void {
     event.preventDefault();
     event.stopPropagation();
     this.editMenuOpen = false;
@@ -1040,7 +1070,22 @@ export class Topbar {
       return;
     }
 
-    if (!this.hasSelectedCanvasNode) {
+    if (action === 'cut') {
+      this.cutSelectedCanvasElements();
+      return;
+    }
+
+    if (action === 'copy') {
+      this.copySelectedCanvasElements();
+      return;
+    }
+
+    if (action === 'paste') {
+      this.pasteCanvasElements();
+      return;
+    }
+
+    if (!this.hasCanvasSelection) {
       return;
     }
 

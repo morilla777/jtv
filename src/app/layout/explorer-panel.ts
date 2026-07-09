@@ -33,7 +33,13 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
           role="menu"
         >
           @for (item of machineContextMenuItems; track item.label) {
-          <button type="button" class="machine-context-menu-item" role="menuitem" (click)="runMachineContextMenuItem(item, $event)">
+          <button
+            type="button"
+            class="machine-context-menu-item"
+            role="menuitem"
+            [disabled]="item.disabled"
+            (click)="runMachineContextMenuItem(item, $event)"
+          >
             <img class="machine-context-menu-icon" [src]="item['data']?.iconSrc" alt="" />
             <span>{{ item.label }}</span>
           </button>
@@ -110,6 +116,7 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
               >
                 <ng-template pTemplate="default" let-node>
                   <span class="machine-tree-node" (contextmenu)="showMachineContextMenu(node, $event)">
+                    <img class="machine-tree-icon" src="assets/images/Gear.gif" alt="" />
                     <span>{{ node.label }}</span>
                   </span>
                 </ng-template>
@@ -280,8 +287,16 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
     .machine-tree-node {
       display: inline-flex;
       align-items: center;
+      gap: 0.1875rem;
       min-width: 0;
       line-height: 1;
+    }
+
+    .machine-tree-icon {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+      flex: 0 0 auto;
     }
 
     .machine-context-menu-item {
@@ -311,6 +326,15 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
 
     .machine-context-menu-item:hover {
       background: var(--p-content-hover-background);
+    }
+
+    .machine-context-menu-item:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+
+    .machine-context-menu-item:disabled:hover {
+      background: transparent;
     }
 
     .machine-context-menu-icon {
@@ -361,6 +385,9 @@ export class ExplorerPanel {
   private machinePropertiesDialogMachineId: string | null = null;
 
   get machineContextMenuItems(): MenuItem[] {
+    const selectedMachineId = this.selectedMachineNode?.data?.machineId ?? '';
+    const isRootMachine = selectedMachineId === this.store.rootMachineTreeNodeId();
+
     return [
       {
         label: this.i18n.translate('explorer.machineMenu.addNew'),
@@ -379,27 +406,31 @@ export class ExplorerPanel {
       },
       {
         label: this.i18n.translate('explorer.machineMenu.cut'),
+        disabled: !selectedMachineId || isRootMachine,
         data: {
           iconSrc: 'assets/images/Cut16.gif',
         },
-        command: () => undefined,
+        command: () => this.cutSubmachine(),
       },
       {
         label: this.i18n.translate('explorer.machineMenu.copy'),
+        disabled: !selectedMachineId,
         data: {
           iconSrc: 'assets/images/Copy16.gif',
         },
-        command: () => undefined,
+        command: () => this.copySubmachine(),
       },
       {
         label: this.i18n.translate('explorer.machineMenu.paste'),
+        disabled: !selectedMachineId || !this.store.canPasteDesignMachine(),
         data: {
           iconSrc: 'assets/images/Paste16.gif',
         },
-        command: () => undefined,
+        command: () => this.pasteSubmachine(),
       },
       {
         label: this.i18n.translate('explorer.machineMenu.delete'),
+        disabled: !selectedMachineId || isRootMachine,
         data: {
           iconSrc: 'assets/images/Delete16.gif',
         },
@@ -456,6 +487,12 @@ export class ExplorerPanel {
   selectedMachineNode: TreeNode | null = null;
   selectedAteNode: TreeNode | null = null;
   private ateTreeBusyToken = 0;
+  private readonly syncSelectedMachineTreeNodeEffect = effect(() => {
+    this.selectedMachineNode = this.findTreeNodeByMachineId(
+      this.mainMachineNodes(),
+      this.store.activeMachineTreeNodeId(),
+    );
+  });
   private readonly syncSelectedAteTreeNode = effect(() => {
     const selectedNodeId = this.store.selectedAteNode()?.id ?? null;
     const nodes = this.ateNodes();
@@ -555,6 +592,11 @@ export class ExplorerPanel {
     event.preventDefault();
     event.stopPropagation();
     this.machineContextMenuOpen = false;
+
+    if (item.disabled) {
+      return;
+    }
+
     item.command?.({ originalEvent: event, item });
   }
 
@@ -664,6 +706,46 @@ export class ExplorerPanel {
         });
       },
     });
+  }
+
+  cutSubmachine(): void {
+    const machineId = this.selectedMachineNode?.data?.machineId ?? '';
+
+    if (!machineId || machineId === this.store.rootMachineTreeNodeId()) {
+      return;
+    }
+
+    if (this.store.isDesignMachineReferencedByInvoker(machineId)) {
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'warn',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.submachineCutReferenced'),
+        sticky: true,
+        closable: true,
+      });
+      return;
+    }
+
+    if (this.store.cutDesignMachine(machineId)) {
+      this.syncSelectedMachineTreeNode();
+    }
+  }
+
+  copySubmachine(): void {
+    const machineId = this.selectedMachineNode?.data?.machineId ?? '';
+
+    if (machineId) {
+      this.store.copyDesignMachine(machineId);
+    }
+  }
+
+  pasteSubmachine(): void {
+    const parentMachineId = this.selectedMachineNode?.data?.machineId ?? '';
+
+    if (parentMachineId && this.store.pasteDesignMachine(parentMachineId)) {
+      this.syncSelectedMachineTreeNode();
+    }
   }
 
   async saveSubmachineAs(): Promise<void> {
@@ -840,7 +922,6 @@ export class ExplorerPanel {
     return {
       key: node.id,
       label: node.name || this.i18n.translate('explorer.ateRootLabel'),
-      icon: 'pi pi-cog',
       expanded: true,
       selectable: true,
       data: {
@@ -848,6 +929,15 @@ export class ExplorerPanel {
       },
       children: node.children.map((child) => this.toMachineTreeNode(child)),
     };
+  }
+
+  private syncSelectedMachineTreeNode(): void {
+    queueMicrotask(() => {
+      this.selectedMachineNode = this.findTreeNodeByMachineId(
+        this.mainMachineNodes(),
+        this.store.activeMachineTreeNodeId(),
+      );
+    });
   }
 
   private getSuggestedMachineFileName(machineName: string): string {

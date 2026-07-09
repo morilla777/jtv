@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { MessageService, type ToastMessageOptions } from 'primeng/api';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { SplitterModule } from 'primeng/splitter';
@@ -6,12 +6,13 @@ import { ToastModule } from 'primeng/toast';
 import { Subscription } from 'rxjs';
 import { Topbar } from './topbar';
 import { ExplorerPanel } from './explorer-panel';
-import { DesignerCanvasPanel } from './designer-canvas-panel';
+import { MachineEditorPanel } from './machine-editor-panel';
 import { PropertiesPanel } from './properties-panel';
 import { TapesPanel } from './tapes-panel';
 import { LoadingOverlay } from '../components/loading-overlay';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvFileService } from '../services/jtv-file.service';
+import { JtvStore } from '../stores/jtv.store';
 
 @Component({
   selector: 'app-shell',
@@ -21,7 +22,7 @@ import { JtvFileService } from '../services/jtv-file.service';
     ToastModule,
     Topbar,
     ExplorerPanel,
-    DesignerCanvasPanel,
+    MachineEditorPanel,
     PropertiesPanel,
     TapesPanel,
     LoadingOverlay,
@@ -56,7 +57,7 @@ import { JtvFileService } from '../services/jtv-file.service';
               </ng-template>
 
               <ng-template #panel>
-                <app-designer-canvas-panel />
+                <app-machine-editor-panel />
               </ng-template>
 
               <ng-template #panel>
@@ -160,6 +161,7 @@ import { JtvFileService } from '../services/jtv-file.service';
 export class AppShell implements OnInit, OnDestroy {
   private readonly messageService = inject(MessageService);
   private readonly fileService = inject(JtvFileService);
+  private readonly store = inject(JtvStore);
   private readonly subscriptions = new Subscription();
 
   readonly simulationToastModalVisible = signal(false);
@@ -192,7 +194,33 @@ export class AppShell implements OnInit, OnDestroy {
     this.simulationToastModalVisible.set(false);
   }
 
+  @HostListener('document:keydown', ['$event'])
+  handleHistoryShortcut(event: KeyboardEvent): void {
+    if (!event.ctrlKey || event.altKey || event.metaKey || this.isEditableTarget(event.target)) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+
+    if (key === 'z' && this.store.canUndo()) {
+      event.preventDefault();
+      this.store.undo();
+      return;
+    }
+
+    if (key === 'y' && this.store.canRedo()) {
+      event.preventDefault();
+      this.store.redo();
+    }
+  }
+
   private isSimulationToast(message: ToastMessageOptions): boolean {
     return message.key === 'simulation';
+  }
+
+  private isEditableTarget(target: EventTarget | null): boolean {
+    const element = target instanceof HTMLElement ? target : null;
+
+    return !!element?.closest('input, textarea, select, [contenteditable="true"]');
   }
 }

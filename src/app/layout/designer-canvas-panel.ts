@@ -43,6 +43,14 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
           </div>
         </ng-template>
       </p-contextMenu>
+      <p-contextMenu #canvasContextMenu [model]="canvasContextMenuItems">
+        <ng-template #item let-item>
+          <div class="node-context-menu-item">
+            <img class="node-context-menu-icon" [src]="item.data.iconSrc" alt="" />
+            <span>{{ item.label }}</span>
+          </div>
+        </ng-template>
+      </p-contextMenu>
 
       <div #canvasContainer class="canvas-container">
         <svg
@@ -53,9 +61,10 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
           [attr.viewBox]="viewBox()"
           preserveAspectRatio="xMinYMin slice"
           aria-label="Maquina de Turing modular"
+          (pointerdown)="rememberCanvasPointer($event)"
           (pointermove)="handleCanvasPointerMove($event)"
-          (pointerup)="stopDragging()"
-          (pointerleave)="stopDragging()"
+          (pointerup)="handleCanvasPointerUp($event)"
+          (pointerleave)="handleCanvasPointerLeave($event)"
           (contextmenu)="cancelTransitionDraft($event)"
         >
           <defs>
@@ -107,8 +116,20 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
             [attr.width]="canvasWidth()"
             [attr.height]="canvasHeight()"
             class="canvas-background"
+            (pointerdown)="startCanvasRegionSelection($event)"
             (click)="handleCanvasClick($event)"
+            (contextmenu)="showCanvasContextMenu($event)"
           ></rect>
+
+          @if (canvasSelectionRect(); as selection) {
+            <rect
+              class="canvas-selection-rect"
+              [attr.x]="selection.x"
+              [attr.y]="selection.y"
+              [attr.width]="selection.width"
+              [attr.height]="selection.height"
+            ></rect>
+          }
 
           <g class="machine-diagram">
             @for (node of machineGraphView().nodes; track node.nodeId) {
@@ -394,6 +415,13 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
       fill: #fff;
     }
 
+    .canvas-selection-rect {
+      fill: rgba(255, 0, 255, 0.08);
+      stroke: rgb(255, 0, 255);
+      stroke-width: 1;
+      pointer-events: none;
+    }
+
     .arrow-line {
       fill: none;
       stroke: #000;
@@ -623,6 +651,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private readonly settingsService = inject(JtvSettingsService);
   @ViewChild('nodeContextMenu') private nodeContextMenu?: ContextMenu;
   @ViewChild('linkContextMenu') private linkContextMenu?: ContextMenu;
+  @ViewChild('canvasContextMenu') private canvasContextMenu?: ContextMenu;
   @ViewChild('canvasContainer') private canvasContainer?: ElementRef<HTMLDivElement>;
   @ViewChild('designerSvg') private designerSvg?: ElementRef<SVGSVGElement>;
   private readonly hoveredNodeId = signal<string | null>(null);
@@ -640,6 +669,9 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   readonly conditionDialogMode = signal<'conditional-link' | 'autolink' | null>(null);
   readonly conditionDialogVisible = signal(false);
   private draggedNodeGroup: { nodeId: string; lastPoint: ViewPoint } | null = null;
+  private canvasSelectionStart: ViewPoint | null = null;
+  private readonly canvasSelectionCurrent = signal<ViewPoint | null>(null);
+  private suppressNextCanvasClick = false;
   private readonly clearTransitionDraftWhenToolChanges = effect(() => {
     if (!this.isLinkInsertionToolActive() && !this.isAutolinkInsertionToolActive()) {
       this.transitionSourceNodeId.set(null);
@@ -658,6 +690,21 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   readonly machineGraphView = computed(() => this.store.machineGraphView());
   readonly viewBox = computed(() => `0 0 ${this.canvasWidth()} ${this.canvasHeight()}`);
   readonly isPointerToolActive = computed(() => this.store.activeToolId() === 'pointer');
+  readonly canvasSelectionRect = computed(() => {
+    const start = this.canvasSelectionStart;
+    const current = this.canvasSelectionCurrent();
+
+    if (!start || !current) {
+      return null;
+    }
+
+    return {
+      x: Math.min(start.x, current.x),
+      y: Math.min(start.y, current.y),
+      width: Math.abs(current.x - start.x),
+      height: Math.abs(current.y - start.y),
+    };
+  });
   readonly isLinkInsertionToolActive = computed(() =>
     ['transition', 'conditional-transition'].includes(this.store.activeToolId() ?? ''),
   );
@@ -810,21 +857,21 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       data: {
         iconSrc: 'assets/images/Cut16.gif',
       },
-      disabled: true,
+      command: () => this.store.cutSelectedCanvasElements(),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.copy'),
       data: {
         iconSrc: 'assets/images/Copy16.gif',
       },
-      disabled: true,
+      command: () => this.store.copySelectedCanvasElements(),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.paste'),
       data: {
         iconSrc: 'assets/images/Paste16.gif',
       },
-      disabled: true,
+      command: () => this.store.pasteCanvasElements(),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.delete'),
@@ -836,11 +883,41 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   ];
   readonly linkContextMenuItems: MenuItem[] = [
     {
+      label: this.i18n.translate('topbar.menu.edit.cut'),
+      data: {
+        iconSrc: 'assets/images/Cut16.gif',
+      },
+      command: () => this.store.cutSelectedCanvasElements(),
+    },
+    {
+      label: this.i18n.translate('topbar.menu.edit.copy'),
+      data: {
+        iconSrc: 'assets/images/Copy16.gif',
+      },
+      command: () => this.store.copySelectedCanvasElements(),
+    },
+    {
+      label: this.i18n.translate('topbar.menu.edit.paste'),
+      data: {
+        iconSrc: 'assets/images/Paste16.gif',
+      },
+      command: () => this.store.pasteCanvasElements(),
+    },
+    {
       label: this.i18n.translate('topbar.menu.edit.delete'),
       data: {
         iconSrc: 'assets/images/Delete16.gif',
       },
       command: () => this.deleteContextLink(),
+    },
+  ];
+  readonly canvasContextMenuItems: MenuItem[] = [
+    {
+      label: this.i18n.translate('topbar.menu.edit.paste'),
+      data: {
+        iconSrc: 'assets/images/Paste16.gif',
+      },
+      command: () => this.store.pasteCanvasElements(),
     },
   ];
   private readonly updateContextMenuLabels = effect(() => {
@@ -852,7 +929,11 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.nodeContextMenuItems[3].label = this.i18n.translate('topbar.menu.edit.copy');
     this.nodeContextMenuItems[4].label = this.i18n.translate('topbar.menu.edit.paste');
     this.nodeContextMenuItems[5].label = this.i18n.translate('topbar.menu.edit.delete');
-    this.linkContextMenuItems[0].label = this.i18n.translate('topbar.menu.edit.delete');
+    this.linkContextMenuItems[0].label = this.i18n.translate('topbar.menu.edit.cut');
+    this.linkContextMenuItems[1].label = this.i18n.translate('topbar.menu.edit.copy');
+    this.linkContextMenuItems[2].label = this.i18n.translate('topbar.menu.edit.paste');
+    this.linkContextMenuItems[3].label = this.i18n.translate('topbar.menu.edit.delete');
+    this.canvasContextMenuItems[0].label = this.i18n.translate('topbar.menu.edit.paste');
   });
   private readonly updateCanvasSizeWhenGraphChanges = effect(() => {
     this.machineGraphView();
@@ -1159,17 +1240,92 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   }
 
   handleCanvasPointerMove(event: PointerEvent): void {
+    this.updateCanvasRegionSelection(event);
     this.dragSelectedNodeGroup(event);
     this.dragLinkVertex(event);
     this.updateTransitionDraft(event);
   }
 
   handleCanvasClick(event: MouseEvent): void {
+    if (this.suppressNextCanvasClick) {
+      this.suppressNextCanvasClick = false;
+      return;
+    }
+
     if (this.addTransitionDraftVertex(event)) {
       return;
     }
 
     this.insertNodeOnCanvas(event);
+
+    if (this.isPointerToolActive()) {
+      this.store.clearCanvasSelection();
+    }
+  }
+
+  rememberCanvasPointer(event: PointerEvent): void {
+    this.store.setCanvasPastePoint(this.getSvgPoint(event.currentTarget as SVGSVGElement, event));
+  }
+
+  startCanvasRegionSelection(event: PointerEvent): void {
+    if (!this.isPointerToolActive() || event.button !== 0) {
+      return;
+    }
+
+    const svg = (event.currentTarget as SVGGraphicsElement).ownerSVGElement;
+
+    if (!svg) {
+      return;
+    }
+
+    const point = this.getSvgPoint(svg, event);
+
+    event.preventDefault();
+    this.stopDragging();
+    this.store.clearCanvasSelection();
+    this.store.setCanvasPastePoint(point);
+    this.canvasSelectionStart = point;
+    this.canvasSelectionCurrent.set(point);
+  }
+
+  handleCanvasPointerUp(event: PointerEvent): void {
+    this.finishCanvasRegionSelection(event);
+    this.stopDragging();
+  }
+
+  handleCanvasPointerLeave(event: PointerEvent): void {
+    this.finishCanvasRegionSelection(event, false);
+    this.stopDragging();
+  }
+
+  private updateCanvasRegionSelection(event: PointerEvent): void {
+    if (!this.canvasSelectionStart) {
+      return;
+    }
+
+    this.canvasSelectionCurrent.set(this.getSvgPoint(event.currentTarget as SVGSVGElement, event));
+  }
+
+  private finishCanvasRegionSelection(event: PointerEvent, suppressClick = true): void {
+    if (!this.canvasSelectionStart) {
+      return;
+    }
+
+    const current = this.getSvgPoint(event.currentTarget as SVGSVGElement, event);
+    const bounds = {
+      x: Math.min(this.canvasSelectionStart.x, current.x),
+      y: Math.min(this.canvasSelectionStart.y, current.y),
+      width: Math.abs(current.x - this.canvasSelectionStart.x),
+      height: Math.abs(current.y - this.canvasSelectionStart.y),
+    };
+
+    if (bounds.width >= 4 || bounds.height >= 4) {
+      this.store.selectCanvasRegion(bounds);
+      this.suppressNextCanvasClick = suppressClick;
+    }
+
+    this.canvasSelectionStart = null;
+    this.canvasSelectionCurrent.set(null);
   }
 
   insertNodeOnCanvas(event: MouseEvent): void {
@@ -1318,7 +1474,13 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.draggedNodeGroup = null;
     this.contextMenuNodeId = nodeId;
     this.store.selectCanvasNode(nodeId);
+    const svg = (event.currentTarget as SVGGraphicsElement).ownerSVGElement;
+
+    if (svg) {
+      this.store.setCanvasPastePoint(this.getSvgPoint(svg, event));
+    }
     this.nodeContextMenuItems[0].disabled = !this.canMakeContextNodeInitial();
+    this.nodeContextMenuItems[4].disabled = !this.store.canPasteCanvasElements();
     this.nodeContextMenu?.show(event);
   }
 
@@ -1333,7 +1495,32 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.draggedNodeGroup = null;
     this.contextMenuLinkId = linkId;
     this.store.selectCanvasLink(linkId);
+    const svg = (event.currentTarget as SVGGraphicsElement).ownerSVGElement;
+
+    if (svg) {
+      this.store.setCanvasPastePoint(this.getSvgPoint(svg, event));
+    }
+    this.linkContextMenuItems[2].disabled = !this.store.canPasteCanvasElements();
     this.linkContextMenu?.show(event);
+  }
+
+  showCanvasContextMenu(event: MouseEvent): void {
+    if (!this.isPointerToolActive()) {
+      this.cancelTransitionDraft(event);
+      return;
+    }
+
+    const svg = (event.currentTarget as SVGGraphicsElement).ownerSVGElement;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (svg) {
+      this.store.setCanvasPastePoint(this.getSvgPoint(svg, event));
+    }
+
+    this.canvasContextMenuItems[0].disabled = !this.store.canPasteCanvasElements();
+    this.canvasContextMenu?.show(event);
   }
 
   cancelTransitionDraft(event?: Event): void {

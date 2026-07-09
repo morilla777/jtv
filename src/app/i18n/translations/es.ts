@@ -53,6 +53,7 @@ export const es: Record<string, string> = {
   'explorer.machineMenu.copy': 'Copiar',
   'explorer.machineMenu.paste': 'Pegar',
   'explorer.machineMenu.delete': 'Eliminar',
+  'editor.closeTab': 'Cerrar pesta\u00f1a',
   'explorer.machineMenu.saveAs': 'Guardar como...',
   'explorer.machineMenu.properties': 'Propiedades',
 
@@ -168,6 +169,7 @@ export const es: Record<string, string> = {
   'toast.legacyMachineImported': 'M\u00e1quina legacy importada desde {{fileName}}',
   'toast.legacyMachineImportError': 'No se pudo importar el archivo legacy',
   'toast.submachineReferenced': 'No puede eliminar esta m\u00e1quina ya que est\u00e1 referenciada desde la m\u00e1quina invocadora',
+  'toast.submachineCutReferenced': 'No puede cortar esta m\u00e1quina ya que est\u00e1 referenciada desde la m\u00e1quina invocadora',
   'confirm.yes': 'S\u00ed',
   'confirm.no': 'No',
   'confirm.deleteSubmachine': '\u00bfSeguro que desea eliminar esta m\u00e1quina?',

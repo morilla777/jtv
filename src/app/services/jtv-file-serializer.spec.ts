@@ -11,9 +11,12 @@ import { SubmachineNode } from '../models/core/submachine-node';
 import { WriterNode } from '../models/core/writer-node';
 import { MachineGraphView } from '../models/view';
 import {
+  createJtvCanvasFragment,
   createJtvFileFromState,
   JTV_FILE_FORMAT,
   JTV_FILE_VERSION,
+  removeJtvCanvasNodes,
+  restoreJtvCanvasFragment,
   restoreMachineFromJtvFile,
   type JtvFile,
 } from './jtv-file-serializer';
@@ -456,6 +459,55 @@ describe('JTV file serializer', () => {
     expect(restored.submachines).toHaveLength(1);
     expect(restored.submachines[0].machine.name).toBe('CHILD');
   });
+
+  it('splits a group safely when cutting nodes from its middle', () => {
+    const source = createClipboardFileSource();
+    const restored = removeJtvCanvasNodes(source, new Set(['node-b']));
+
+    expect(restored.machineGraph.groups).toHaveLength(2);
+    expect(restored.machineGraph.groups[0].entry?.id).toBe('node-a');
+    expect(restored.machineGraph.groups[0].entry?.next).toBeNull();
+    expect(restored.machineGraph.groups[1].entry?.id).toBe('node-c');
+    expect(restored.machineGraph.groups[1].entry?.previous).toBeNull();
+    expect(restored.machineGraphView.nodes.map((node) => node.nodeId)).toEqual(['node-a', 'node-c']);
+  });
+
+  it('pastes a canvas fragment with fresh IDs at the requested point', () => {
+    const source = createClipboardFileSource();
+    const fragment = createJtvCanvasFragment(source, new Set(['node-a', 'node-b']));
+
+    expect(fragment).not.toBeNull();
+
+    const restored = restoreJtvCanvasFragment(fragment!, { x: 200, y: 150 });
+
+    expect(restored.machineGraphView.nodes).toHaveLength(2);
+    expect(restored.machineGraphView.nodes[0].nodeId).not.toBe('node-a');
+    expect(restored.machineGraphView.nodes[0].position).toEqual({ x: 200, y: 150 });
+    expect(restored.machineGraphView.nodes[1].position).toEqual({ x: 230, y: 150 });
+  });
+
+  it('generates different IDs every time the same canvas fragment is pasted', () => {
+    const fragment = createJtvCanvasFragment(
+      createClipboardFileSource(),
+      new Set(['node-a', 'node-b']),
+    );
+
+    expect(fragment).not.toBeNull();
+
+    const firstPaste = restoreJtvCanvasFragment(fragment!, { x: 100, y: 100 });
+    const secondPaste = restoreJtvCanvasFragment(fragment!, { x: 200, y: 200 });
+    const firstIds = [
+      ...firstPaste.machineGraph.groups.map((group) => group.id),
+      ...firstPaste.machineGraphView.nodes.map((node) => node.nodeId),
+    ];
+    const secondIds = [
+      ...secondPaste.machineGraph.groups.map((group) => group.id),
+      ...secondPaste.machineGraphView.nodes.map((node) => node.nodeId),
+    ];
+
+    expect(secondIds).not.toEqual(firstIds);
+    expect(secondIds.every((id) => !firstIds.includes(id))).toBe(true);
+  });
 });
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -481,6 +533,36 @@ function createEmptyFileSource(id: string, name: string): Parameters<typeof crea
     machineGraphView: {
       groups: [],
       nodes: [],
+      links: [],
+    },
+    parameterAssignments: {},
+  };
+}
+
+function createClipboardFileSource(): Parameters<typeof createJtvFileFromState>[0] {
+  const nodes = linkNodes([
+    new WriterNode('node-a', 'a', 0, true),
+    new WriterNode('node-b', 'b', 0),
+    new WriterNode('node-c', 'c', 0),
+  ]);
+  const group = new LinearMachineGroup('group-abc', nodes[0], nodes[2]);
+
+  return {
+    selectedMachine: { id: 'machine', name: 'MACHINE' },
+    machineGraph: {
+      groups: [group],
+      links: [],
+      autolinks: [],
+      initialGroupId: group.id,
+    },
+    machineGraphView: {
+      groups: [{ groupId: group.id, position: { x: 10, y: 20 }, width: 80, height: 32 }],
+      nodes: nodes.map((node, index) => ({
+        nodeId: node.id,
+        groupId: group.id,
+        label: node.name,
+        position: { x: 10 + index * 30, y: 20 },
+      })),
       links: [],
     },
     parameterAssignments: {},

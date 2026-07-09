@@ -11,7 +11,8 @@ import { MoveRightNode } from '../models/core/move-right-node';
 import { SymbolValue } from '../models/core/symbol-value';
 import { SubmachineNode } from '../models/core/submachine-node';
 import { WriterNode } from '../models/core/writer-node';
-import { MachineGraphView } from '../models/view';
+import { Tape } from '../models/core/tape';
+import { MachineGraphView, ViewPoint } from '../models/view';
 import type { JtvMachineState, JtvTapeState } from '../stores/jtv.store';
 
 export const JTV_FILE_FORMAT = 'jtv-web-machine';
@@ -91,6 +92,11 @@ export interface JtvFileSource {
 
 export interface JtvFileSerializerOptions {
   readonly preserveIds?: boolean;
+  readonly regenerateIds?: boolean;
+}
+
+export interface JtvCanvasFragment {
+  readonly file: JtvFile;
 }
 
 export interface RestoredJtvMachine {
@@ -126,7 +132,9 @@ export function createJtvFileFromState(state: JtvFileSource, options: JtvFileSer
     version: JTV_FILE_VERSION,
     machine: {
       ...state.selectedMachine,
-      id: options.preserveIds || isUuid(state.selectedMachine.id) ? state.selectedMachine.id : createUuid(),
+      id: options.preserveIds || (!options.regenerateIds && isUuid(state.selectedMachine.id))
+        ? state.selectedMachine.id
+        : createUuid(),
     },
     parameterAssignments: { ...state.parameterAssignments },
     metaValues,
@@ -230,6 +238,80 @@ export function restoreMachineFromJtvFile(file: JtvFile): RestoredJtvMachine {
     tapeCount: file.tapeCount,
     submachines: file.submachines ?? [],
   };
+}
+
+export function createJtvCanvasFragment(
+  state: JtvFileSource,
+  selectedNodeIds: ReadonlySet<string>,
+): JtvCanvasFragment | null {
+  if (selectedNodeIds.size === 0) {
+    return null;
+  }
+
+  const file = filterJtvFileNodes(
+    createJtvFileFromState(state, { preserveIds: true }),
+    selectedNodeIds,
+    false,
+  );
+
+  return file.graph.nodes.length > 0 ? { file } : null;
+}
+
+export function removeJtvCanvasNodes(
+  state: JtvFileSource,
+  removedNodeIds: ReadonlySet<string>,
+): RestoredJtvMachine {
+  const file = createJtvFileFromState(state, { preserveIds: true });
+  const remainingNodeIds = new Set(
+    file.graph.nodes
+      .map((node) => node.id)
+      .filter((nodeId) => !removedNodeIds.has(nodeId)),
+  );
+
+  return restoreMachineFromJtvFile(filterJtvFileNodes(file, remainingNodeIds, true));
+}
+
+export function restoreJtvCanvasFragment(
+  fragment: JtvCanvasFragment,
+  target: ViewPoint,
+): RestoredJtvMachine {
+  const restored = restoreMachineFromJtvFile(fragment.file);
+  const rekeyed = createJtvFileFromState({
+    selectedMachine: restored.selectedMachine,
+    machineGraph: restored.machineGraph,
+    machineGraphView: restored.machineGraphView,
+    parameterAssignments: restored.parameterAssignments,
+    metaValues: restored.metaValues,
+    tapes: Array.from({ length: restored.tapeCount }, (_, index) => ({
+      id: `tape-${index + 1}`,
+      name: `Cinta ${index + 1}`,
+      tape: new Tape(),
+    })),
+    submachines: restored.submachines,
+  }, { regenerateIds: true });
+  const anchor = getViewAnchor(rekeyed.view.nodes);
+  const delta = {
+    x: target.x - anchor.x,
+    y: target.y - anchor.y,
+  };
+
+  return restoreMachineFromJtvFile({
+    ...rekeyed,
+    view: {
+      groups: rekeyed.view.groups.map((group) => ({
+        ...group,
+        position: translatePoint(group.position, delta),
+      })),
+      nodes: rekeyed.view.nodes.map((node) => ({
+        ...node,
+        position: translatePoint(node.position, delta),
+      })),
+      links: rekeyed.view.links.map((link) => ({
+        ...link,
+        points: link.points?.map((point) => translatePoint(point, delta)),
+      })),
+    },
+  });
 }
 
 function assertJtvFile(file: JtvFile): void {
@@ -374,6 +456,154 @@ function restoreLinkTargetNode(
   }
 
   return bestMatch ? nodes.get(bestMatch.nodeId) ?? targetGroup.entry : targetGroup.entry;
+}
+
+function filterJtvFileNodes(
+  file: JtvFile,
+  includedNodeIds: ReadonlySet<string>,
+  preserveInitialNode: boolean,
+): JtvFile {
+  const nodeGroupIds = new Map<string, string>();
+  const filteredGroups: PersistedGroup[] = [];
+  const filteredGroupViews: MachineGraphView['groups'][number][] = [];
+
+  for (const group of file.graph.groups) {
+    const runs: string[][] = [];
+    let currentRun: string[] = [];
+
+    for (const nodeId of group.nodeIds) {
+      if (includedNodeIds.has(nodeId)) {
+        currentRun.push(nodeId);
+      } else if (currentRun.length > 0) {
+        runs.push(currentRun);
+        currentRun = [];
+      }
+    }
+
+    if (currentRun.length > 0) {
+      runs.push(currentRun);
+    }
+
+    for (let runIndex = 0; runIndex < runs.length; runIndex++) {
+      const nodeIds = runs[runIndex];
+      const groupId = runIndex === 0 ? group.id : createUuid();
+      const nodeViews = file.view.nodes.filter((node) => nodeIds.includes(node.nodeId));
+      const originalView = file.view.groups.find((view) => view.groupId === group.id);
+      const minX = Math.min(...nodeViews.map((node) => node.position.x));
+      const maxX = Math.max(...nodeViews.map((node) => node.position.x + (node.width ?? 20)));
+
+      filteredGroups.push({ id: groupId, nodeIds });
+      filteredGroupViews.push({
+        ...originalView,
+        groupId,
+        position: {
+          x: Number.isFinite(minX) ? minX : originalView?.position.x ?? 0,
+          y: nodeViews[0]?.position.y ?? originalView?.position.y ?? 0,
+        },
+        width: Number.isFinite(maxX - minX) ? Math.max(30, maxX - minX) : originalView?.width,
+      });
+
+      for (const nodeId of nodeIds) {
+        nodeGroupIds.set(nodeId, groupId);
+      }
+    }
+  }
+
+  const originalGroupById = new Map(file.graph.groups.map((group) => [group.id, group]));
+  const directLinks = file.graph.links
+    .filter((link) => {
+      const sourceNodeId = link.sourceGroupId
+        ? originalGroupById.get(link.sourceGroupId)?.nodeIds.at(-1)
+        : null;
+      const targetNodeId = link.targetNodeId ?? (
+        link.targetGroupId ? originalGroupById.get(link.targetGroupId)?.nodeIds[0] : null
+      );
+
+      return !!sourceNodeId && !!targetNodeId &&
+        includedNodeIds.has(sourceNodeId) && includedNodeIds.has(targetNodeId);
+    })
+    .map((link) => ({
+      ...link,
+      sourceGroupId: link.sourceGroupId
+        ? nodeGroupIds.get(originalGroupById.get(link.sourceGroupId)?.nodeIds.at(-1) ?? '') ?? null
+        : null,
+      targetGroupId: link.targetNodeId
+        ? nodeGroupIds.get(link.targetNodeId) ?? null
+        : link.targetGroupId
+          ? nodeGroupIds.get(originalGroupById.get(link.targetGroupId)?.nodeIds[0] ?? '') ?? null
+          : null,
+    }));
+  const autolinks = file.graph.autolinks
+    .filter((autolink) => !!autolink.nodeId && includedNodeIds.has(autolink.nodeId));
+  const includedLinkIds = new Set([
+    ...directLinks.map((link) => link.id),
+    ...autolinks.map((link) => link.id),
+  ]);
+  const originalInitialNode = file.graph.nodes.find((node) => node.isInitial);
+  const initialNodeId = preserveInitialNode && originalInitialNode && includedNodeIds.has(originalInitialNode.id)
+    ? originalInitialNode.id
+    : preserveInitialNode
+      ? filteredGroups[0]?.nodeIds[0] ?? null
+      : null;
+  const initialGroupId = initialNodeId ? nodeGroupIds.get(initialNodeId) ?? '' : filteredGroups[0]?.id ?? '';
+
+  return {
+    ...file,
+    graph: {
+      initialGroupId,
+      groups: filteredGroups,
+      nodes: file.graph.nodes
+        .filter((node) => includedNodeIds.has(node.id))
+        .map((node) => ({
+          ...node,
+          isInitial: node.id === initialNodeId,
+        })),
+      links: directLinks,
+      autolinks,
+    },
+    view: {
+      groups: filteredGroupViews,
+      nodes: file.view.nodes
+        .filter((node) => includedNodeIds.has(node.nodeId))
+        .map((node) => ({
+          ...node,
+          groupId: nodeGroupIds.get(node.nodeId) ?? node.groupId,
+          initial: node.nodeId === initialNodeId,
+          selected: undefined,
+          canvasSelected: undefined,
+        })),
+      links: file.view.links
+        .filter((link) => includedLinkIds.has(link.linkId))
+        .map((link) => ({
+          ...link,
+          sourceGroupId: link.kind === 'autolink'
+            ? nodeGroupIds.get(file.graph.autolinks.find((item) => item.id === link.linkId)?.nodeId ?? '') ?? ''
+            : directLinks.find((item) => item.id === link.linkId)?.sourceGroupId ?? '',
+          targetGroupId: link.kind === 'autolink'
+            ? nodeGroupIds.get(file.graph.autolinks.find((item) => item.id === link.linkId)?.nodeId ?? '') ?? ''
+            : directLinks.find((item) => item.id === link.linkId)?.targetGroupId ?? '',
+          targetNodeId: link.targetNodeId && includedNodeIds.has(link.targetNodeId)
+            ? link.targetNodeId
+            : undefined,
+          selected: undefined,
+          canvasSelected: undefined,
+        })),
+    },
+  };
+}
+
+function getViewAnchor(nodes: readonly MachineGraphView['nodes'][number][]): ViewPoint {
+  return {
+    x: Math.min(...nodes.map((node) => node.position.x)),
+    y: Math.min(...nodes.map((node) => node.position.y)),
+  };
+}
+
+function translatePoint(point: ViewPoint, delta: ViewPoint): ViewPoint {
+  return {
+    x: point.x + delta.x,
+    y: point.y + delta.y,
+  };
 }
 
 function getNodeLeftAnchor(node: MachineGraphView['nodes'][number]): { x: number; y: number } {
@@ -586,26 +816,46 @@ function createPersistenceIdMap(state: JtvFileSource, options: JtvFileSerializer
   const links = new Map<string, string>();
 
   for (const group of state.machineGraph.groups) {
-    groups.set(group.id, options.preserveIds ? group.id : getUuidForPersistence(group.id, usedIds));
+    groups.set(
+      group.id,
+      options.preserveIds
+        ? group.id
+        : getUuidForPersistence(group.id, usedIds, options.regenerateIds ?? false),
+    );
 
     for (const node of getGroupNodes(group)) {
-      nodes.set(node.id, options.preserveIds ? node.id : getUuidForPersistence(node.id, usedIds));
+      nodes.set(
+        node.id,
+        options.preserveIds
+          ? node.id
+          : getUuidForPersistence(node.id, usedIds, options.regenerateIds ?? false),
+      );
     }
   }
 
   for (const link of state.machineGraph.links) {
-    links.set(link.id, options.preserveIds ? link.id : getUuidForPersistence(link.id, usedIds));
+    links.set(
+      link.id,
+      options.preserveIds
+        ? link.id
+        : getUuidForPersistence(link.id, usedIds, options.regenerateIds ?? false),
+    );
   }
 
   for (const autolink of state.machineGraph.autolinks ?? []) {
-    links.set(autolink.id, options.preserveIds ? autolink.id : getUuidForPersistence(autolink.id, usedIds));
+    links.set(
+      autolink.id,
+      options.preserveIds
+        ? autolink.id
+        : getUuidForPersistence(autolink.id, usedIds, options.regenerateIds ?? false),
+    );
   }
 
   return { groups, nodes, links };
 }
 
-function getUuidForPersistence(id: string, usedIds: Set<string>): string {
-  if (isUuid(id) && !usedIds.has(id)) {
+function getUuidForPersistence(id: string, usedIds: Set<string>, regenerateId: boolean): string {
+  if (!regenerateId && isUuid(id) && !usedIds.has(id)) {
     usedIds.add(id);
     return id;
   }
