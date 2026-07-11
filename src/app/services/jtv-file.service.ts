@@ -1,6 +1,7 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { JtvFile } from './jtv-file-serializer';
+import { JtvFileValidatorService } from './jtv-file-validator.service';
 
 export interface OpenedJtvFile {
   readonly file: JtvFile;
@@ -36,6 +37,7 @@ interface FilePickerWindow extends Window {
 
 @Injectable({ providedIn: 'root' })
 export class JtvFileService {
+  private readonly validator: JtvFileValidatorService = inject(JtvFileValidatorService);
   private currentFileHandle: JtvFileHandle | null = null;
   private readonly activeFilePath = signal<string | null>(null);
   private readonly dirty = signal(false);
@@ -76,6 +78,9 @@ export class JtvFileService {
         multiple: false,
       });
       const file = await handle.getFile();
+      const parsedFile = JSON.parse(await file.text()) as unknown;
+
+      this.validator.validate(parsedFile);
 
       if (options.trackCurrentFile) {
         this.currentFileHandle = handle;
@@ -84,7 +89,7 @@ export class JtvFileService {
       }
 
       return {
-        file: JSON.parse(await file.text()) as JtvFile,
+        file: parsedFile,
         fileName: file.name,
       };
     }
@@ -166,6 +171,10 @@ export class JtvFileService {
         }
 
         try {
+          const parsedFile = JSON.parse(await file.text()) as unknown;
+
+          this.validator.validate(parsedFile);
+
           if (options.trackCurrentFile) {
             this.currentFileHandle = null;
             this.activeFilePath.set(file.name);
@@ -173,7 +182,7 @@ export class JtvFileService {
           }
 
           resolve({
-            file: JSON.parse(await file.text()) as JtvFile,
+            file: parsedFile,
             fileName: file.name,
           });
         } catch (error) {

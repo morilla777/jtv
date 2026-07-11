@@ -11,6 +11,7 @@ import { NotationChangeDialog } from '../components/notation-change-dialog';
 import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvFileService } from '../services/jtv-file.service';
+import { JtvFileValidatorService } from '../services/jtv-file-validator.service';
 import { LegacyJtvImporter } from '../services/legacy-jtv-importer';
 import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { TranslationService, type Language } from '../services/translation.service';
@@ -700,6 +701,7 @@ interface LanguageOption {
 export class Topbar {
   readonly i18n = inject(TranslationService);
   private readonly fileService = inject(JtvFileService);
+  private readonly fileValidator: JtvFileValidatorService = inject(JtvFileValidatorService);
   private readonly legacyImporter = inject(LegacyJtvImporter);
   private readonly loading = inject(LoadingIndicatorService);
   private readonly messageService = inject(MessageService);
@@ -868,6 +870,7 @@ export class Topbar {
       try {
         const importedFile = this.legacyImporter.importXml(await file.text());
 
+        this.fileValidator.validate(importedFile);
         this.store.importMachineFile(importedFile);
         this.fileService.clearCurrentFile();
         this.messageService.add({

@@ -60,11 +60,21 @@ export interface ConditionDialogValue {
 
           <fieldset class="condition-fieldset symbols-fieldset">
             <legend>{{ 'conditionDialog.symbols' | translate }}</legend>
-            <select [(ngModel)]="draft.selectedSymbols" multiple size="3" class="condition-list">
-              @for (symbol of symbols; track symbol) {
-                <option [ngValue]="symbol">{{ symbol }}</option>
-              }
-            </select>
+            <div class="condition-list-row">
+              <button
+                type="button"
+                class="condition-list-clear"
+                [title]="'conditionDialog.clearAll' | translate"
+                (click)="clearSymbolsSelection()"
+              >
+                <img src="assets/images/Delete16.gif" alt="" />
+              </button>
+              <select [(ngModel)]="draft.selectedSymbols" multiple size="3" class="condition-list">
+                @for (symbol of symbols; track symbol) {
+                  <option [ngValue]="symbol">{{ symbol }}</option>
+                }
+              </select>
+            </div>
           </fieldset>
 
           <fieldset class="condition-fieldset variable-fieldset">
@@ -81,11 +91,21 @@ export interface ConditionDialogValue {
 
           <fieldset class="condition-fieldset symbols-fieldset">
             <legend>{{ 'conditionDialog.variables' | translate }}</legend>
-            <select [(ngModel)]="draft.selectedVariables" multiple size="3" class="condition-list">
-              @for (variable of variables; track variable) {
-                <option [ngValue]="variable">{{ variable }}</option>
-              }
-            </select>
+            <div class="condition-list-row">
+              <button
+                type="button"
+                class="condition-list-clear"
+                [title]="'conditionDialog.clearAll' | translate"
+                (click)="clearVariablesSelection()"
+              >
+                <img src="assets/images/Delete16.gif" alt="" />
+              </button>
+              <select [(ngModel)]="draft.selectedVariables" multiple size="3" class="condition-list">
+                @for (variable of variables; track variable) {
+                  <option [ngValue]="variable">{{ variable }}</option>
+                }
+              </select>
+            </div>
           </fieldset>
 
           @if (showOrientation) {
@@ -133,11 +153,21 @@ export interface ConditionDialogValue {
 
           <fieldset class="condition-fieldset symbols-fieldset">
             <legend>{{ 'conditionDialog.parameters' | translate }}</legend>
-            <select [(ngModel)]="draft.selectedParameters" multiple size="3" class="condition-list">
-              @for (parameter of parameters; track parameter) {
-                <option [ngValue]="parameter">{{ parameter }}</option>
-              }
-            </select>
+            <div class="condition-list-row">
+              <button
+                type="button"
+                class="condition-list-clear"
+                [title]="'conditionDialog.clearAll' | translate"
+                (click)="clearParametersSelection()"
+              >
+                <img src="assets/images/Delete16.gif" alt="" />
+              </button>
+              <select [(ngModel)]="draft.selectedParameters" multiple size="3" class="condition-list">
+                @for (parameter of parameters; track parameter) {
+                  <option [ngValue]="parameter">{{ parameter }}</option>
+                }
+              </select>
+            </div>
           </fieldset>
         </div>
       </div>
@@ -216,6 +246,36 @@ export interface ConditionDialogValue {
       min-height: 3.5rem;
       font-family: 'Times New Roman', Times, serif;
       font-style: italic;
+    }
+
+    .condition-list-row {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      width: 100%;
+    }
+
+    .condition-list-clear {
+      width: 1.375rem;
+      height: 1.375rem;
+      padding: 0;
+      border: 1px solid var(--p-content-border-color);
+      background: var(--p-content-background);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+
+    .condition-list-clear:hover {
+      background: var(--p-content-hover-background);
+    }
+
+    .condition-list-clear img {
+      width: 16px;
+      height: 16px;
+      display: block;
     }
 
     .orientation-fieldset {
@@ -325,6 +385,27 @@ export class ConditionDialog implements OnChanges {
       selectedVariables: [],
       selectedParameters: [],
       orientation: 'right',
+    };
+  }
+
+  clearSymbolsSelection(): void {
+    this.draft = {
+      ...this.draft,
+      selectedSymbols: [],
+    };
+  }
+
+  clearVariablesSelection(): void {
+    this.draft = {
+      ...this.draft,
+      selectedVariables: [],
+    };
+  }
+
+  clearParametersSelection(): void {
+    this.draft = {
+      ...this.draft,
+      selectedParameters: [],
     };
   }
 

@@ -29,7 +29,9 @@ export interface MachineGraphRunOptions {
 
 export class MachineGraphRunner {
   run(graph: MachineGraph, context: ExecutionContext, traceRecorder?: AteTraceRecorder): boolean {
-    return this.runBurst(graph, context, traceRecorder).status === 'completed';
+    const status = this.runBurst(graph, context, traceRecorder).status;
+
+    return status === 'completed' || status === 'hanging';
   }
 
   runBurst(
@@ -174,7 +176,9 @@ export class MachineGraphRunner {
       }
 
       if (!nextLink) {
-        return { status: 'completed' };
+        return this.hasOutgoingLinks(graph.links, currentGroup)
+          ? { status: 'hanging' }
+          : { status: 'completed' };
       }
 
       if (!nextLink.canTraverse(context)) {
@@ -305,6 +309,10 @@ export class MachineGraphRunner {
     const conditionalTransitions = transitions.filter((transition) => transition.condition);
 
     return conditionalTransitions.length > 0 ? conditionalTransitions : transitions;
+  }
+
+  private hasOutgoingLinks(links: Link[], currentGroup: MachineGroup): boolean {
+    return links.some((link) => link.sourceGroup?.id === currentGroup.id);
   }
 
   private getNodeExecutionFailureStatus(node: MachineNode, context: ExecutionContext): MachineGraphRunStatus {

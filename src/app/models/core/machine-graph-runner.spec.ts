@@ -321,6 +321,43 @@ describe('MachineGraphRunner', () => {
     });
   });
 
+  it('returns hanging when outgoing links exist and none can traverse', () => {
+    const tape = new Tape();
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const startNode = new WriterNode('write-a', 'a', 0, true);
+    const firstTargetNode = new WriterNode('write-b', 'b', 0, true);
+    const secondTargetNode = new WriterNode('write-c', 'c', 0, true);
+    const startGroup = new LinearMachineGroup('start-group', startNode, startNode);
+    const firstTargetGroup = new LinearMachineGroup('first-target-group', firstTargetNode, firstTargetNode);
+    const secondTargetGroup = new LinearMachineGroup('second-target-group', secondTargetNode, secondTargetNode);
+    const graph: MachineGraph = {
+      groups: [startGroup, firstTargetGroup, secondTargetGroup],
+      links: [
+        new Link(
+          'branch-b',
+          startGroup,
+          firstTargetGroup,
+          new LinkCondition([{ tapeIndex: 0, acceptedValues: ['b'] }]),
+        ),
+        new Link(
+          'branch-c',
+          startGroup,
+          secondTargetGroup,
+          new LinkCondition([{ tapeIndex: 0, acceptedValues: ['c'] }]),
+        ),
+      ],
+      autolinks: [],
+      initialGroupId: startGroup.id,
+    };
+
+    const result = new MachineGraphRunner().runBurst(graph, context);
+
+    expect(result.status).toBe('hanging');
+  });
+
   it('returns error when the graph has no valid initial group', () => {
     const context = {
       tapes: [new Tape()],

@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jtv.local/schemas/jtv-file.schema.json",
+  "title": "JTV Web Machine File",
+  "type": "object",
+  "required": ["format", "version", "machine", "parameterAssignments", "metaValues", "tapeCount", "graph", "view"],
+  "additionalProperties": true,
+  "properties": {
+    "format": { "const": "jtv-web-machine" },
+    "version": { "const": 2 },
+    "machine": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "shortName": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "parameterAssignments": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "metaValues": {
+      "type": "object",
+      "required": ["variables", "parameters"],
+      "properties": {
+        "variables": { "type": "array", "items": { "type": "string" } },
+        "parameters": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "tapeCount": { "type": "integer", "minimum": 1 },
+    "submachines": {
+      "type": "array",
+      "items": { "$ref": "#" }
+    },
+    "graph": {
+      "type": "object",
+      "required": ["initialGroupId", "groups", "nodes", "links", "autolinks"],
+      "properties": {
+        "initialGroupId": { "type": "string" },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "nodeIds"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "nodeIds": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "name", "tapeIndex", "isInitial"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "type": { "enum": ["writer", "move-left", "move-right", "hub", "submachine"] },
+              "name": { "type": "string" },
+              "tapeIndex": { "type": "integer", "minimum": 0 },
+              "isInitial": { "type": "boolean" },
+              "submachineId": { "type": "string" },
+              "submachineName": { "type": "string" },
+              "displaySymbol": { "type": "string" },
+              "parameterName": { "type": "string" },
+              "submachineParameterAssignments": {
+                "type": "object",
+                "additionalProperties": { "type": "string" }
+              },
+              "displaySubscriptLabel": { "type": "string" }
+            }
+          }
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "sourceGroupId", "targetGroupId", "condition"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "sourceGroupId": { "type": ["string", "null"] },
+              "targetGroupId": { "type": ["string", "null"] },
+              "targetNodeId": { "type": ["string", "null"] },
+              "condition": { "$ref": "#/$defs/condition" }
+            }
+          }
+        },
+        "autolinks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "nodeId", "condition"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "nodeId": { "type": ["string", "null"] },
+              "condition": { "$ref": "#/$defs/condition" }
+            }
+          }
+        }
+      }
+    },
+    "view": {
+      "type": "object",
+      "required": ["groups", "nodes", "links"],
+      "properties": {
+        "groups": { "type": "array" },
+        "nodes": { "type": "array" },
+        "links": { "type": "array" }
+      }
+    }
+  },
+  "$defs": {
+    "condition": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["clauses"],
+          "properties": {
+            "clauses": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["tapeIndex", "acceptedValues", "negated"],
+                "properties": {
+                  "tapeIndex": { "type": "integer", "minimum": 0 },
+                  "acceptedValues": { "type": "array", "items": { "type": "string" } },
+                  "negated": { "type": "boolean" },
+                  "assignToVariableName": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

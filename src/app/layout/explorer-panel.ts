@@ -7,6 +7,7 @@ import { TranslatePipe } from '../pipes/translate.pipe';
 import { TranslationService } from '../services/translation.service';
 import { JtvSettingsService } from '../services/jtv-settings.service';
 import { JtvFileService } from '../services/jtv-file.service';
+import { JtvFileValidatorService } from '../services/jtv-file-validator.service';
 import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { MachinePropertiesDialog, MachinePropertiesDialogValue } from '../components/machine-properties-dialog';
 import { AteNode } from '../models/ate';
@@ -352,6 +353,7 @@ export class ExplorerPanel {
   private readonly i18n = inject(TranslationService);
   private readonly settingsService = inject(JtvSettingsService);
   private readonly fileService = inject(JtvFileService);
+  private readonly fileValidator: JtvFileValidatorService = inject(JtvFileValidatorService);
   private readonly loading = inject(LoadingIndicatorService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
@@ -671,13 +673,27 @@ export class ExplorerPanel {
       return;
     }
 
-    this.store.addExistingSubmachine(JSON.parse(await file.text()));
-    queueMicrotask(() => {
-      this.selectedMachineNode = this.findTreeNodeByMachineId(
-        this.mainMachineNodes(),
-        this.store.activeMachineTreeNodeId(),
-      );
-    });
+    try {
+      const parsedFile = JSON.parse(await file.text()) as unknown;
+
+      this.fileValidator.validate(parsedFile);
+      this.store.addExistingSubmachine(parsedFile);
+      queueMicrotask(() => {
+        this.selectedMachineNode = this.findTreeNodeByMachineId(
+          this.mainMachineNodes(),
+          this.store.activeMachineTreeNodeId(),
+        );
+      });
+    } catch {
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'error',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.machineOpenError'),
+        sticky: true,
+        closable: true,
+      });
+    }
   }
 
   deleteSubmachine(): void {
