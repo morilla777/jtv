@@ -433,6 +433,7 @@ interface LanguageOption {
         styleClass="about-dialog"
       >
         <img [src]="aboutSplashImageSrc" alt="Java Turing Visual" class="about-splash-image" />
+        <div class="about-legacy-text" [innerHTML]="'aboutDialog.legacyText' | translate"></div>
       </p-dialog>
     </div>
   `,
@@ -686,15 +687,33 @@ interface LanguageOption {
     }
 
     :host ::ng-deep .about-dialog .p-dialog-content {
-      padding: 0 10%;
-      overflow: hidden;
+      padding: 0 10% 1rem;
+      overflow: auto;
     }
 
     .about-splash-image {
       display: block;
-      width: 100%;
+      width: 82%;
       height: auto;
-      margin: 0 auto 10%;
+      margin: 0 auto 1rem;
+    }
+
+    .about-legacy-text {
+      font-family: inherit;
+      font-size: 0.82rem;
+      line-height: 1.25;
+      text-align: justify;
+    }
+
+    .about-legacy-text ::ng-deep .about-title {
+      text-align: center;
+      text-decoration: underline;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    .about-legacy-text ::ng-deep a {
+      color: var(--p-primary-color);
     }
   `],
 })

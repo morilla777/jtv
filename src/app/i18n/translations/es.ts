@@ -40,6 +40,7 @@ export const es: Record<string, string> = {
   'topbar.menu.settings.notationChange': 'Cambio de Notaci\u00f3n',
   'topbar.menu.help.contents': 'Contenidos',
   'topbar.menu.help.about': 'Acerca de JTV...',
+  'aboutDialog.legacyText': '<div class="about-title">JTV Sistema Gr&aacute;fico de Dise&ntilde;o y Ejecuci&oacute;n de M&aacute;quinas de Turing</div><div>&nbsp;&nbsp;&nbsp; Aplicaci&oacute;n JAVA correspondiente a la Memoria para Optar al T&iacute;tulo de Ingeniero Civil en Computaci&oacute;n de la Universidad de Chile, dise&ntilde;ada y constru&iacute;da por <a href="mailto:mmora@dcc.uchile.cl">Marco Antonio Mora Godoy</a> durante el Semestre Primavera del a&ntilde;o 2002, a fin de apoyar las labores docentes del curso <i>&quot;CC30B Fundamentos de Ciencia de la Computaci&oacute;n&quot;</i> dictado por el Departamento de Ciencias de la Computaci&oacute;n (DCC).<br>&nbsp;&nbsp; Consultas, aclaraci&oacute;n de dudas, o sugerencias de cualquier &iacute;ndole, se pueden realizar a la direcci&oacute;n de correo <a href="mailto:mmora@dcc.uchile.cl">mmora@dcc.uchile.cl</a> o visitando la p&aacute;gina oficial de JTV <a href="http://www.dcc.uchile.cl/jtv" target="_blank" rel="noopener noreferrer">www.dcc.uchile.cl/jtv</a>.</div>',
 
   // Explorer
   'explorer.title': 'Explorador',

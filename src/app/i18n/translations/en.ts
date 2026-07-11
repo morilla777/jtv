@@ -40,6 +40,7 @@ export const en: Record<string, string> = {
   'topbar.menu.settings.notationChange': 'Notation Change',
   'topbar.menu.help.contents': 'Contents',
   'topbar.menu.help.about': 'About JTV...',
+  'aboutDialog.legacyText': '<div class="about-title">JTV Graphical System for Designing and Executing Turing Machines</div><div>&nbsp;&nbsp;&nbsp; JAVA application corresponding to the thesis submitted to obtain the Civil Engineering in Computer Science degree at the University of Chile, designed and built by <a href="mailto:mmora@dcc.uchile.cl">Marco Antonio Mora Godoy</a> during the Spring Semester of 2002, to support teaching activities for the course <i>&quot;CC30B Fundamentals of Computer Science&quot;</i> taught by the Department of Computer Science (DCC).<br>&nbsp;&nbsp; Questions, clarifications, or suggestions of any kind can be sent to <a href="mailto:mmora@dcc.uchile.cl">mmora@dcc.uchile.cl</a> or by visiting the official JTV page <a href="http://www.dcc.uchile.cl/jtv" target="_blank" rel="noopener noreferrer">www.dcc.uchile.cl/jtv</a>.</div>',
 
   // Explorer
   'explorer.title': 'Explorer',

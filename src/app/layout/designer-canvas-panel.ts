@@ -767,7 +767,8 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       return null;
     }
 
-    const sourcePoint = this.getNodeRightAnchor(sourceNode);
+    const sourceReference = this.transitionDraftVertices()[0] ?? endPoint;
+    const sourcePoint = this.getNearestNodeAnchor(sourceNode, sourceReference);
     const points = [sourcePoint, ...this.transitionDraftVertices(), endPoint];
 
     return this.getPolylinePath(points);
@@ -1029,7 +1030,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       return '';
     }
 
-    return this.getPolylinePath(points);
+    return this.getPolylinePath(this.getRenderableLinkPoints(link));
   }
 
   getLinkLabelPosition(link: MachineLinkView): ViewPoint {
@@ -1037,7 +1038,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       return this.getAutolinkLabelPosition(link);
     }
 
-    const points = link.points ?? [];
+    const points = this.getRenderableLinkPoints(link);
 
     if (points.length < 2) {
       return points[0] ?? { x: 0, y: 0 };
@@ -1614,7 +1615,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       const sourceNode = this.machineGraphView().nodes.find((node) => node.nodeId === exitNodeId);
 
       if (sourceNode) {
-        this.transitionDraftEndPoint.set(this.getNodeRightAnchor(sourceNode));
+        this.transitionDraftEndPoint.set(this.getNodeVisualCenter(sourceNode));
       }
 
       return;
@@ -1642,22 +1643,6 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     }
 
     this.transitionDraftEndPoint.set(this.getSvgPoint(event.currentTarget as SVGSVGElement, event));
-  }
-
-  private getNodeRightAnchor(node: { kind?: string; label: string; position: ViewPoint; width?: number }): ViewPoint {
-    if (node.kind === 'hub') {
-      return {
-        x: node.position.x + 6,
-        y: node.position.y,
-      };
-    }
-
-    const width = node.width ?? Math.max(16, node.label.length * 14);
-
-    return {
-      x: node.position.x + width,
-      y: node.position.y - 10,
-    };
   }
 
   private createConditionDialogValue(): ConditionDialogValue {
@@ -1962,6 +1947,136 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       `M ${startPoint.x} ${startPoint.y}`,
       ...restPoints.map((point) => `L ${point.x} ${point.y}`),
     ].join(' ');
+  }
+
+  private getRenderableLinkPoints(link: MachineLinkView): readonly ViewPoint[] {
+    if (link.kind === 'autolink') {
+      return link.points ?? [];
+    }
+
+    const points = link.points ?? [];
+
+    if (points.length < 2) {
+      return points;
+    }
+
+    const sourceNode = this.getLinkSourceNode(link);
+    const targetNode = this.getLinkTargetNode(link);
+
+    if (!sourceNode || !targetNode) {
+      return points;
+    }
+
+    const intermediatePoints = points.slice(1, -1);
+    const sourceReference = intermediatePoints[0] ?? this.getNodeVisualCenter(targetNode);
+    const targetReference = intermediatePoints.at(-1) ?? this.getNodeVisualCenter(sourceNode);
+
+    return [
+      this.getNearestNodeAnchor(sourceNode, sourceReference),
+      ...intermediatePoints,
+      this.getNearestNodeAnchor(targetNode, targetReference),
+    ];
+  }
+
+  private getLinkSourceNode(link: MachineLinkView): MachineNodeView | null {
+    const sourceNodes = this.machineGraphView().nodes.filter((node) => node.groupId === link.sourceGroupId);
+
+    if (sourceNodes.length === 0) {
+      return null;
+    }
+
+    return sourceNodes.reduce((rightmostNode, node) =>
+      node.position.x > rightmostNode.position.x ? node : rightmostNode,
+    );
+  }
+
+  private getLinkTargetNode(link: MachineLinkView): MachineNodeView | null {
+    const nodes = this.machineGraphView().nodes;
+
+    if (link.targetNodeId) {
+      return nodes.find((node) => node.nodeId === link.targetNodeId) ?? null;
+    }
+
+    const targetNodes = nodes.filter((node) => node.groupId === link.targetGroupId);
+
+    if (targetNodes.length === 0) {
+      return null;
+    }
+
+    return targetNodes.reduce((leftmostNode, node) =>
+      node.position.x < leftmostNode.position.x ? node : leftmostNode,
+    );
+  }
+
+  private getNearestNodeAnchor(node: MachineNodeView, reference: ViewPoint): ViewPoint {
+    const anchors = this.getNodeAnchors(node);
+
+    return anchors.reduce((nearestAnchor, anchor) =>
+      this.getSquaredDistance(anchor, reference) < this.getSquaredDistance(nearestAnchor, reference)
+        ? anchor
+        : nearestAnchor,
+    );
+  }
+
+  private getNodeAnchors(node: MachineNodeView): readonly ViewPoint[] {
+    if (node.kind === 'hub') {
+      const radius = 6;
+      const diagonal = radius / Math.sqrt(2);
+
+      return [
+        { x: node.position.x, y: node.position.y - radius },
+        { x: node.position.x + diagonal, y: node.position.y - diagonal },
+        { x: node.position.x + radius, y: node.position.y },
+        { x: node.position.x + diagonal, y: node.position.y + diagonal },
+        { x: node.position.x, y: node.position.y + radius },
+        { x: node.position.x - diagonal, y: node.position.y + diagonal },
+        { x: node.position.x - radius, y: node.position.y },
+        { x: node.position.x - diagonal, y: node.position.y - diagonal },
+      ];
+    }
+
+    const bounds = this.getNodeVisualBounds(node);
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    const right = bounds.x + bounds.width;
+    const bottom = bounds.y + bounds.height;
+
+    return [
+      { x: centerX, y: bounds.y },
+      { x: right, y: bounds.y },
+      { x: right, y: centerY },
+      { x: right, y: bottom },
+      { x: centerX, y: bottom },
+      { x: bounds.x, y: bottom },
+      { x: bounds.x, y: centerY },
+      { x: bounds.x, y: bounds.y },
+    ];
+  }
+
+  private getNodeVisualCenter(node: MachineNodeView): ViewPoint {
+    if (node.kind === 'hub') {
+      return node.position;
+    }
+
+    const bounds = this.getNodeVisualBounds(node);
+
+    return {
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height / 2,
+    };
+  }
+
+  private getNodeVisualBounds(node: MachineNodeView): { x: number; y: number; width: number; height: number } {
+    const width = node.width ?? Math.max(16, node.label.length * 14);
+    const hasSubmachineCaption = !!node.submachineShortName;
+    const height = node.height ?? (hasSubmachineCaption ? 42 : 32);
+
+    return {
+      x: node.position.x - 5,
+      y: node.position.y - 26,
+      width,
+      height,
+    };
   }
 
   private getLongestSegment(points: readonly ViewPoint[]): { startPoint: ViewPoint; endPoint: ViewPoint } {
