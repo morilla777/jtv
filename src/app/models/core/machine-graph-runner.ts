@@ -4,6 +4,7 @@ import { Link } from './link';
 import { MachineGraph } from './machine-graph';
 import { MachineGroup } from './machine-group';
 import { MachineNode } from './machine-node';
+import { MoveLeftNode } from './move-left-node';
 import { type AteTraceRecorder } from '../ate';
 
 export interface MachineGraphExecutionPoint {
@@ -13,7 +14,7 @@ export interface MachineGraphExecutionPoint {
   readonly forcedTransitionId?: string;
 }
 
-export type MachineGraphRunStatus = 'completed' | 'failed' | 'suspended' | 'nondeterministic';
+export type MachineGraphRunStatus = 'completed' | 'failed' | 'suspended' | 'nondeterministic' | 'hanging' | 'error';
 
 export interface MachineGraphRunResult {
   readonly status: MachineGraphRunStatus;
@@ -42,7 +43,7 @@ export class MachineGraphRunner {
     let recordedSteps = 0;
 
     if (!point) {
-      return { status: 'failed' };
+      return { status: 'error' };
     }
 
     while (point) {
@@ -58,7 +59,7 @@ export class MachineGraphRunner {
       const currentGroup = this.findGroupById(graph, currentPoint.currentGroupId);
 
       if (!currentGroup) {
-        return { status: 'failed' };
+        return { status: 'error' };
       }
 
       if (currentPoint.phase === 'node') {
@@ -78,7 +79,7 @@ export class MachineGraphRunner {
         const ok = currentNode.execute(context);
 
         if (!ok) {
-          return { status: 'failed' };
+          return { status: this.getNodeExecutionFailureStatus(currentNode, context) };
         }
 
         traceRecorder?.recordMachineNode(currentNode);
@@ -97,7 +98,7 @@ export class MachineGraphRunner {
           : null;
 
         if (!currentNode) {
-          return { status: 'failed' };
+          return { status: 'error' };
         }
 
         const autolinks = this.findTraversableAutolinks(graph.autolinks ?? [], currentNode, context);
@@ -106,7 +107,7 @@ export class MachineGraphRunner {
           : autolinks[0];
 
         if (currentPoint.forcedTransitionId && !autolink) {
-          return { status: 'failed' };
+          return { status: 'error' };
         }
 
         if (!currentPoint.forcedTransitionId && autolinks.length > 1) {
@@ -123,7 +124,7 @@ export class MachineGraphRunner {
 
         if (autolink) {
           if (!autolink.canTraverse(context)) {
-            return { status: 'failed' };
+            return { status: 'hanging' };
           }
 
           traceRecorder?.recordLink(autolink);
@@ -157,7 +158,7 @@ export class MachineGraphRunner {
         : nextLinks[0];
 
       if (currentPoint.forcedTransitionId && !nextLink) {
-        return { status: 'failed' };
+        return { status: 'error' };
       }
 
       if (!currentPoint.forcedTransitionId && nextLinks.length > 1) {
@@ -177,7 +178,7 @@ export class MachineGraphRunner {
       }
 
       if (!nextLink.canTraverse(context)) {
-        return { status: 'failed' };
+        return { status: 'hanging' };
       }
 
       traceRecorder?.recordLink(nextLink);
@@ -304,5 +305,13 @@ export class MachineGraphRunner {
     const conditionalTransitions = transitions.filter((transition) => transition.condition);
 
     return conditionalTransitions.length > 0 ? conditionalTransitions : transitions;
+  }
+
+  private getNodeExecutionFailureStatus(node: MachineNode, context: ExecutionContext): MachineGraphRunStatus {
+    if (node instanceof MoveLeftNode && context.tapes[node.tapeIndex]?.getHeadPosition() === 0) {
+      return 'hanging';
+    }
+
+    return 'error';
   }
 }

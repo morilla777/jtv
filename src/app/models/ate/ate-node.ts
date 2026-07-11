@@ -19,6 +19,7 @@ export interface AteContinuationSnapshot {
 export interface AteNode {
   readonly id: string;
   readonly label: string;
+  readonly labelKey?: string;
   readonly iconSrc: string;
   readonly kind: AteNodeKind;
   readonly machineNodeId?: string;

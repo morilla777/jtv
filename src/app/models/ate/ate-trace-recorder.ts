@@ -54,6 +54,28 @@ export class AteTraceRecorder {
     });
   }
 
+  recordHanging(label: string = 'HANGING', labelKey: string = 'ate.hanging'): void {
+    this.root.children.push({
+      id: this.createEntryId('hanging'),
+      label,
+      labelKey,
+      iconSrc: this.getIconSrc('hanging_ATE.gif'),
+      kind: 'hanging',
+      children: [],
+    });
+  }
+
+  recordError(label: string = 'ERROR', labelKey: string = 'ate.error'): void {
+    this.root.children.push({
+      id: this.createEntryId('error'),
+      label,
+      labelKey,
+      iconSrc: this.getIconSrc('error_ATE.gif'),
+      kind: 'error',
+      children: [],
+    });
+  }
+
   recordNondeterminism(): void {
     this.root.children.push({
       id: this.createEntryId('nd'),

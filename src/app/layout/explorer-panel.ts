@@ -507,7 +507,7 @@ export class ExplorerPanel {
   private toTreeNode(node: AteNode): TreeNode {
     return {
       key: node.id,
-      label: node.kind === 'root' ? node.label || this.i18n.translate('explorer.ateRootLabel') : node.label,
+      label: this.getAteNodeLabel(node),
       data: {
         iconSrc: node.kind === 'root' ? this.getAteRootIconSrc() : this.getAteIconSrc(node.iconSrc),
         ateNodeId: node.id,
@@ -516,6 +516,14 @@ export class ExplorerPanel {
       selectable: true,
       children: node.children.map((child) => this.toTreeNode(child)),
     };
+  }
+
+  private getAteNodeLabel(node: AteNode): string {
+    if (node.kind === 'root') {
+      return node.label || this.i18n.translate('explorer.ateRootLabel');
+    }
+
+    return node.labelKey ? this.i18n.translate(node.labelKey) : node.label;
   }
 
   selectAteNode(node: TreeNode): void {

@@ -1,6 +1,8 @@
 import { Component, inject } from '@angular/core';
+import { ConfirmationService } from 'primeng/api';
 
 import { TranslatePipe } from '../pipes/translate.pipe';
+import { TranslationService } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 import { DesignerCanvasPanel } from './designer-canvas-panel';
 
@@ -16,12 +18,15 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
             [class.machine-tab-active]="tab.id === activeMachineTabId()"
             role="tab"
             [attr.aria-selected]="tab.id === activeMachineTabId()"
-            [title]="tab.name || ('explorer.ateRootLabel' | translate)"
+            [title]="getTabTitle(tab.name, tab.dirty)"
             (click)="activateTab(tab.id)"
           >
             <img class="machine-tab-icon" src="assets/images/Gear.gif" alt="" />
             <span class="machine-tab-label">
               {{ tab.name || ('explorer.ateRootLabel' | translate) }}
+              @if (tab.dirty) {
+                <span class="machine-tab-dirty" aria-hidden="true">*</span>
+              }
             </span>
             @if (!tab.isRoot) {
               <button
@@ -83,6 +88,7 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
       max-width: 13rem;
       padding: 0 0.45rem;
       border-right: 1px solid var(--p-content-border-color);
+      border-top: 3px solid transparent;
       color: var(--p-text-muted-color);
       cursor: pointer;
       font-size: 0.78rem;
@@ -92,6 +98,8 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
     .machine-tab-active {
       background: var(--p-content-background);
       color: var(--p-text-color);
+      border-top-color: red;
+      font-weight: 600;
     }
 
     .machine-tab-active::after {
@@ -100,7 +108,7 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
       bottom: 0;
       left: 0;
       height: 2px;
-      background: var(--p-primary-color);
+      background: red;
       content: '';
     }
 
@@ -116,6 +124,12 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .machine-tab-dirty {
+      margin-left: 0.125rem;
+      color: red;
+      font-weight: 700;
     }
 
     .machine-tab-close {
@@ -157,6 +171,8 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
 })
 export class MachineEditorPanel {
   private readonly store = inject(JtvStore);
+  private readonly confirmationService = inject(ConfirmationService);
+  private readonly i18n = inject(TranslationService);
 
   readonly machineTabs = this.store.designMachineTabs;
   readonly activeMachineTabId = this.store.activeDesignMachineTabId;
@@ -168,6 +184,26 @@ export class MachineEditorPanel {
   closeTab(machineId: string, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+
+    if (this.store.isDesignMachineDirty(machineId)) {
+      this.confirmationService.confirm({
+        key: 'machine',
+        message: this.i18n.translate('confirm.closeDirtyTab'),
+        acceptLabel: this.i18n.translate('confirm.yes'),
+        rejectLabel: this.i18n.translate('confirm.no'),
+        accept: () => {
+          this.store.closeDesignMachineTab(machineId);
+        },
+      });
+      return;
+    }
+
     this.store.closeDesignMachineTab(machineId);
+  }
+
+  getTabTitle(name: string, dirty: boolean): string {
+    const tabName = name || this.i18n.translate('explorer.ateRootLabel');
+
+    return dirty ? `${tabName} *` : tabName;
   }
 }

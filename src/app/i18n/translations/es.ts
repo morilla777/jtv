@@ -56,6 +56,8 @@ export const es: Record<string, string> = {
   'editor.closeTab': 'Cerrar pesta\u00f1a',
   'explorer.machineMenu.saveAs': 'Guardar como...',
   'explorer.machineMenu.properties': 'Propiedades',
+  'ate.hanging': 'COLGADA',
+  'ate.error': 'ERROR',
 
   // Designer
   'designer.title': 'Diseño de Máquina',
@@ -173,5 +175,6 @@ export const es: Record<string, string> = {
   'confirm.yes': 'S\u00ed',
   'confirm.no': 'No',
   'confirm.deleteSubmachine': '\u00bfSeguro que desea eliminar esta m\u00e1quina?',
+  'confirm.closeDirtyTab': 'La m\u00e1quina tiene cambios sin guardar. \u00bfDesea cerrar la pesta\u00f1a?',
 };
 

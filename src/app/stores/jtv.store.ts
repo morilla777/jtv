@@ -126,6 +126,7 @@ export interface JtvMachineTab {
   readonly id: string;
   readonly name: string;
   readonly isRoot: boolean;
+  readonly dirty: boolean;
 }
 
 interface JtvDesignMachine {
@@ -425,6 +426,7 @@ export class JtvStore {
   private readonly machineGraphRunner = new MachineGraphRunner();
   private readonly historyRevision = signal(0);
   private readonly machineWorkspaceRevision = signal(0);
+  private readonly dirtyDesignMachineIds = signal<ReadonlySet<string>>(new Set<string>());
   private machineHistories = new Map<string, JtvMachineHistory>();
   private rootDesignMachineId = this.state().selectedMachine.id;
   private activeDesignMachineId = this.state().selectedMachine.id;
@@ -468,6 +470,7 @@ export class JtvStore {
   });
   readonly designMachineTabs = computed<JtvMachineTab[]>(() => {
     this.machineWorkspaceRevision();
+    const dirtyMachineIds = this.dirtyDesignMachineIds();
 
     return this.openDesignMachineTabIds()
       .map((machineId) => this.designMachines.get(machineId))
@@ -476,6 +479,7 @@ export class JtvStore {
         id: machine.id,
         name: machine.selectedMachine.name,
         isRoot: machine.id === this.rootDesignMachineId,
+        dirty: dirtyMachineIds.has(machine.id),
       }));
   });
   readonly canPasteDesignMachine = computed(() => {
@@ -632,6 +636,43 @@ export class JtvStore {
     }));
     this.saveActiveDesignMachine();
     this.syncCurrentHistorySnapshot();
+  }
+
+  renameRootMachine(name: string): void {
+    this.saveActiveDesignMachine();
+    const rootMachine = this.designMachines.get(this.rootDesignMachineId);
+
+    if (!rootMachine) {
+      return;
+    }
+
+    const selectedMachine = {
+      ...rootMachine.selectedMachine,
+      name,
+    };
+
+    this.designMachines.set(rootMachine.id, {
+      ...rootMachine,
+      selectedMachine,
+    });
+
+    if (rootMachine.id === this.activeDesignMachineId) {
+      this.state.update((current) => ({
+        ...current,
+        ate: {
+          ...current.ate,
+          label: name,
+        },
+        selectedMachine,
+      }));
+      this.syncCurrentHistorySnapshot();
+    }
+
+    this.bumpMachineWorkspaceRevision();
+  }
+
+  getRootMachineName(): string {
+    return this.designMachines.get(this.rootDesignMachineId)?.selectedMachine.name ?? this.state().selectedMachine.name;
   }
 
   selectParameter(parameter: string): void {
@@ -1841,6 +1882,10 @@ export class JtvStore {
       traceRecorder.recordExpand(this.createAteContinuationSnapshot(result.continuation, context));
     } else if (result.status === 'nondeterministic' && result.continuations) {
       this.recordNondeterministicContinuations(traceRecorder, result.continuations, context);
+    } else if (result.status === 'hanging') {
+      traceRecorder.recordHanging();
+    } else if (result.status === 'error' || result.status === 'failed') {
+      traceRecorder.recordError();
     }
 
     this.state.update((current) => ({
@@ -1850,7 +1895,7 @@ export class JtvStore {
       tapes: current.tapes.map((tapeState) => ({ ...tapeState })),
     }));
 
-    return result.status !== 'failed';
+    return result.status !== 'failed' && result.status !== 'error';
   }
 
   continueAteExecution(expandNodeId: string): boolean {
@@ -1899,6 +1944,14 @@ export class JtvStore {
       this.recordNondeterministicContinuations(traceRecorder, result.continuations, context);
       keepMutableReplayContinuation(expandNode);
       deleteMutableContinuation(expandNode);
+    } else if (result.status === 'hanging') {
+      traceRecorder.recordHanging();
+      keepMutableReplayContinuation(expandNode);
+      deleteMutableContinuation(expandNode);
+    } else if (result.status === 'error' || result.status === 'failed') {
+      traceRecorder.recordError();
+      keepMutableReplayContinuation(expandNode);
+      deleteMutableContinuation(expandNode);
     }
 
     this.state.update((current) => ({
@@ -1916,7 +1969,7 @@ export class JtvStore {
       }),
     }));
 
-    return result.status !== 'failed';
+    return result.status !== 'failed' && result.status !== 'error';
   }
 
   private enterAteSubtrace(parentNode: AteNode, subtrace: AteSubtrace): void {
@@ -2152,6 +2205,14 @@ export class JtvStore {
     return true;
   }
 
+  isDesignMachineDirty(machineId: string): boolean {
+    return this.dirtyDesignMachineIds().has(machineId);
+  }
+
+  clearDesignMachineDirtyFlags(): void {
+    this.dirtyDesignMachineIds.set(new Set());
+  }
+
   selectChildSubmachineByName(machineName: string | null): void {
     const activeMachine = this.designMachines.get(this.activeDesignMachineId);
     const machineId = activeMachine?.submachineIds.find((submachineId) =>
@@ -2220,12 +2281,13 @@ export class JtvStore {
     });
     this.designMachineClipboard = null;
     this.bumpDesignMachineClipboardRevision();
+    this.markDesignMachineDirty(parentMachine.id);
+    this.markDesignMachineDirty(submachine.id);
     this.selectedChildSubmachineId = submachine.id;
     this.activeDesignMachineId = submachine.id;
     this.openDesignMachineTab(submachine.id);
     this.loadDesignMachine(submachine.id, { saveCurrent: false });
     this.bumpMachineWorkspaceRevision();
-    this.fileService.markDirty();
 
     return submachine.id;
   }
@@ -2245,6 +2307,7 @@ export class JtvStore {
       for (const deletedMachineId of deletedMachineIds) {
         this.machineHistories.delete(deletedMachineId);
       }
+      this.removeDesignMachineDirtyFlags(deletedMachineIds);
       this.bumpHistoryRevision();
     }
 
@@ -2276,8 +2339,9 @@ export class JtvStore {
     const nextMachineId = deletedMachineIds.includes(this.activeDesignMachineId) ? parent.id : this.activeDesignMachineId;
 
     this.loadDesignMachine(nextMachineId, { saveCurrent: false });
+    this.removeDesignMachineDirtyFlags(deletedMachineIds);
+    this.markDesignMachineDirty(parent.id);
     this.bumpMachineWorkspaceRevision();
-    this.fileService.markDirty();
 
     return true;
   }
@@ -2298,11 +2362,12 @@ export class JtvStore {
       submachineIds: [...parentMachine.submachineIds, submachine.id],
     });
     this.selectedChildSubmachineId = submachine.id;
+    this.markDesignMachineDirty(parentMachine.id);
+    this.markDesignMachineDirty(submachine.id);
     this.activeDesignMachineId = submachine.id;
     this.openDesignMachineTab(submachine.id);
     this.loadDesignMachine(submachine.id, { saveCurrent: false });
     this.bumpMachineWorkspaceRevision();
-    this.fileService.markDirty();
   }
 
   addNewSubmachine(properties: Pick<JtvMachineState, 'name' | 'shortName' | 'description'>): void {
@@ -2338,10 +2403,11 @@ export class JtvStore {
       submachineIds: [...parentMachine.submachineIds, submachine.id],
     });
     this.selectedChildSubmachineId = submachine.id;
+    this.markDesignMachineDirty(parentMachine.id);
+    this.markDesignMachineDirty(submachine.id);
     this.activeDesignMachineId = submachine.id;
     this.loadDesignMachine(submachine.id, { saveCurrent: false });
     this.bumpMachineWorkspaceRevision();
-    this.fileService.markDirty();
   }
 
   getDesignMachineProperties(machineId: string): Pick<JtvMachineState, 'name' | 'shortName' | 'description'> | null {
@@ -2389,6 +2455,7 @@ export class JtvStore {
       selectedMachine,
     });
     this.updateSubmachineNodeReferences(machineId, properties.name);
+    this.markDesignMachineDirty(machineId);
 
     if (machineId === this.activeDesignMachineId) {
       this.state.update((current) => ({
@@ -2402,7 +2469,6 @@ export class JtvStore {
     }
 
     this.bumpMachineWorkspaceRevision();
-    this.fileService.markDirty();
   }
 
   private resetMachineWorkspaceFromCurrentState(): void {
@@ -2413,6 +2479,7 @@ export class JtvStore {
     this.activeDesignMachineId = designMachine.id;
     this.designMachines = new Map([[designMachine.id, designMachine]]);
     this.openDesignMachineTabIds.set([designMachine.id]);
+    this.dirtyDesignMachineIds.set(new Set());
     this.selectedCanvasNodeIds.set(new Set());
     this.selectedCanvasLinkIds.set(new Set());
     this.bumpMachineWorkspaceRevision();
@@ -2425,6 +2492,7 @@ export class JtvStore {
     this.rootDesignMachineId = rootMachine.id;
     this.activeDesignMachineId = rootMachine.id;
     this.openDesignMachineTabIds.set([rootMachine.id]);
+    this.dirtyDesignMachineIds.set(new Set());
   }
 
   private createDesignMachineFromFile(file: JtvFile): JtvDesignMachine {
@@ -2640,12 +2708,19 @@ export class JtvStore {
 
   private updateSubmachineNodeReferences(submachineId: string, submachineName: string): void {
     for (const machine of this.designMachines.values()) {
+      let updated = false;
+
       for (const group of machine.machineGraph.groups) {
         for (const node of getMachineGroupNodes(group)) {
           if (node instanceof SubmachineNode && node.submachineId === submachineId) {
             node.submachineName = submachineName;
+            updated = true;
           }
         }
+      }
+
+      if (updated) {
+        this.markDesignMachineDirty(machine.id);
       }
     }
   }
@@ -2813,10 +2888,10 @@ export class JtvStore {
 
   private markMachineDirty(): void {
     this.refreshMachineMetaValues();
+    this.markDesignMachineDirty(this.activeDesignMachineId);
     const history = this.getActiveMachineHistory();
 
     if (history.transactionStart) {
-      this.fileService.markDirty();
       return;
     }
 
@@ -2828,8 +2903,24 @@ export class JtvStore {
       history.lastSnapshot = currentSnapshot;
       this.bumpHistoryRevision();
     }
+  }
 
+  private markDesignMachineDirty(machineId: string): void {
+    this.dirtyDesignMachineIds.update((current) => new Set([...current, machineId]));
     this.fileService.markDirty();
+    this.bumpMachineWorkspaceRevision();
+  }
+
+  private removeDesignMachineDirtyFlags(machineIds: readonly string[]): void {
+    this.dirtyDesignMachineIds.update((current) => {
+      const next = new Set(current);
+
+      for (const machineId of machineIds) {
+        next.delete(machineId);
+      }
+
+      return next;
+    });
   }
 
   private refreshMachineMetaValues(): void {

@@ -294,6 +294,57 @@ describe('MachineGraphRunner', () => {
     });
   });
 
+  it('returns hanging when moving left from the first tape cell', () => {
+    const tape = new Tape();
+    const context = {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+    };
+    const moveLeft = new MoveLeftNode('move-left', 0, true);
+    const group = new LinearMachineGroup('left-border', moveLeft, moveLeft);
+    const graph: MachineGraph = {
+      groups: [group],
+      links: [],
+      autolinks: [],
+      initialGroupId: group.id,
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA');
+
+    const result = new MachineGraphRunner().runBurst(graph, context, traceRecorder);
+
+    expect(result.status).toBe('hanging');
+    traceRecorder.recordHanging();
+    expect(traceRecorder.root.children.at(-1)).toMatchObject({
+      kind: 'hanging',
+      label: 'HANGING',
+      iconSrc: 'assets/images/hanging_ATE.gif',
+    });
+  });
+
+  it('returns error when the graph has no valid initial group', () => {
+    const context = {
+      tapes: [new Tape()],
+      metaValues: new MetaValueDictionary(),
+    };
+    const graph: MachineGraph = {
+      groups: [],
+      links: [],
+      autolinks: [],
+      initialGroupId: 'missing-group',
+    };
+    const traceRecorder = new AteTraceRecorder('NUEVA');
+
+    const result = new MachineGraphRunner().runBurst(graph, context, traceRecorder);
+
+    expect(result.status).toBe('error');
+    traceRecorder.recordError();
+    expect(traceRecorder.root.children.at(-1)).toMatchObject({
+      kind: 'error',
+      label: 'ERROR',
+      iconSrc: 'assets/images/error_ATE.gif',
+    });
+  });
+
   it('renders empty labels for unconditional links', () => {
     expect(new Link('unconditional', null, null).getAteLabel()).toBe('');
     expect(new Autolink('unconditional-autolink', null).getAteLabel()).toBe('');

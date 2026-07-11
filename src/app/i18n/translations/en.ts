@@ -56,6 +56,8 @@ export const en: Record<string, string> = {
   'editor.closeTab': 'Close tab',
   'explorer.machineMenu.saveAs': 'Save As...',
   'explorer.machineMenu.properties': 'Properties',
+  'ate.hanging': 'HANGING',
+  'ate.error': 'ERROR',
 
   // Designer
   'designer.title': 'Machine Design',
@@ -173,4 +175,5 @@ export const en: Record<string, string> = {
   'confirm.yes': 'Yes',
   'confirm.no': 'No',
   'confirm.deleteSubmachine': 'Are you sure you want to delete this machine?',
+  'confirm.closeDirtyTab': 'This machine has unsaved changes. Do you want to close the tab?',
 };

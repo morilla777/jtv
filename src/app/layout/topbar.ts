@@ -1149,7 +1149,8 @@ export class Topbar {
       const fileName = this.getSuggestedMachineFileName();
       const saved = await this.fileService.save(this.store.exportMachineFile(), fileName);
 
-      this.store.renameSelectedMachine(saved.machineName);
+      this.store.renameRootMachine(saved.machineName);
+      this.store.clearDesignMachineDirtyFlags();
       this.messageService.add({
         key: 'simulation',
         severity: 'success',
@@ -1169,7 +1170,8 @@ export class Topbar {
 
       const saved = await this.fileService.saveAs(this.store.exportMachineFile(), fileName);
 
-      this.store.renameSelectedMachine(saved.machineName);
+      this.store.renameRootMachine(saved.machineName);
+      this.store.clearDesignMachineDirtyFlags();
       this.messageService.add({
         key: 'simulation',
         severity: 'success',
@@ -1202,7 +1204,7 @@ export class Topbar {
   }
 
   private getSuggestedMachineFileName(): string {
-    const machineName = this.store.selectedMachine().name || 'jtv-machine';
+    const machineName = this.store.getRootMachineName() || 'jtv-machine';
     const normalizedName = machineName
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
