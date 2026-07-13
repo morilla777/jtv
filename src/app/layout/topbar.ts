@@ -953,8 +953,8 @@ export class Topbar {
     {
       code: 'en',
       label: 'EN',
-      flagSrc: 'assets/images/flag-gb.svg',
-      flagAlt: 'Bandera britanica',
+      flagSrc: 'assets/images/flag-us.svg',
+      flagAlt: 'Bandera estadounidense',
     },
   ];
 
