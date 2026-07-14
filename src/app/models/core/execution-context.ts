@@ -14,5 +14,6 @@ export interface SubmachineDefinition {
 export interface ExecutionContext {
   tapes: Tape[];
   metaValues: MetaValueDictionary;
+  maxSteps?: number;
   submachines?: ReadonlyMap<string, SubmachineDefinition>;
 }

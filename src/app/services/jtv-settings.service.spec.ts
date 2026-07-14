@@ -20,6 +20,7 @@ describe('JtvSettingsService', () => {
   it('returns the default burst size when there are no saved settings', () => {
     expect(new JtvSettingsService().getSettings()).toEqual({
       burstSize: 300,
+      maxTapeCount: 10,
       oldNotation: false,
     });
   });
@@ -31,10 +32,12 @@ describe('JtvSettingsService', () => {
 
     expect(JSON.parse(storage.get('jtv-settings') ?? '{}')).toEqual({
       burstSize: 450,
+      maxTapeCount: 10,
       oldNotation: false,
     });
     expect(service.getSettings()).toEqual({
       burstSize: 450,
+      maxTapeCount: 10,
       oldNotation: false,
     });
   });
@@ -46,10 +49,12 @@ describe('JtvSettingsService', () => {
 
     expect(JSON.parse(storage.get('jtv-settings') ?? '{}')).toEqual({
       burstSize: 300,
+      maxTapeCount: 10,
       oldNotation: true,
     });
     expect(service.getSettings()).toEqual({
       burstSize: 300,
+      maxTapeCount: 10,
       oldNotation: true,
     });
   });
@@ -59,6 +64,7 @@ describe('JtvSettingsService', () => {
 
     expect(new JtvSettingsService().getSettings()).toEqual({
       burstSize: 300,
+      maxTapeCount: 10,
       oldNotation: false,
     });
   });

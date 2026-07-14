@@ -1,5 +1,6 @@
 import { AteTraceRenderable } from './ate-trace-renderable';
 import { ExecutionContext } from './execution-context';
+import { type MachineGraphRunResult } from './machine-graph-run-result';
 import { type AteSubtrace } from '../ate';
 
 export interface MachineNode extends AteTraceRenderable {
@@ -13,4 +14,5 @@ export interface MachineNode extends AteTraceRenderable {
 
   execute(context: ExecutionContext): boolean;
   getAteSubtrace?(): AteSubtrace | null;
+  getExecutionResult?(): MachineGraphRunResult | null;
 }

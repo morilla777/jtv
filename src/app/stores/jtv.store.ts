@@ -6,7 +6,8 @@ import { LinearMachineGroup } from '../models/core/linear-machine-group';
 import { Link } from '../models/core/link';
 import { LinkCondition, type ReadConditionClause } from '../models/core/link-condition';
 import { MachineGraph } from '../models/core/machine-graph';
-import { MachineGraphExecutionPoint, MachineGraphRunner } from '../models/core/machine-graph-runner';
+import { MachineGraphRunner } from '../models/core/machine-graph-runner';
+import { type MachineGraphExecutionPoint } from '../models/core/machine-graph-run-result';
 import { MachineGroup } from '../models/core/machine-group';
 import { MachineNode } from '../models/core/machine-node';
 import { HubNode } from '../models/core/hub-node';
@@ -1871,13 +1872,16 @@ export class JtvStore {
     const context = {
       tapes: tapes.map((tapeState) => tapeState.tape),
       metaValues: this.createExecutionMetaValues(),
+      maxSteps: this.settingsService.getSettings().burstSize,
       submachines: this.createExecutionSubmachines(),
     };
     const result = this.machineGraphRunner.runBurst(this.state().machineGraph, context, traceRecorder, {
       maxSteps: this.settingsService.getSettings().burstSize,
     });
 
-    if (result.status === 'completed') {
+    if (result.traceTerminalRecorded) {
+      // The executed node already recorded a specialized terminal ATE entry.
+    } else if (result.status === 'completed') {
       traceRecorder.recordStop();
     } else if (result.status === 'suspended' && result.continuation) {
       traceRecorder.recordExpand(this.createAteContinuationSnapshot(result.continuation, context));
@@ -1908,7 +1912,10 @@ export class JtvStore {
       return true;
     }
 
-    if (expandNode?.kind === 'stop' && this.ateNavigationStack.length > 0) {
+    if (
+      (expandNode?.kind === 'stop' || expandNode?.kind === 'hanging' || expandNode?.kind === 'error') &&
+      this.ateNavigationStack.length > 0
+    ) {
       this.exitAteSubtrace();
       return true;
     }
@@ -1933,7 +1940,10 @@ export class JtvStore {
       },
     });
 
-    if (result.status === 'completed') {
+    if (result.traceTerminalRecorded) {
+      keepMutableReplayContinuation(expandNode);
+      deleteMutableContinuation(expandNode);
+    } else if (result.status === 'completed') {
       traceRecorder.recordStop();
       keepMutableReplayContinuation(expandNode);
       deleteMutableContinuation(expandNode);
@@ -2013,15 +2023,25 @@ export class JtvStore {
   }
 
   private exitAteSubtrace(): void {
+    const current = this.state();
     const frame = this.ateNavigationStack.pop();
 
     if (!frame) {
       return;
     }
 
+    const frameTapes = this.cloneTapeStates(frame.tapes);
+    const parentNode = this.findAteNode(frame.ate, frame.parentAteNodeId);
+    const callerTapeIndex = parentNode?.subtrace?.callerTapeIndex;
+    const subtraceResultSnapshot = current.tapes[0]?.tape.getSnapshot();
+
+    if (callerTapeIndex !== undefined && subtraceResultSnapshot && frameTapes[callerTapeIndex]) {
+      frameTapes[callerTapeIndex].tape.restoreSnapshot(subtraceResultSnapshot);
+    }
+
     this.activeDesignMachineId = frame.activeDesignMachineId;
-    this.state.update((current) => ({
-      ...current,
+    this.state.update((state) => ({
+      ...state,
       activeToolId: null,
       ate: frame.ate,
       machineGraph: frame.machineGraph,
@@ -2033,7 +2053,7 @@ export class JtvStore {
       selectedCanvasNodeId: frame.selectedCanvasNodeId,
       selectedMachine: frame.selectedMachine,
       selectedTapeIndex: Math.min(frame.selectedTapeIndex, frame.tapes.length - 1),
-      tapes: this.cloneTapeStates(frame.tapes),
+      tapes: frameTapes,
     }));
   }
 
@@ -3667,6 +3687,7 @@ export class JtvStore {
       metaValues: replayContinuation
         ? this.createMetaValuesFromContinuation(replayContinuation)
         : this.createExecutionMetaValues(),
+      maxSteps: this.settingsService.getSettings().burstSize,
       submachines: this.createExecutionSubmachines(),
     };
     const machineNodes = this.getMachineNodesById(state.machineGraph);
@@ -3761,6 +3782,7 @@ export class JtvStore {
   private createContinuationExecutionContext(continuation: AteContinuationSnapshot): {
     tapes: Tape[];
     metaValues: MetaValueDictionary;
+    maxSteps: number;
     submachines: ReadonlyMap<string, SubmachineDefinition>;
   } {
     return {
@@ -3777,6 +3799,7 @@ export class JtvStore {
         return tape;
       }),
       metaValues: this.createMetaValuesFromContinuation(continuation),
+      maxSteps: this.settingsService.getSettings().burstSize,
       submachines: this.createExecutionSubmachines(),
     };
   }

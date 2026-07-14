@@ -38,4 +38,5 @@ export interface AteSubtrace {
   readonly initialTapeSnapshots: readonly TapeSnapshot[];
   readonly finalTapeSnapshots: readonly TapeSnapshot[];
   readonly parameterAssignments: Readonly<Record<string, string>>;
+  readonly callerTapeIndex?: number;
 }

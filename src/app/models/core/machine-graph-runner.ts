@@ -5,22 +5,8 @@ import { MachineGraph } from './machine-graph';
 import { MachineGroup } from './machine-group';
 import { MachineNode } from './machine-node';
 import { MoveLeftNode } from './move-left-node';
+import { type MachineGraphExecutionPoint, type MachineGraphRunResult, type MachineGraphRunStatus } from './machine-graph-run-result';
 import { type AteTraceRecorder } from '../ate';
-
-export interface MachineGraphExecutionPoint {
-  readonly currentGroupId: string;
-  readonly currentNodeId: string | null;
-  readonly phase: 'node' | 'after-node' | 'after-group';
-  readonly forcedTransitionId?: string;
-}
-
-export type MachineGraphRunStatus = 'completed' | 'failed' | 'suspended' | 'nondeterministic' | 'hanging' | 'error';
-
-export interface MachineGraphRunResult {
-  readonly status: MachineGraphRunStatus;
-  readonly continuation?: MachineGraphExecutionPoint;
-  readonly continuations?: readonly MachineGraphExecutionPoint[];
-}
 
 export interface MachineGraphRunOptions {
   readonly maxSteps?: number;
@@ -81,6 +67,18 @@ export class MachineGraphRunner {
         const ok = currentNode.execute(context);
 
         if (!ok) {
+          const nodeExecutionResult = currentNode.getExecutionResult?.();
+
+          if (nodeExecutionResult && nodeExecutionResult.status !== 'completed') {
+            traceRecorder?.recordMachineNode(currentNode);
+            recordedSteps++;
+
+            return {
+              ...nodeExecutionResult,
+              traceTerminalRecorded: true,
+            };
+          }
+
           return { status: this.getNodeExecutionFailureStatus(currentNode, context) };
         }
 

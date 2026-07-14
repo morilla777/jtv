@@ -26,6 +26,7 @@ import monusFile from '../../../assets/examples/monus.jtv.json';
 import multiplicadoraFile from '../../../assets/examples/multiplicadora.jtv.json';
 import multiplicadora2File from '../../../assets/examples/multiplicadora2.jtv.json';
 import palindromeFile from '../../../assets/examples/palindrome.jtv.json';
+import subColgFile from '../../../assets/examples/sub_colg.jtv.json';
 import buscadoraLFile from '../../../assets/submachines/buscadora_l.jtv.json';
 import buscadoraNotLFile from '../../../assets/submachines/buscadora_not_l.jtv.json';
 import buscadoraNotRFile from '../../../assets/submachines/buscadora_not_r.jtv.json';
@@ -1003,6 +1004,184 @@ describe('MachineGraphRunner', () => {
         2: 'b',
       },
     });
+  });
+
+  it('records a specialized M hanging entry when a submachine hangs internally', () => {
+    const callerTape = new Tape();
+    const hangingNode = new MoveLeftNode('sub-left', 0, true);
+    const hangingGroup = new LinearMachineGroup('sub-left-group', hangingNode, hangingNode);
+    const submachine: SubmachineDefinition = {
+      name: 'COLGADA_SUB',
+      graph: {
+        groups: [hangingGroup],
+        links: [],
+        autolinks: [],
+        initialGroupId: hangingGroup.id,
+      },
+      view: { groups: [], nodes: [], links: [] },
+      tapeCount: 1,
+      parameterAssignments: {},
+    };
+    const submachineNode = new SubmachineNode('submachine-node', 'sub-hanging', 'COLGADA_SUB', 'M', '', {}, 0, true);
+    const parentGroup = new LinearMachineGroup('parent-group', submachineNode, submachineNode);
+    const traceRecorder = new AteTraceRecorder('MAIN');
+    const result = new MachineGraphRunner().runBurst({
+      groups: [parentGroup],
+      links: [],
+      autolinks: [],
+      initialGroupId: parentGroup.id,
+    }, {
+      tapes: [callerTape],
+      metaValues: new MetaValueDictionary(),
+      submachines: new Map([['sub-hanging', submachine]]),
+    }, traceRecorder);
+
+    expect(result.status).toBe('hanging');
+    expect(traceRecorder.root.children).toEqual([
+      expect.objectContaining({
+        iconSrc: 'assets/images/M_Hanging_ATE.gif',
+        label: 'COLGADA_SUB()',
+        subtrace: expect.objectContaining({
+          root: expect.objectContaining({
+            children: [
+              expect.objectContaining({
+                iconSrc: 'assets/images/hanging_ATE.gif',
+                kind: 'hanging',
+              }),
+            ],
+          }),
+        }),
+      }),
+    ]);
+  });
+
+  it('records a specialized M expand entry when a submachine reaches the burst limit', () => {
+    const callerTape = new Tape();
+    const writerNode = new WriterNode('sub-write', 'a', 0, true);
+    const writerGroup = new LinearMachineGroup('sub-write-group', writerNode, writerNode);
+    const submachine: SubmachineDefinition = {
+      name: 'EXPAND_SUB',
+      graph: {
+        groups: [writerGroup],
+        links: [],
+        autolinks: [new Autolink('repeat', writerNode)],
+        initialGroupId: writerGroup.id,
+      },
+      view: { groups: [], nodes: [], links: [] },
+      tapeCount: 1,
+      parameterAssignments: {},
+    };
+    const submachineNode = new SubmachineNode('submachine-node', 'sub-expand', 'EXPAND_SUB', 'M', '', {}, 0, true);
+
+    const ok = submachineNode.execute({
+      tapes: [callerTape],
+      metaValues: new MetaValueDictionary(),
+      maxSteps: 1,
+      submachines: new Map([['sub-expand', submachine]]),
+    });
+
+    expect(ok).toBe(false);
+    expect(submachineNode.getExecutionResult()?.status).toBe('suspended');
+    expect(submachineNode.getAteIconName()).toBe('M_Expand_ATE.gif');
+    expect(submachineNode.getAteSubtrace()?.root.children).toEqual([
+      expect.objectContaining({
+        iconSrc: 'assets/images/a_ATE.gif',
+        machineNodeId: 'sub-write',
+      }),
+      expect.objectContaining({
+        iconSrc: 'assets/images/expand_ATE.gif',
+        kind: 'expand',
+        continuation: expect.objectContaining({
+          currentGroupId: writerGroup.id,
+          currentNodeId: writerNode.id,
+          phase: 'after-node',
+        }),
+      }),
+    ]);
+  });
+
+  it('records a specialized M nondeterminism entry when a submachine branches internally', () => {
+    const callerTape = new Tape();
+    const writerNode = new WriterNode('sub-write', 'a', 0, true);
+    const sourceGroup = new LinearMachineGroup('source-group', writerNode, writerNode);
+    const leftNode = new WriterNode('left-write', 'b', 0, true);
+    const leftGroup = new LinearMachineGroup('left-group', leftNode, leftNode);
+    const rightNode = new WriterNode('right-write', 'c', 0, true);
+    const rightGroup = new LinearMachineGroup('right-group', rightNode, rightNode);
+    const leftLink = new Link('left-link', sourceGroup, leftGroup);
+    const rightLink = new Link('right-link', sourceGroup, rightGroup);
+    const submachine: SubmachineDefinition = {
+      name: 'ND_SUB',
+      graph: {
+        groups: [sourceGroup, leftGroup, rightGroup],
+        links: [leftLink, rightLink],
+        autolinks: [],
+        initialGroupId: sourceGroup.id,
+      },
+      view: { groups: [], nodes: [], links: [] },
+      tapeCount: 1,
+      parameterAssignments: {},
+    };
+    const submachineNode = new SubmachineNode('submachine-node', 'sub-nd', 'ND_SUB', 'M', '', {}, 0, true);
+
+    const ok = submachineNode.execute({
+      tapes: [callerTape],
+      metaValues: new MetaValueDictionary(),
+      submachines: new Map([['sub-nd', submachine]]),
+    });
+
+    expect(ok).toBe(false);
+    expect(submachineNode.getExecutionResult()?.status).toBe('nondeterministic');
+    expect(submachineNode.getAteIconName()).toBe('M_ND_ATE.gif');
+    expect(submachineNode.getAteSubtrace()?.root.children).toEqual([
+      expect.objectContaining({
+        iconSrc: 'assets/images/a_ATE.gif',
+        machineNodeId: 'sub-write',
+      }),
+      expect.objectContaining({
+        iconSrc: 'assets/images/ND_ATE.gif',
+        kind: 'nondeterminism',
+      }),
+      expect.objectContaining({
+        iconSrc: 'assets/images/expand_ATE.gif',
+        kind: 'expand',
+        continuation: expect.objectContaining({ forcedTransitionId: 'left-link' }),
+      }),
+      expect.objectContaining({
+        iconSrc: 'assets/images/expand_ATE.gif',
+        kind: 'expand',
+        continuation: expect.objectContaining({ forcedTransitionId: 'right-link' }),
+      }),
+    ]);
+  });
+
+  it('renders M_Hanging for the SUB_COLG example submachine invocation', () => {
+    const restored = restoreMachineFromJtvFile(subColgFile as JtvFile);
+    const tape = new Tape();
+    const traceRecorder = new AteTraceRecorder(restored.selectedMachine.name);
+    const result = new MachineGraphRunner().runBurst(restored.machineGraph, {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+      submachines: createExampleSubmachines(restored),
+    }, traceRecorder);
+
+    expect(result.status).toBe('hanging');
+    expect(traceRecorder.root.children).toEqual([
+      expect.objectContaining({
+        iconSrc: 'assets/images/M_Hanging_ATE.gif',
+        label: 'COLGADA2()',
+        subtrace: expect.objectContaining({
+          root: expect.objectContaining({
+            children: expect.arrayContaining([
+              expect.objectContaining({
+                iconSrc: 'assets/images/hanging_ATE.gif',
+                kind: 'hanging',
+              }),
+            ]),
+          }),
+        }),
+      }),
+    ]);
   });
 
   it('executes the preinstalled shift-right submachine without looping', () => {
