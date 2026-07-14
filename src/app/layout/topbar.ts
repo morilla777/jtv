@@ -14,6 +14,7 @@ import { JtvFileService } from '../services/jtv-file.service';
 import { JtvFileValidatorService } from '../services/jtv-file-validator.service';
 import { LegacyJtvImporter } from '../services/legacy-jtv-importer';
 import { LoadingIndicatorService } from '../services/loading-indicator.service';
+import { RecentMachine, RecentMachinesService } from '../services/recent-machines.service';
 import { TranslationService, type Language } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 import { environment } from '../../environments/environment';
@@ -66,6 +67,29 @@ interface LanguageOption {
                   <img class="file-menu-icon" src="assets/images/Import16.gif" alt="" />
                   <span>{{ 'topbar.import' | translate }}</span>
                 </button>
+                <div class="file-menu-recent-group">
+                  <button type="button" role="menuitem" class="file-menu-item" [disabled]="recentMachines().length === 0">
+                    <img class="file-menu-icon" src="assets/images/Recent16.gif" alt="" />
+                    <span>{{ 'topbar.menu.file.recentMachines' | translate }}</span>
+                    <span class="file-menu-submenu-arrow">›</span>
+                  </button>
+                  @if (recentMachines().length > 0) {
+                    <div class="file-menu-panel file-menu-recent-list" role="menu">
+                      @for (machine of recentMachines(); track machine.id) {
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="file-menu-item file-menu-recent-item"
+                          [title]="machine.fileName"
+                          (click)="openRecentMachine($event, machine)"
+                        >
+                          <img class="file-menu-icon" src="assets/images/Gear.gif" alt="" />
+                          <span class="file-menu-recent-name">{{ machine.machineName || machine.fileName }}</span>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
                 <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'print')">
                   <img class="file-menu-icon" src="assets/images/Print16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.print' | translate }}</span>
@@ -207,10 +231,7 @@ interface LanguageOption {
               </p-select>
             </div>
 
-            <div class="brand menubar-brand">
-              <span class="brand-title">JTV 2.0</span>
-              <span class="brand-subtitle">{{ 'topbar.brandSubtitle' | translate }}</span>
-            </div>
+            <img class="menubar-logo" src="assets/images/JTVLogo.png" alt="Java Turing Visual" />
           </div>
         </ng-template>
       </p-menubar>
@@ -533,6 +554,49 @@ interface LanguageOption {
       background: transparent;
     }
 
+    .file-menu-recent-group {
+      position: relative;
+    }
+
+    .file-menu-recent-list {
+      position: absolute;
+      top: 0;
+      left: calc(100% - 0.125rem);
+      z-index: 1002;
+      display: flex;
+      flex-direction: column;
+      min-width: 12rem;
+      padding: 0.25rem;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .file-menu-recent-group:hover .file-menu-recent-list,
+    .file-menu-recent-group:focus-within .file-menu-recent-list {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .file-menu-recent-item {
+      max-width: 14rem;
+      padding-block: 0.25rem;
+    }
+
+    .file-menu-submenu-arrow {
+      margin-left: auto;
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    .file-menu-recent-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .file-menu-icon {
       width: 16px;
       height: 16px;
@@ -548,32 +612,17 @@ interface LanguageOption {
       border-top: 0;
     }
 
-    .brand {
-      display: flex;
-      flex-direction: column;
-      line-height: 1.1;
-    }
-
-    .menubar-brand {
-      align-items: flex-end;
-      padding-inline: 0.5rem;
-      white-space: nowrap;
-    }
-
     .menubar-end {
       display: flex;
       align-items: center;
       gap: 0.75rem;
     }
 
-    .brand-title {
-      font-weight: 700;
-      font-size: 1rem;
-    }
-
-    .brand-subtitle {
-      font-size: 0.75rem;
-      color: var(--p-text-muted-color);
+    .menubar-logo {
+      display: block;
+      width: auto;
+      height: 2.25rem;
+      object-fit: contain;
     }
 
     .toolbar-actions {
@@ -679,7 +728,7 @@ interface LanguageOption {
     }
 
     :host ::ng-deep .machine-select {
-      width: 9.5rem;
+      width: 12rem;
     }
 
     :host ::ng-deep .about-dialog {
@@ -724,6 +773,7 @@ export class Topbar {
   private readonly legacyImporter = inject(LegacyJtvImporter);
   private readonly loading = inject(LoadingIndicatorService);
   private readonly messageService = inject(MessageService);
+  private readonly recentMachinesService = inject(RecentMachinesService);
   private readonly store = inject(JtvStore);
 
   readonly symbolOptions = [
@@ -762,6 +812,7 @@ export class Topbar {
   readonly uppercaseOptions = Array.from({ length: 26 }, (_, index) => String.fromCharCode(65 + index));
 
   readonly machineOptions = this.store.activeChildMachineNames;
+  readonly recentMachines = this.recentMachinesService.recentMachines;
 
   executionFinished = false;
   fileMenuOpen = false;
@@ -1150,6 +1201,44 @@ export class Topbar {
       if (!opened) {
         return;
       }
+
+      this.executionFinished = false;
+      this.store.importMachineFile(opened.file);
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'success',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.machineOpened', { fileName: opened.fileName }),
+        sticky: true,
+        closable: true,
+      });
+    } catch {
+      this.showPersistenceError('toast.machineOpenError');
+    }
+  }
+
+  async openRecentMachine(event: Event, machine: RecentMachine): Promise<void> {
+    event.preventDefault();
+    event.stopPropagation();
+    this.fileMenuOpen = false;
+
+    try {
+      const handle = await this.recentMachinesService.getHandle(machine);
+
+      if (!handle) {
+        this.messageService.add({
+          key: 'simulation',
+          severity: 'warn',
+          summary: 'JTV',
+          detail: this.i18n.translate('toast.recentMachineNeedsPicker'),
+          sticky: true,
+          closable: true,
+        });
+        await this.openMachine();
+        return;
+      }
+
+      const opened = await this.fileService.openHandle(handle);
 
       this.executionFinished = false;
       this.store.importMachineFile(opened.file);

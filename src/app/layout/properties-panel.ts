@@ -1,7 +1,9 @@
 import { Component, computed, inject } from '@angular/core';
+import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvSettingsService } from '../services/jtv-settings.service';
+import { TranslationService } from '../services/translation.service';
 import { JtvStore, type JtvToolId } from '../stores/jtv.store';
 
 interface ToolButton {
@@ -33,25 +35,28 @@ const NEW_NOTATION_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
   template: `
     <div class="panel">
       <div class="panel-body">
-        <div class="button-grid">
-          @for (btn of buttons; track btn.id) {
-            @if (btn.icon) {
-              <button
-                pButton
-                type="button"
-                [attr.aria-label]="btn.tooltipKey ? (btn.tooltipKey | translate) : ''"
-                [title]="btn.tooltipKey ? (btn.tooltipKey | translate) : ''"
-                [class.tool-btn-active]="activeToolId() === btn.toolId"
-                class="tool-btn p-button-secondary"
-                (click)="toggleTool(btn)"
-              >
-                <img [src]="getIcon(btn)" [alt]="btn.tooltipKey ? (btn.tooltipKey | translate) : ''" class="btn-icon" />
-              </button>
-            } @else {
-              <div class="empty-cell" aria-hidden="true"></div>
+        <div class="tools-block">
+          <div class="button-grid">
+            @for (btn of buttons; track btn.id) {
+              @if (btn.icon) {
+                <button
+                  pButton
+                  type="button"
+                  [attr.aria-label]="btn.tooltipKey ? (btn.tooltipKey | translate) : ''"
+                  [title]="btn.tooltipKey ? (btn.tooltipKey | translate) : ''"
+                  [class.tool-btn-active]="activeToolId() === btn.toolId"
+                  class="tool-btn p-button-secondary"
+                  (click)="toggleTool(btn)"
+                >
+                  <img [src]="getIcon(btn)" [alt]="btn.tooltipKey ? (btn.tooltipKey | translate) : ''" class="btn-icon" />
+                </button>
+              } @else {
+                <div class="empty-cell" aria-hidden="true"></div>
+              }
             }
-          }
+          </div>
         </div>
+        <div class="empty-tools-panel" aria-hidden="true"></div>
       </div>
     </div>
   `,
@@ -64,23 +69,38 @@ const NEW_NOTATION_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
     }
 
     .panel-body {
-      padding: 0.5rem;
+      padding: 0.125rem;
       flex: 1;
       min-height: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .tools-block {
+      flex: 0 0 auto;
+      width: 100%;
+      display: flex;
+      justify-content: center;
     }
 
     .button-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      grid-template-rows: repeat(6, 1fr);
-      gap: 0.5rem;
-      height: 100%;
-      max-height: 100%;
+      grid-template-columns: repeat(3, 3rem);
+      grid-template-rows: repeat(6, 3rem);
+      gap: 0.25rem;
+      width: max-content;
+      height: max-content;
+      flex: 0 0 auto;
     }
 
     .tool-btn {
-      width: 100%;
-      height: 100%;
+      width: 3rem !important;
+      height: 3rem !important;
+      min-width: 3rem;
+      max-width: 3rem;
+      min-height: 3rem;
+      max-height: 3rem;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -93,8 +113,14 @@ const NEW_NOTATION_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
     }
 
     .empty-cell {
+      width: 3rem;
+      height: 3rem;
+    }
+
+    .empty-tools-panel {
+      flex: 1 1 auto;
       width: 100%;
-      height: 100%;
+      min-height: 0;
     }
 
     .btn-icon {
@@ -107,7 +133,9 @@ const NEW_NOTATION_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
 })
 export class PropertiesPanel {
   private readonly store = inject(JtvStore);
+  private readonly messageService = inject(MessageService);
   private readonly settingsService = inject(JtvSettingsService);
+  private readonly i18n = inject(TranslationService);
 
   readonly activeToolId = computed(() => this.store.activeToolId());
 
@@ -256,6 +284,16 @@ export class PropertiesPanel {
 
   toggleTool(button: ToolButton): void {
     if (button.toolId) {
+      if (button.toolId === 'submachine' && this.store.activeChildMachineNames().length === 0) {
+        this.messageService.add({
+          key: 'simulation',
+          severity: 'warn',
+          summary: 'JTV',
+          detail: this.i18n.translate('toast.noSubmachinesToInsert'),
+        });
+        return;
+      }
+
       this.store.toggleTool(button.toolId);
     }
   }

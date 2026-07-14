@@ -6,6 +6,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TranslatePipe } from '../pipes/translate.pipe';
+import { JtvSettingsService } from '../services/jtv-settings.service';
 import { TranslationService } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 
@@ -366,6 +367,7 @@ interface TapeRowView {
 export class TapesPanel {
   private readonly store = inject(JtvStore);
   private readonly messageService = inject(MessageService);
+  private readonly settingsService = inject(JtvSettingsService);
   private readonly i18n = inject(TranslationService);
   private readonly tapeViewStartPositions = signal(new Map<string, number>());
 
@@ -438,7 +440,7 @@ export class TapesPanel {
     {
       labelKey: 'simulator.tapeActions.add',
       icon: 'assets/images/AddTape24.gif',
-      action: () => this.store.addTape(),
+      action: () => this.addTape(),
     },
     {
       labelKey: 'simulator.tapeActions.remove',
@@ -499,6 +501,24 @@ export class TapesPanel {
   loadSelectedTape(): void {
     this.store.setSelectedTapeValue(this.tapeValue);
     this.centerSelectedTapePage();
+  }
+
+  private addTape(): void {
+    const maxTapeCount = this.settingsService.settings().maxTapeCount;
+
+    if (this.store.tapes().length >= maxTapeCount) {
+      this.messageService.add({
+        key: 'simulation',
+        severity: 'warn',
+        summary: 'JTV',
+        detail: this.i18n.translate('toast.maxTapeCountReached', { maxTapeCount }),
+        sticky: true,
+        closable: true,
+      });
+      return;
+    }
+
+    this.store.addTape();
   }
 
   private removeLastTape(): void {

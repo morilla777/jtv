@@ -3,11 +3,13 @@ import { Injectable, computed, signal } from '@angular/core';
 export interface JtvSettings {
   readonly burstSize: number;
   readonly oldNotation: boolean;
+  readonly maxTapeCount: number;
 }
 
 export const DEFAULT_JTV_SETTINGS: JtvSettings = {
   burstSize: 300,
   oldNotation: false,
+  maxTapeCount: 10,
 };
 
 const JTV_SETTINGS_STORAGE_KEY = 'jtv-settings';
@@ -57,9 +59,10 @@ export class JtvSettingsService {
     }
 
     try {
-      const parsedSettings = JSON.parse(rawSettings) as Partial<JtvSettings>;
+    const parsedSettings = JSON.parse(rawSettings) as Partial<JtvSettings>;
       const burstSize = Number(parsedSettings.burstSize);
-      const settings: { burstSize?: number; oldNotation?: boolean } = {};
+      const maxTapeCount = Number(parsedSettings.maxTapeCount);
+      const settings: { burstSize?: number; oldNotation?: boolean; maxTapeCount?: number } = {};
 
       if (Number.isFinite(burstSize)) {
         settings.burstSize = burstSize;
@@ -67,6 +70,10 @@ export class JtvSettingsService {
 
       if (typeof parsedSettings.oldNotation === 'boolean') {
         settings.oldNotation = parsedSettings.oldNotation;
+      }
+
+      if (Number.isInteger(maxTapeCount) && maxTapeCount >= 1) {
+        settings.maxTapeCount = maxTapeCount;
       }
 
       return settings;

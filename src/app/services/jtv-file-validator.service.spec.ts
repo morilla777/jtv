@@ -10,6 +10,28 @@ describe('JtvFileValidatorService', () => {
     expect(() => validator.validate(createValidFile())).not.toThrow();
   });
 
+  it('accepts empty design machines and empty child submachines', () => {
+    const validator = new JtvFileValidatorService();
+    const file = createEmptyFile({
+      machine: {
+        id: 'parent-machine',
+        name: 'SUBMAQUINAS',
+      },
+      submachines: [
+        createEmptyFile({
+          machine: {
+            id: 'child-machine',
+            name: 'SUBMAQUINA1',
+            shortName: 'SUB1',
+            description: '',
+          },
+        }),
+      ],
+    });
+
+    expect(() => validator.validate(file)).not.toThrow();
+  });
+
   it('rejects a link pointing to an unknown target node', () => {
     const validator = new JtvFileValidatorService();
     const file = createValidFile({
@@ -124,6 +146,41 @@ function createValidFile(overrides: Partial<JtvFile> = {}): JtvFile {
           position: { x: 0, y: 0 },
         },
       ],
+      links: [],
+    },
+  };
+
+  return {
+    ...base,
+    ...overrides,
+  };
+}
+
+function createEmptyFile(overrides: Partial<JtvFile> = {}): JtvFile {
+  const base: JtvFile = {
+    format: JTV_FILE_FORMAT,
+    version: JTV_FILE_VERSION,
+    machine: {
+      id: 'empty-machine',
+      name: 'EMPTY',
+    },
+    parameterAssignments: {},
+    metaValues: {
+      variables: [],
+      parameters: [],
+    },
+    tapeCount: 1,
+    submachines: [],
+    graph: {
+      initialGroupId: '',
+      groups: [],
+      nodes: [],
+      links: [],
+      autolinks: [],
+    },
+    view: {
+      groups: [],
+      nodes: [],
       links: [],
     },
   };

@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { JtvFile } from './jtv-file-serializer';
 import { JtvFileValidatorService } from './jtv-file-validator.service';
+import { RecentMachinesService } from './recent-machines.service';
 
 export interface OpenedJtvFile {
   readonly file: JtvFile;
@@ -11,6 +12,10 @@ export interface OpenedJtvFile {
 export interface SavedJtvFile {
   readonly fileName: string;
   readonly machineName: string;
+}
+
+interface FileHandlePermissionDescriptor {
+  readonly mode?: 'read' | 'readwrite';
 }
 
 interface WritableFileHandle {
@@ -26,9 +31,11 @@ interface ReadableFileHandle {
   readonly name: string;
 
   getFile(): Promise<File>;
+  queryPermission?: (descriptor?: FileHandlePermissionDescriptor) => Promise<PermissionState>;
+  requestPermission?: (descriptor?: FileHandlePermissionDescriptor) => Promise<PermissionState>;
 }
 
-type JtvFileHandle = WritableFileHandle & ReadableFileHandle;
+export type JtvFileHandle = WritableFileHandle & ReadableFileHandle;
 
 interface FilePickerWindow extends Window {
   showSaveFilePicker?: (options: unknown) => Promise<JtvFileHandle>;
@@ -38,6 +45,7 @@ interface FilePickerWindow extends Window {
 @Injectable({ providedIn: 'root' })
 export class JtvFileService {
   private readonly validator: JtvFileValidatorService = inject(JtvFileValidatorService);
+  private readonly recentMachinesService = inject(RecentMachinesService);
   private currentFileHandle: JtvFileHandle | null = null;
   private readonly activeFilePath = signal<string | null>(null);
   private readonly dirty = signal(false);
@@ -86,6 +94,7 @@ export class JtvFileService {
         this.currentFileHandle = handle;
         this.activeFilePath.set(file.name);
         this.dirty.set(false);
+        void this.recentMachinesService.remember(file.name, parsedFile.machine.name, handle);
       }
 
       return {
@@ -103,6 +112,28 @@ export class JtvFileService {
     }
 
     return this.writeToHandle(file, this.currentFileHandle);
+  }
+
+  async openHandle(handle: JtvFileHandle): Promise<OpenedJtvFile> {
+    const permission = await this.requestHandlePermission(handle, 'read');
+
+    if (permission !== 'granted') {
+      throw new Error('File permission denied');
+    }
+
+    const file = await handle.getFile();
+    const parsedFile = JSON.parse(await file.text()) as unknown;
+
+    this.validator.validate(parsedFile);
+    this.currentFileHandle = handle;
+    this.activeFilePath.set(file.name);
+    this.dirty.set(false);
+    void this.recentMachinesService.remember(file.name, parsedFile.machine.name, handle);
+
+    return {
+      file: parsedFile,
+      fileName: file.name,
+    };
   }
 
   async saveAs(file: JtvFile, suggestedName: string): Promise<SavedJtvFile> {
@@ -124,6 +155,7 @@ export class JtvFileService {
     this.download(this.createJsonBlob(this.withMachineName(file, machineName)), fileName);
     this.activeFilePath.set(fileName);
     this.dirty.set(false);
+    void this.recentMachinesService.remember(fileName, machineName, null);
     return { fileName, machineName };
   }
 
@@ -179,6 +211,7 @@ export class JtvFileService {
             this.currentFileHandle = null;
             this.activeFilePath.set(file.name);
             this.dirty.set(false);
+            void this.recentMachinesService.remember(file.name, parsedFile.machine.name, null);
           }
 
           resolve({
@@ -204,7 +237,23 @@ export class JtvFileService {
 
     this.activeFilePath.set(fileName);
     this.dirty.set(false);
+    void this.recentMachinesService.remember(fileName, machineName, handle);
     return { fileName, machineName };
+  }
+
+  private async requestHandlePermission(
+    handle: JtvFileHandle,
+    mode: 'read' | 'readwrite',
+  ): Promise<PermissionState> {
+    if (!handle.queryPermission || !handle.requestPermission) {
+      return 'granted';
+    }
+
+    const currentPermission = await handle.queryPermission({ mode });
+
+    return currentPermission === 'granted'
+      ? currentPermission
+      : handle.requestPermission({ mode });
   }
 
   private createJsonBlob(file: JtvFile): Blob {

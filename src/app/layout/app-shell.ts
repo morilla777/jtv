@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { MessageService, type ToastMessageOptions } from 'primeng/api';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { SplitterModule } from 'primeng/splitter';
@@ -48,7 +48,7 @@ import { JtvStore } from '../stores/jtv.store';
         >
           <ng-template #panel>
             <p-splitter
-              [panelSizes]="[18, 66.7, 15.3]"
+              [panelSizes]="designerPanelSizes()"
               [gutterSize]="6"
               class="designer-splitter"
             >
@@ -166,6 +166,20 @@ export class AppShell implements OnInit, OnDestroy {
 
   readonly simulationToastModalVisible = signal(false);
   readonly currentFilePath = this.fileService.currentFilePath;
+  private readonly viewportWidth = signal(globalThis.window?.innerWidth ?? 1366);
+  private readonly explorerPanelWidth = 245;
+  private readonly propertiesPanelWidth = 164;
+  readonly designerPanelSizes = computed(() => {
+    const workspaceWidth = Math.max(1, this.viewportWidth() - 16);
+    const explorerSize = this.explorerPanelWidth * 100 / workspaceWidth;
+    const propertiesSize = this.propertiesPanelWidth * 100 / workspaceWidth;
+
+    return [
+      explorerSize,
+      Math.max(100 - explorerSize - propertiesSize, 1),
+      propertiesSize,
+    ];
+  });
 
   ngOnInit(): void {
     this.subscriptions.add(
@@ -212,6 +226,11 @@ export class AppShell implements OnInit, OnDestroy {
       event.preventDefault();
       this.store.redo();
     }
+  }
+
+  @HostListener('window:resize')
+  handleWindowResize(): void {
+    this.viewportWidth.set(globalThis.window?.innerWidth ?? 1366);
   }
 
   private isSimulationToast(message: ToastMessageOptions): boolean {

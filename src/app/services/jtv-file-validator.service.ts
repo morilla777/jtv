@@ -277,7 +277,9 @@ export class JtvFileValidatorService {
     );
     void linkIds;
 
-    if (!groupIds.has(file.graph.initialGroupId)) {
+    if (file.graph.groups.length === 0 && file.graph.initialGroupId !== '') {
+      errors.push(`${path}.graph.initialGroupId: debe estar vacío cuando no hay grupos`);
+    } else if (file.graph.groups.length > 0 && !groupIds.has(file.graph.initialGroupId)) {
       errors.push(`${path}.graph.initialGroupId: referencia a un grupo inexistente`);
     }
 

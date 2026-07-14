@@ -431,7 +431,7 @@ export class JtvStore {
   private rootDesignMachineId = this.state().selectedMachine.id;
   private activeDesignMachineId = this.state().selectedMachine.id;
   private readonly openDesignMachineTabIds = signal<readonly string[]>([this.state().selectedMachine.id]);
-  private selectedChildSubmachineId: string | null = null;
+  private selectedChildSubmachineIdsByParent = new Map<string, string>();
   private designMachines = new Map<string, JtvDesignMachine>();
   private designMachineClipboard: DesignMachineClipboard | null = null;
   private readonly designMachineClipboardRevision = signal(0);
@@ -504,9 +504,10 @@ export class JtvStore {
   readonly selectedChildMachineName = computed(() => {
     this.machineWorkspaceRevision();
     const activeMachine = this.designMachines.get(this.activeDesignMachineId);
+    const selectedChildSubmachineId = activeMachine ? this.getSelectedChildSubmachineId(activeMachine) : null;
 
-    return this.selectedChildSubmachineId && activeMachine?.submachineIds.includes(this.selectedChildSubmachineId)
-      ? this.designMachines.get(this.selectedChildSubmachineId)?.selectedMachine.name ?? null
+    return selectedChildSubmachineId
+      ? this.designMachines.get(selectedChildSubmachineId)?.selectedMachine.name ?? null
       : null;
   });
   readonly ate = computed(() => this.state().ate);
@@ -2177,7 +2178,6 @@ export class JtvStore {
     }
 
     this.loadDesignMachine(machineId);
-    this.selectChildSubmachineByName(null);
   }
 
   closeDesignMachineTab(machineId: string): boolean {
@@ -2197,7 +2197,6 @@ export class JtvStore {
         ?? this.rootDesignMachineId;
 
       this.loadDesignMachine(nextMachineId);
-      this.selectChildSubmachineByName(null);
     } else {
       this.bumpMachineWorkspaceRevision();
     }
@@ -2219,7 +2218,7 @@ export class JtvStore {
       this.designMachines.get(submachineId)?.selectedMachine.name === machineName,
     ) ?? null;
 
-    this.selectedChildSubmachineId = machineId;
+    this.setSelectedChildSubmachineId(this.activeDesignMachineId, machineId);
     this.bumpMachineWorkspaceRevision();
   }
 
@@ -2283,7 +2282,7 @@ export class JtvStore {
     this.bumpDesignMachineClipboardRevision();
     this.markDesignMachineDirty(parentMachine.id);
     this.markDesignMachineDirty(submachine.id);
-    this.selectedChildSubmachineId = submachine.id;
+    this.setSelectedChildSubmachineId(parentMachine.id, submachine.id);
     this.activeDesignMachineId = submachine.id;
     this.openDesignMachineTab(submachine.id);
     this.loadDesignMachine(submachine.id, { saveCurrent: false });
@@ -2332,11 +2331,17 @@ export class JtvStore {
       machineIds.filter((openMachineId) => !deletedMachineIds.includes(openMachineId)),
     );
 
-    if (this.selectedChildSubmachineId && deletedMachineIds.includes(this.selectedChildSubmachineId)) {
-      this.selectedChildSubmachineId = null;
+    const nextMachineId = deletedMachineIds.includes(this.activeDesignMachineId) ? parent.id : this.activeDesignMachineId;
+    const updatedParentMachine = this.designMachines.get(parent.id);
+    const selectedChildSubmachineId = this.getSelectedChildSubmachineId(parent.machine);
+
+    if (selectedChildSubmachineId && deletedMachineIds.includes(selectedChildSubmachineId)) {
+      this.setSelectedChildSubmachineId(parent.id, updatedParentMachine?.submachineIds[0] ?? null);
     }
 
-    const nextMachineId = deletedMachineIds.includes(this.activeDesignMachineId) ? parent.id : this.activeDesignMachineId;
+    for (const deletedMachineId of deletedMachineIds) {
+      this.selectedChildSubmachineIdsByParent.delete(deletedMachineId);
+    }
 
     this.loadDesignMachine(nextMachineId, { saveCurrent: false });
     this.removeDesignMachineDirtyFlags(deletedMachineIds);
@@ -2361,7 +2366,7 @@ export class JtvStore {
       ...parentMachine,
       submachineIds: [...parentMachine.submachineIds, submachine.id],
     });
-    this.selectedChildSubmachineId = submachine.id;
+    this.setSelectedChildSubmachineId(parentMachine.id, submachine.id);
     this.markDesignMachineDirty(parentMachine.id);
     this.markDesignMachineDirty(submachine.id);
     this.activeDesignMachineId = submachine.id;
@@ -2402,7 +2407,7 @@ export class JtvStore {
       ...parentMachine,
       submachineIds: [...parentMachine.submachineIds, submachine.id],
     });
-    this.selectedChildSubmachineId = submachine.id;
+    this.setSelectedChildSubmachineId(parentMachine.id, submachine.id);
     this.markDesignMachineDirty(parentMachine.id);
     this.markDesignMachineDirty(submachine.id);
     this.activeDesignMachineId = submachine.id;
@@ -2478,6 +2483,7 @@ export class JtvStore {
     this.rootDesignMachineId = designMachine.id;
     this.activeDesignMachineId = designMachine.id;
     this.designMachines = new Map([[designMachine.id, designMachine]]);
+    this.selectedChildSubmachineIdsByParent.clear();
     this.openDesignMachineTabIds.set([designMachine.id]);
     this.dirtyDesignMachineIds.set(new Set());
     this.selectedCanvasNodeIds.set(new Set());
@@ -2487,10 +2493,12 @@ export class JtvStore {
 
   private importDesignMachineWorkspace(file: JtvFile): void {
     this.designMachines = new Map();
+    this.selectedChildSubmachineIdsByParent.clear();
     const rootMachine = this.createDesignMachineFromFile(file);
 
     this.rootDesignMachineId = rootMachine.id;
     this.activeDesignMachineId = rootMachine.id;
+    this.setSelectedChildSubmachineId(rootMachine.id, rootMachine.submachineIds[0] ?? null);
     this.openDesignMachineTabIds.set([rootMachine.id]);
     this.dirtyDesignMachineIds.set(new Set());
   }
@@ -2683,11 +2691,26 @@ export class JtvStore {
 
   private getSelectedChildSubmachine(): JtvDesignMachine | null {
     const activeMachine = this.designMachines.get(this.activeDesignMachineId);
-    const selectedId = this.selectedChildSubmachineId && activeMachine?.submachineIds.includes(this.selectedChildSubmachineId)
-      ? this.selectedChildSubmachineId
-      : activeMachine?.submachineIds[0] ?? null;
+    const selectedId = activeMachine ? this.getSelectedChildSubmachineId(activeMachine) : null;
 
     return selectedId ? this.designMachines.get(selectedId) ?? null : null;
+  }
+
+  private getSelectedChildSubmachineId(machine: JtvDesignMachine): string | null {
+    const selectedId = this.selectedChildSubmachineIdsByParent.get(machine.id) ?? null;
+
+    return selectedId && machine.submachineIds.includes(selectedId)
+      ? selectedId
+      : machine.submachineIds[0] ?? null;
+  }
+
+  private setSelectedChildSubmachineId(parentMachineId: string, submachineId: string | null): void {
+    if (submachineId) {
+      this.selectedChildSubmachineIdsByParent.set(parentMachineId, submachineId);
+      return;
+    }
+
+    this.selectedChildSubmachineIdsByParent.delete(parentMachineId);
   }
 
   private findParentDesignMachine(machineId: string): { id: string; machine: JtvDesignMachine } | null {
