@@ -88,7 +88,11 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
                   [indentation]="0.25"
                 >
                   <ng-template pTemplate="default" let-node>
-                    <span class="ate-tree-node" (dblclick)="continueAteExecution(node, $event)">
+                    <span
+                      class="ate-tree-node"
+                      (dblclick)="continueAteExecution(node, $event)"
+                      (contextmenu)="handleAteNodeContextMenu(node, $event)"
+                    >
                       <img class="ate-tree-icon" [src]="node.data.iconSrc" [alt]="node.label" />
                       <span>{{ node.label }}</span>
                     </span>
@@ -385,6 +389,7 @@ export class ExplorerPanel {
   machinePropertiesDialogValue: MachinePropertiesDialogValue | null = null;
   private machinePropertiesDialogMode: 'create' | 'edit' = 'create';
   private machinePropertiesDialogMachineId: string | null = null;
+  private lastAteRightClick: { nodeId: string; timestamp: number } | null = null;
 
   get machineContextMenuItems(): MenuItem[] {
     const selectedMachineId = this.selectedMachineNode?.data?.machineId ?? '';
@@ -833,6 +838,34 @@ export class ExplorerPanel {
 
     if (continued) {
       this.focusAteExpandedBranch(expandedNodeId);
+    }
+  }
+
+  async handleAteNodeContextMenu(node: TreeNode, event: MouseEvent): Promise<void> {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const nodeId = node.data?.ateNodeId ?? '';
+    const now = Date.now();
+    const lastRightClick = this.lastAteRightClick;
+    const isRightDoubleClick = lastRightClick !== null &&
+      lastRightClick.nodeId === nodeId &&
+      now - lastRightClick.timestamp <= 500;
+
+    this.lastAteRightClick = { nodeId, timestamp: now };
+
+    if (!isRightDoubleClick) {
+      return;
+    }
+
+    this.lastAteRightClick = null;
+    const returned = await this.loading.run(
+      () => this.store.returnFromAteSubtrace(),
+      this.i18n.translate('loading.executing'),
+    );
+
+    if (returned) {
+      this.focusAteExpandedBranch(this.store.selectedAteNode()?.id ?? nodeId);
     }
   }
 

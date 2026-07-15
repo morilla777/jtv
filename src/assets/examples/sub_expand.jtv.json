@@ -1,0 +1,163 @@
+{
+  "format": "jtv-web-machine",
+  "version": 2,
+  "machine": {
+    "id": "729aa7df-219c-4589-839b-1ba9ee5ef5bf",
+    "name": "SUB_EXPAND"
+  },
+  "parameterAssignments": {},
+  "metaValues": {
+    "variables": [],
+    "parameters": []
+  },
+  "tapeCount": 1,
+  "submachines": [
+    {
+      "format": "jtv-web-machine",
+      "version": 2,
+      "machine": {
+        "id": "f025c686-afbd-456e-b7a1-c6d6e7c03756",
+        "name": "EXPAND",
+        "shortName": "EXPA",
+        "description": ""
+      },
+      "parameterAssignments": {},
+      "metaValues": {
+        "variables": [],
+        "parameters": []
+      },
+      "tapeCount": 1,
+      "submachines": [],
+      "graph": {
+        "initialGroupId": "151cdfec-da91-4ddd-8958-3e3a60b3bfc6",
+        "groups": [
+          {
+            "id": "151cdfec-da91-4ddd-8958-3e3a60b3bfc6",
+            "nodeIds": [
+              "019b532a-9c40-4bca-a7db-16566f10c987"
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "019b532a-9c40-4bca-a7db-16566f10c987",
+            "type": "move-right",
+            "name": "R",
+            "tapeIndex": 0,
+            "isInitial": true
+          }
+        ],
+        "links": [],
+        "autolinks": [
+          {
+            "id": "19e6e8ea-5f2b-44f0-9af0-e685641e7ba5",
+            "nodeId": "019b532a-9c40-4bca-a7db-16566f10c987",
+            "condition": null
+          }
+        ]
+      },
+      "view": {
+        "groups": [
+          {
+            "groupId": "151cdfec-da91-4ddd-8958-3e3a60b3bfc6",
+            "label": "R",
+            "position": {
+              "x": 320,
+              "y": 141
+            },
+            "width": 28,
+            "height": 32
+          }
+        ],
+        "nodes": [
+          {
+            "nodeId": "019b532a-9c40-4bca-a7db-16566f10c987",
+            "groupId": "151cdfec-da91-4ddd-8958-3e3a60b3bfc6",
+            "kind": "text",
+            "label": "R",
+            "tapeIndex": 0,
+            "initial": true,
+            "position": {
+              "x": 320,
+              "y": 141
+            }
+          }
+        ],
+        "links": [
+          {
+            "linkId": "19e6e8ea-5f2b-44f0-9af0-e685641e7ba5",
+            "label": "",
+            "kind": "autolink",
+            "autolinkOrientation": "right",
+            "sourceGroupId": "151cdfec-da91-4ddd-8958-3e3a60b3bfc6",
+            "targetGroupId": "151cdfec-da91-4ddd-8958-3e3a60b3bfc6",
+            "points": [
+              {
+                "x": 320,
+                "y": 141
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "graph": {
+    "initialGroupId": "fb3b5935-b0fe-4dbf-896c-16611d8addee",
+    "groups": [
+      {
+        "id": "fb3b5935-b0fe-4dbf-896c-16611d8addee",
+        "nodeIds": [
+          "818704a6-312e-4f8c-a95f-bf470254317c"
+        ]
+      }
+    ],
+    "nodes": [
+      {
+        "id": "818704a6-312e-4f8c-a95f-bf470254317c",
+        "type": "submachine",
+        "name": "M",
+        "tapeIndex": 0,
+        "isInitial": true,
+        "submachineId": "f025c686-afbd-456e-b7a1-c6d6e7c03756",
+        "submachineName": "EXPAND",
+        "displaySymbol": "M",
+        "parameterName": "",
+        "submachineParameterAssignments": {}
+      }
+    ],
+    "links": [],
+    "autolinks": []
+  },
+  "view": {
+    "groups": [
+      {
+        "groupId": "fb3b5935-b0fe-4dbf-896c-16611d8addee",
+        "label": "M",
+        "position": {
+          "x": 320,
+          "y": 128
+        },
+        "width": 28,
+        "height": 32
+      }
+    ],
+    "nodes": [
+      {
+        "nodeId": "818704a6-312e-4f8c-a95f-bf470254317c",
+        "groupId": "fb3b5935-b0fe-4dbf-896c-16611d8addee",
+        "kind": "submachine",
+        "label": "M",
+        "subscriptLabel": "",
+        "subscriptOverline": false,
+        "tapeIndex": 0,
+        "initial": true,
+        "position": {
+          "x": 320,
+          "y": 128
+        }
+      }
+    ],
+    "links": []
+  }
+}

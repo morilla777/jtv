@@ -1916,7 +1916,7 @@ export class JtvStore {
       (expandNode?.kind === 'stop' || expandNode?.kind === 'hanging' || expandNode?.kind === 'error') &&
       this.ateNavigationStack.length > 0
     ) {
-      this.exitAteSubtrace();
+      this.exitAteSubtrace(expandNode);
       return true;
     }
 
@@ -1983,6 +1983,15 @@ export class JtvStore {
     return result.status !== 'failed' && result.status !== 'error';
   }
 
+  returnFromAteSubtrace(): boolean {
+    if (this.ateNavigationStack.length === 0) {
+      return false;
+    }
+
+    this.exitAteSubtrace(undefined, { propagateResult: false });
+    return true;
+  }
+
   private enterAteSubtrace(parentNode: AteNode, subtrace: AteSubtrace): void {
     const current = this.state();
 
@@ -2022,7 +2031,10 @@ export class JtvStore {
     }));
   }
 
-  private exitAteSubtrace(): void {
+  private exitAteSubtrace(
+    terminalNode?: AteNode,
+    options: { propagateResult?: boolean } = { propagateResult: true },
+  ): void {
     const current = this.state();
     const frame = this.ateNavigationStack.pop();
 
@@ -2033,10 +2045,21 @@ export class JtvStore {
     const frameTapes = this.cloneTapeStates(frame.tapes);
     const parentNode = this.findAteNode(frame.ate, frame.parentAteNodeId);
     const callerTapeIndex = parentNode?.subtrace?.callerTapeIndex;
-    const subtraceResultSnapshot = current.tapes[0]?.tape.getSnapshot();
+    const subtraceResultSnapshot = options.propagateResult === false
+      ? undefined
+      : terminalNode
+      ? this.replayTapeSnapshotsToAteNode(terminalNode)?.[0]
+      : current.tapes[0]?.tape.getSnapshot();
 
     if (callerTapeIndex !== undefined && subtraceResultSnapshot && frameTapes[callerTapeIndex]) {
       frameTapes[callerTapeIndex].tape.restoreSnapshot(subtraceResultSnapshot);
+    }
+
+    if (parentNode?.subtrace && subtraceResultSnapshot) {
+      (parentNode.subtrace as { finalTapeSnapshots: readonly TapeSnapshot[] }).finalTapeSnapshots = [
+        subtraceResultSnapshot,
+        ...parentNode.subtrace.finalTapeSnapshots.slice(1),
+      ];
     }
 
     this.activeDesignMachineId = frame.activeDesignMachineId;
@@ -3697,6 +3720,17 @@ export class JtvStore {
       const traceNode = traceNodes[index];
 
       if (traceNode.machineNodeId) {
+        if (traceNode.subtrace) {
+          const callerTapeIndex = traceNode.subtrace.callerTapeIndex ?? 0;
+          const resultSnapshot = traceNode.subtrace.finalTapeSnapshots[0];
+
+          if (resultSnapshot && tapes[callerTapeIndex]) {
+            tapes[callerTapeIndex].restoreSnapshot(resultSnapshot);
+          }
+
+          continue;
+        }
+
         const machineNode = machineNodes.get(traceNode.machineNodeId);
 
         if (!machineNode?.execute(context)) {

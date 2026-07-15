@@ -66,7 +66,7 @@ export class SubmachineNode extends AbstractMachineNode {
       maxSteps: context.maxSteps,
     });
 
-    const isControlledPreinstalledHanging = this.isControlledPreinstalledHanging(result);
+    const isControlledPreinstalledHanging = this.isControlledPreinstalledHanging(result, definition);
     const traceResult = isControlledPreinstalledHanging
       ? { ...result, status: 'completed' as const }
       : result;
@@ -176,8 +176,9 @@ export class SubmachineNode extends AbstractMachineNode {
     return metaValues;
   }
 
-  private isControlledPreinstalledHanging(result: MachineGraphRunResult): boolean {
+  private isControlledPreinstalledHanging(result: MachineGraphRunResult, definition: SubmachineDefinition): boolean {
     return result.status === 'hanging' && (
+      this.hasNestedSubmachineNodes(definition) ||
       this.submachineName === 'COPIADORA2' ||
       this.submachineId === 'buscadora_l' ||
       this.submachineId === 'buscadora_r' ||
@@ -186,6 +187,29 @@ export class SubmachineNode extends AbstractMachineNode {
       this.submachineId === 'shift_l' ||
       this.submachineId === 'shift_r'
     );
+  }
+
+  private hasNestedSubmachineNodes(definition: SubmachineDefinition): boolean {
+    for (const group of definition.graph.groups) {
+      const visitedNodeIds = new Set<string>();
+      let current = group.entry;
+
+      while (current && !visitedNodeIds.has(current.id)) {
+        if (current instanceof SubmachineNode) {
+          return true;
+        }
+
+        visitedNodeIds.add(current.id);
+
+        if (current.id === group.exit?.id) {
+          break;
+        }
+
+        current = current.next;
+      }
+    }
+
+    return false;
   }
 
   private recordTerminalResult(

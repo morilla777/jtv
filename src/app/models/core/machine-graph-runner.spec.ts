@@ -27,6 +27,9 @@ import multiplicadoraFile from '../../../assets/examples/multiplicadora.jtv.json
 import multiplicadora2File from '../../../assets/examples/multiplicadora2.jtv.json';
 import palindromeFile from '../../../assets/examples/palindrome.jtv.json';
 import subColgFile from '../../../assets/examples/sub_colg.jtv.json';
+import subExpandFile from '../../../assets/examples/sub_expand.jtv.json';
+import subNdFile from '../../../assets/examples/sub_nd.jtv.json';
+import tarea3vfinalFile from '../../../assets/examples/tarea3vfinal.jtv.json';
 import buscadoraLFile from '../../../assets/submachines/buscadora_l.jtv.json';
 import buscadoraNotLFile from '../../../assets/submachines/buscadora_not_l.jtv.json';
 import buscadoraNotRFile from '../../../assets/submachines/buscadora_not_r.jtv.json';
@@ -1155,6 +1158,94 @@ describe('MachineGraphRunner', () => {
     ]);
   });
 
+  it('reports M_Error when a submachine definition is missing at execution time', () => {
+    const callerTape = new Tape();
+    const submachineNode = new SubmachineNode(
+      'missing-submachine-node',
+      'missing-submachine',
+      'MISSING_SUB',
+      'M',
+      '',
+      {},
+      0,
+      true,
+    );
+
+    const ok = submachineNode.execute({
+      tapes: [callerTape],
+      metaValues: new MetaValueDictionary(),
+      submachines: new Map(),
+    });
+
+    expect(ok).toBe(false);
+    expect(submachineNode.getExecutionResult()).toEqual({ status: 'error' });
+    expect(submachineNode.getAteIconName()).toBe('M_Error_ATE.gif');
+    expect(submachineNode.getAteSubtrace()).toBeNull();
+    expect(callerTape.getSnapshot()).toEqual({
+      headPosition: 0,
+      cells: {},
+    });
+  });
+
+  it('records a specialized M error entry with an internal error trace for an inconsistent in-memory submachine', () => {
+    const callerTape = new Tape();
+    const submachineNode = new SubmachineNode(
+      'corrupt-submachine-node',
+      'corrupt-submachine',
+      'CORRUPT_SUB',
+      'M',
+      '',
+      {},
+      0,
+      true,
+    );
+    const parentGroup = new LinearMachineGroup('parent-group', submachineNode, submachineNode);
+    const corruptSubmachine: SubmachineDefinition = {
+      name: 'CORRUPT_SUB',
+      graph: {
+        groups: [],
+        links: [],
+        autolinks: [],
+        initialGroupId: 'missing-initial-group',
+      },
+      view: { groups: [], nodes: [], links: [] },
+      tapeCount: 1,
+      parameterAssignments: {},
+    };
+    const traceRecorder = new AteTraceRecorder('MAIN');
+    const result = new MachineGraphRunner().runBurst({
+      initialGroupId: parentGroup.id,
+      groups: [parentGroup],
+      links: [],
+      autolinks: [],
+    }, {
+      tapes: [callerTape],
+      metaValues: new MetaValueDictionary(),
+      submachines: new Map([['corrupt-submachine', corruptSubmachine]]),
+    }, traceRecorder);
+
+    expect(result).toEqual({
+      status: 'error',
+      traceTerminalRecorded: true,
+    });
+    expect(traceRecorder.root.children).toEqual([
+      expect.objectContaining({
+        iconSrc: 'assets/images/M_Error_ATE.gif',
+        label: 'CORRUPT_SUB()',
+        subtrace: expect.objectContaining({
+          root: expect.objectContaining({
+            children: [
+              expect.objectContaining({
+                iconSrc: 'assets/images/error_ATE.gif',
+                kind: 'error',
+              }),
+            ],
+          }),
+        }),
+      }),
+    ]);
+  });
+
   it('renders M_Hanging for the SUB_COLG example submachine invocation', () => {
     const restored = restoreMachineFromJtvFile(subColgFile as JtvFile);
     const tape = new Tape();
@@ -1182,6 +1273,83 @@ describe('MachineGraphRunner', () => {
         }),
       }),
     ]);
+  });
+
+  it('renders M_Expand for the SUB_EXPAND example submachine invocation', () => {
+    const restored = restoreMachineFromJtvFile(subExpandFile as JtvFile);
+    const tape = new Tape();
+    const traceRecorder = new AteTraceRecorder(restored.selectedMachine.name);
+    const result = new MachineGraphRunner().runBurst(restored.machineGraph, {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+      maxSteps: 2,
+      submachines: createExampleSubmachines(restored),
+    }, traceRecorder, { maxSteps: 2 });
+
+    expect(result.status).toBe('suspended');
+    expect(traceRecorder.root.children).toEqual([
+      expect.objectContaining({
+        iconSrc: 'assets/images/M_Expand_ATE.gif',
+        label: 'EXPAND()',
+        subtrace: expect.objectContaining({
+          root: expect.objectContaining({
+            children: expect.arrayContaining([
+              expect.objectContaining({
+                iconSrc: 'assets/images/expand_ATE.gif',
+                kind: 'expand',
+              }),
+            ]),
+          }),
+        }),
+      }),
+    ]);
+  });
+
+  it('renders M_ND for the SUB_ND example submachine invocation', () => {
+    const restored = restoreMachineFromJtvFile(subNdFile as JtvFile);
+    const tape = new Tape();
+    const traceRecorder = new AteTraceRecorder(restored.selectedMachine.name);
+    const result = new MachineGraphRunner().runBurst(restored.machineGraph, {
+      tapes: [tape],
+      metaValues: new MetaValueDictionary(),
+      submachines: createExampleSubmachines(restored),
+    }, traceRecorder);
+
+    expect(result.status).toBe('nondeterministic');
+    expect(traceRecorder.root.children).toEqual([
+      expect.objectContaining({
+        iconSrc: 'assets/images/M_ND_ATE.gif',
+        label: 'ND()',
+        subtrace: expect.objectContaining({
+          root: expect.objectContaining({
+            children: expect.arrayContaining([
+              expect.objectContaining({
+                iconSrc: 'assets/images/ND_ATE.gif',
+                kind: 'nondeterminism',
+              }),
+              expect.objectContaining({
+                iconSrc: 'assets/images/expand_ATE.gif',
+                kind: 'expand',
+              }),
+            ]),
+          }),
+        }),
+      }),
+    ]);
+  });
+
+  it('executes the TAREA3VFINAL legacy monster example without treating legacy submachine returns as hanging', () => {
+    expect(runExampleMachineBurstOutput(tarea3vfinalFile as JtvFile, '10101#1111#s#100#r', 1000)).toBe('#100000#');
+  });
+
+  it.each([
+    ['101#f#101010#1010#r#m', '#111100000000#'],
+    ['100101#101#t#log#10#10001#1010#101#f#r#m#s#d', '#0#'],
+    ['101001#1000#100000#r#d', '#error#'],
+    ['0#f#1#r#00#p', '#error#'],
+    ['10010#1010#1010#1001#000101#01010#01010#01010#p#s#d#r#m#s#log#f#s', '#1101110101111100010010#'],
+  ])('executes the TAREA3VFINAL legacy monster example for "%s"', (input, expectedOutput) => {
+    expect(runExampleMachineBurstOutput(tarea3vfinalFile as JtvFile, input, 1000)).toBe(expectedOutput);
   });
 
   it('executes the preinstalled shift-right submachine without looping', () => {
@@ -1591,11 +1759,62 @@ function runExampleMachineBurst(file: JtvFile, input: string, maxSteps: number):
   return { result, tape, traceRecorder };
 }
 
+function runExampleMachineBurstOutput(file: JtvFile, input: string, maxSteps: number): string {
+  const restored = restoreMachineFromJtvFile(file);
+  const tapeCount = Math.max(restored.tapeCount, 1);
+  const tapes = Array.from({ length: tapeCount }, (_, index) => {
+    const tape = new Tape();
+    tape.load(index === 0 ? input : '');
+    return tape;
+  });
+  const runner = new MachineGraphRunner();
+  const context = {
+    tapes,
+    metaValues: new MetaValueDictionary(),
+    submachines: createExampleSubmachines(restored),
+  };
+  let result = runner.runBurst(restored.machineGraph, context, undefined, { maxSteps });
+  let bursts = 1;
+
+  while (result.status === 'suspended' && result.continuation && bursts < 100) {
+    result = runner.runBurst(restored.machineGraph, context, undefined, {
+      maxSteps,
+      startAt: result.continuation,
+    });
+    bursts++;
+  }
+
+  expect(result.status).toBe('completed');
+
+  return tapeSnapshotToDelimitedString(tapes[0].getSnapshot());
+}
+
+function tapeSnapshotToDelimitedString(snapshot: ReturnType<Tape['getSnapshot']>): string {
+  const positions = Object.keys(snapshot.cells)
+    .map((position) => Number(position))
+    .filter((position) => Number.isInteger(position));
+
+  if (positions.length === 0) {
+    return '##';
+  }
+
+  const maxPosition = Math.max(...positions);
+  let output = '';
+
+  for (let position = 1; position <= maxPosition; position++) {
+    output += snapshot.cells[position] ?? SymbolValue.BLANK;
+  }
+
+  return `${SymbolValue.BLANK}${output}${SymbolValue.BLANK}`;
+}
+
 function createSubmachineDefinition(file: JtvFile): SubmachineDefinition {
   const restored = restoreMachineFromJtvFile(file);
 
   return {
+    name: restored.selectedMachine.name,
     graph: restored.machineGraph,
+    view: restored.machineGraphView,
     tapeCount: restored.tapeCount,
     parameterAssignments: restored.parameterAssignments,
   };
@@ -1617,7 +1836,9 @@ function addRestoredSubmachines(
     const restored = restoreMachineFromJtvFile(file);
 
     submachines.set(restored.selectedMachine.id, {
+      name: restored.selectedMachine.name,
       graph: restored.machineGraph,
+      view: restored.machineGraphView,
       tapeCount: restored.tapeCount,
       parameterAssignments: restored.parameterAssignments,
     });
