@@ -10,6 +10,8 @@ import { JtvFileService } from '../services/jtv-file.service';
 import { JtvSettingsService } from '../services/jtv-settings.service';
 import { PreinstalledSubmachineService } from '../services/preinstalled-submachine.service';
 import { RecentMachinesService } from '../services/recent-machines.service';
+import copiadora2File from '../../assets/examples/copiadora2.jtv.json';
+import igualesAbcFile from '../../assets/examples/iguales_abc.jtv.json';
 
 describe('JtvStore ATE subtrace navigation', () => {
   let storage: Map<string, string>;
@@ -188,6 +190,107 @@ describe('JtvStore ATE subtrace navigation', () => {
         'assets/images/expand_ATE.gif',
         'assets/images/expand_ATE.gif',
       ]);
+    } finally {
+      injector.destroy();
+    }
+  });
+
+  it('executes the COPIADORA2 example from the store for "copyme"', () => {
+    storage.set('jtv-settings', JSON.stringify({
+      burstSize: 1000,
+      maxTapeCount: 10,
+      oldNotation: false,
+    }));
+    const injector = createEnvironmentInjector([
+      JtvStore,
+      JtvFileService,
+      JtvFileValidatorService,
+      JtvSettingsService,
+      PreinstalledSubmachineService,
+      RecentMachinesService,
+    ]);
+
+    try {
+      const store = runInInjectionContext(injector, () => injector.get(JtvStore));
+
+      store.importMachineFile(copiadora2File as JtvFile);
+      store.setTapeValue('tape-1', 'copyme');
+      store.setTapeValue('tape-2', '');
+
+      expect(store.runMachineOnFirstTape()).toBe(true);
+      expect(store.ate().children.at(-1)).toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/stop_ATE.gif',
+        kind: 'stop',
+      }));
+      expect(store.tapeSnapshots()).toEqual([
+        {
+          headPosition: 14,
+          cells: {
+            1: 'c',
+            2: 'o',
+            3: 'p',
+            4: 'y',
+            5: 'm',
+            6: 'e',
+            8: 'c',
+            9: 'o',
+            10: 'p',
+            11: 'y',
+            12: 'm',
+            13: 'e',
+          },
+        },
+        {
+          headPosition: 7,
+          cells: {
+            1: 'c',
+            2: 'o',
+            3: 'p',
+            4: 'y',
+            5: 'm',
+            6: 'e',
+          },
+        },
+      ]);
+    } finally {
+      injector.destroy();
+    }
+  });
+
+  it('executes the IGUALES_ABC example from the store for "abc"', () => {
+    storage.set('jtv-settings', JSON.stringify({
+      burstSize: 1000,
+      maxTapeCount: 10,
+      oldNotation: false,
+    }));
+    const injector = createEnvironmentInjector([
+      JtvStore,
+      JtvFileService,
+      JtvFileValidatorService,
+      JtvSettingsService,
+      PreinstalledSubmachineService,
+      RecentMachinesService,
+    ]);
+
+    try {
+      const store = runInInjectionContext(injector, () => injector.get(JtvStore));
+
+      store.importMachineFile(igualesAbcFile as JtvFile);
+      store.setTapeValue('tape-1', 'abc');
+
+      expect(store.runMachineOnFirstTape()).toBe(true);
+      expect(store.ate().children.at(-1)).toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/stop_ATE.gif',
+        kind: 'stop',
+      }));
+      expect(store.selectedTapeSnapshot()).toEqual({
+        headPosition: 0,
+        cells: {
+          1: 'd',
+          2: 'd',
+          3: 'd',
+        },
+      });
     } finally {
       injector.destroy();
     }

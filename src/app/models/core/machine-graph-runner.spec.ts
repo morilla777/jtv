@@ -1433,6 +1433,39 @@ describe('MachineGraphRunner', () => {
     ]);
   });
 
+  it('executes the COPIADORA2 example for "copyme"', () => {
+    expect(runExampleMachineTapes(copiadora2File as JtvFile, ['copyme', ''])).toEqual([
+      {
+        headPosition: 14,
+        cells: {
+          1: 'c',
+          2: 'o',
+          3: 'p',
+          4: 'y',
+          5: 'm',
+          6: 'e',
+          8: 'c',
+          9: 'o',
+          10: 'p',
+          11: 'y',
+          12: 'm',
+          13: 'e',
+        },
+      },
+      {
+        headPosition: 7,
+        cells: {
+          1: 'c',
+          2: 'o',
+          3: 'p',
+          4: 'y',
+          5: 'm',
+          6: 'e',
+        },
+      },
+    ]);
+  });
+
   it.each([
     [
       '111111#1111',
@@ -1567,6 +1600,17 @@ describe('MachineGraphRunner', () => {
         7: 'd',
         8: 'd',
         9: 'd',
+      },
+    });
+  });
+
+  it('executes the IGUALES_ABC example for the minimal accepted input "abc"', () => {
+    expect(runExampleMachine(igualesAbcFile as JtvFile, 'abc')).toEqual({
+      headPosition: 0,
+      cells: {
+        1: 'd',
+        2: 'd',
+        3: 'd',
       },
     });
   });

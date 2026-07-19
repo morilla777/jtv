@@ -2,7 +2,11 @@ import { AbstractMachineNode } from './abstract-machine-node';
 import { ExecutionContext, SubmachineDefinition } from './execution-context';
 import { Link } from './link';
 import { MachineGraphRunner } from './machine-graph-runner';
-import { type MachineGraphExecutionPoint, type MachineGraphRunResult } from './machine-graph-run-result';
+import {
+  isLegacyTerminalHangingResult,
+  type MachineGraphExecutionPoint,
+  type MachineGraphRunResult,
+} from './machine-graph-run-result';
 import { type MetaValue } from './meta-value';
 import { MetaValueDictionary } from './meta-value-dictionary';
 import { ParameterValue } from './parameter-value';
@@ -66,8 +70,9 @@ export class SubmachineNode extends AbstractMachineNode {
       maxSteps: context.maxSteps,
     });
 
-    const isControlledPreinstalledHanging = this.isControlledPreinstalledHanging(result, definition);
-    const traceResult = isControlledPreinstalledHanging
+    const shouldCompleteHanging = this.isControlledPreinstalledHanging(result, definition) ||
+      isLegacyTerminalHangingResult(result, definition.graph.initialGroupId);
+    const traceResult = shouldCompleteHanging
       ? { ...result, status: 'completed' as const }
       : result;
 

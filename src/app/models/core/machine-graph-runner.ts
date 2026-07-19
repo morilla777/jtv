@@ -29,6 +29,7 @@ export class MachineGraphRunner {
     let point = options.startAt ?? this.createInitialExecutionPoint(graph);
     const maxSteps = Math.max(0, options.maxSteps ?? Number.POSITIVE_INFINITY);
     let recordedSteps = 0;
+    let traversedTransitionCount = 0;
 
     if (!point) {
       return { status: 'error' };
@@ -79,7 +80,17 @@ export class MachineGraphRunner {
             };
           }
 
-          return { status: this.getNodeExecutionFailureStatus(currentNode, context) };
+          const status = this.getNodeExecutionFailureStatus(currentNode, context);
+
+          return status === 'hanging'
+            ? {
+              status,
+              hangingReason: 'node-failed',
+              hangingGroupId: currentGroup.id,
+              recordedSteps,
+              traversedTransitionCount,
+            }
+            : { status };
         }
 
         traceRecorder?.recordMachineNode(currentNode);
@@ -129,6 +140,7 @@ export class MachineGraphRunner {
 
           traceRecorder?.recordLink(autolink);
           recordedSteps++;
+          traversedTransitionCount++;
           point = {
             currentGroupId: currentGroup.id,
             currentNodeId: currentNode.id,
@@ -175,16 +187,29 @@ export class MachineGraphRunner {
 
       if (!nextLink) {
         return this.hasOutgoingLinks(graph.links, currentGroup)
-          ? { status: 'hanging' }
+          ? {
+            status: 'hanging',
+            hangingReason: 'no-traversable-transition',
+            hangingGroupId: currentGroup.id,
+            recordedSteps,
+            traversedTransitionCount,
+          }
           : { status: 'completed' };
       }
 
       if (!nextLink.canTraverse(context)) {
-        return { status: 'hanging' };
+        return {
+          status: 'hanging',
+          hangingReason: 'no-traversable-transition',
+          hangingGroupId: currentGroup.id,
+          recordedSteps,
+          traversedTransitionCount,
+        };
       }
 
       traceRecorder?.recordLink(nextLink);
       recordedSteps++;
+      traversedTransitionCount++;
 
       const targetGroup: MachineGroup | null = nextLink.targetGroup;
 

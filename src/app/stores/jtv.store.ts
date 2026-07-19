@@ -7,7 +7,10 @@ import { Link } from '../models/core/link';
 import { LinkCondition, type ReadConditionClause } from '../models/core/link-condition';
 import { MachineGraph } from '../models/core/machine-graph';
 import { MachineGraphRunner } from '../models/core/machine-graph-runner';
-import { type MachineGraphExecutionPoint } from '../models/core/machine-graph-run-result';
+import {
+  isLegacyTerminalHangingResult,
+  type MachineGraphExecutionPoint,
+} from '../models/core/machine-graph-run-result';
 import { MachineGroup } from '../models/core/machine-group';
 import { MachineNode } from '../models/core/machine-node';
 import { HubNode } from '../models/core/hub-node';
@@ -1887,6 +1890,8 @@ export class JtvStore {
       traceRecorder.recordExpand(this.createAteContinuationSnapshot(result.continuation, context));
     } else if (result.status === 'nondeterministic' && result.continuations) {
       this.recordNondeterministicContinuations(traceRecorder, result.continuations, context);
+    } else if (isLegacyTerminalHangingResult(result, this.state().machineGraph.initialGroupId)) {
+      traceRecorder.recordStop();
     } else if (result.status === 'hanging') {
       traceRecorder.recordHanging();
     } else if (result.status === 'error' || result.status === 'failed') {
@@ -1953,6 +1958,10 @@ export class JtvStore {
       deleteMutableContinuation(expandNode);
     } else if (result.status === 'nondeterministic' && result.continuations) {
       this.recordNondeterministicContinuations(traceRecorder, result.continuations, context);
+      keepMutableReplayContinuation(expandNode);
+      deleteMutableContinuation(expandNode);
+    } else if (isLegacyTerminalHangingResult(result, state.machineGraph.initialGroupId)) {
+      traceRecorder.recordStop();
       keepMutableReplayContinuation(expandNode);
       deleteMutableContinuation(expandNode);
     } else if (result.status === 'hanging') {
