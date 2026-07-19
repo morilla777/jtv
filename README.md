@@ -1,6 +1,14 @@
-# Jtv
+# JTV
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.7.
+JTV is a graphical environment for designing, executing, tracing, and analyzing Turing Machines. This web version modernizes the original Java application while preserving its core visual notation, machine model, execution trace tree, preinstalled submachines, custom submachines, legacy machine import, and example machines used for teaching Theory of Computation.
+
+The application is built with Angular, PrimeNG, and TypeScript. It includes unit and integration tests that execute representative Turing Machines, including machines with multiple tapes, submachines, nondeterminism, suspended executions, and legacy XML imports.
+
+## AI-assisted development
+
+JTV was modernized with AI-assisted software engineering. GPT-5.6 was used as a design and reasoning assistant to discuss architecture, implementation strategies, migration decisions, and user-facing behavior. Codex was used as the coding agent inside the repository to inspect the codebase, implement features, refactor modules, fix bugs, add tests, and validate changes with the Angular/Vitest toolchain.
+
+All generated or assisted changes were iteratively reviewed, tested, and adjusted against the behavior of the original JTV application.
 
 ## Development server
 
