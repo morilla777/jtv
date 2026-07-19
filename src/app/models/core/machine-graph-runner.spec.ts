@@ -1362,7 +1362,9 @@ describe('MachineGraphRunner', () => {
       metaValues: new MetaValueDictionary(),
       submachines: new Map<string, SubmachineDefinition>([
         ['buscadora_r', {
+          name: buscadoraR.selectedMachine.name,
           graph: buscadoraR.machineGraph,
+          view: buscadoraR.machineGraphView,
           tapeCount: buscadoraR.tapeCount,
           parameterAssignments: buscadoraR.parameterAssignments,
         }],

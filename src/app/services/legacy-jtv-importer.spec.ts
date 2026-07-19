@@ -1,9 +1,13 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
+import copiadoraLegacyXml from '../../assets/examples/legacy/COPIADORA.jtv';
+import copiadora2LegacyXml from '../../assets/examples/legacy/COPIADORA2.jtv';
+import igualesAbcLegacyXml from '../../assets/examples/legacy/IGUALES ABC.jtv';
+import monusLegacyXml from '../../assets/examples/legacy/MONUS.jtv';
+import multiplicadoraLegacyXml from '../../assets/examples/legacy/MULTIPLICADORA.jtv';
+import multiplicadora2LegacyXml from '../../assets/examples/legacy/MULTIPLICADORA2.jtv';
+import palindromeLegacyXml from '../../assets/examples/legacy/PALINDROME.jtv';
 import buscadoraLFile from '../../assets/submachines/buscadora_l.jtv.json';
 import buscadoraNotLFile from '../../assets/submachines/buscadora_not_l.jtv.json';
 import buscadoraNotRFile from '../../assets/submachines/buscadora_not_r.jtv.json';
@@ -296,7 +300,7 @@ describe('Legacy JTV importer', () => {
 });
 
 function importLegacyExample(fileName: string): JtvFile {
-  const xml = readFileSync(resolve(__dirname, `../../assets/examples/legacy/${fileName}`), 'utf8');
+  const xml = getLegacyExampleXml(fileName);
   const domParser = globalThis.DOMParser;
 
   globalThis.DOMParser = new JSDOM().window.DOMParser as typeof DOMParser;
@@ -306,6 +310,26 @@ function importLegacyExample(fileName: string): JtvFile {
   } finally {
     globalThis.DOMParser = domParser;
   }
+}
+
+function getLegacyExampleXml(fileName: string): string {
+  const legacyExamples: Readonly<Record<string, string>> = {
+    'COPIADORA.jtv': copiadoraLegacyXml,
+    'COPIADORA2.jtv': copiadora2LegacyXml,
+    'IGUALES ABC.jtv': igualesAbcLegacyXml,
+    'MONUS.jtv': monusLegacyXml,
+    'MULTIPLICADORA.jtv': multiplicadoraLegacyXml,
+    'MULTIPLICADORA2.jtv': multiplicadora2LegacyXml,
+    'PALINDROME.jtv': palindromeLegacyXml,
+  };
+
+  const xml = legacyExamples[fileName];
+
+  if (!xml) {
+    throw new Error(`Unknown legacy example: ${fileName}`);
+  }
+
+  return xml;
 }
 
 function runLegacyExampleMachine(file: JtvFile, input: string): ReturnType<Tape['getSnapshot']> {
@@ -385,7 +409,9 @@ function createSubmachineDefinition(file: JtvFile): SubmachineDefinition {
   const restored = restoreMachineFromJtvFile(file);
 
   return {
+    name: restored.selectedMachine.name,
     graph: restored.machineGraph,
+    view: restored.machineGraphView,
     tapeCount: restored.tapeCount,
     parameterAssignments: restored.parameterAssignments,
   };
@@ -399,7 +425,9 @@ function addRestoredSubmachines(
     const restored = restoreMachineFromJtvFile(file);
 
     submachines.set(restored.selectedMachine.id, {
+      name: restored.selectedMachine.name,
       graph: restored.machineGraph,
+      view: restored.machineGraphView,
       tapeCount: restored.tapeCount,
       parameterAssignments: restored.parameterAssignments,
     });

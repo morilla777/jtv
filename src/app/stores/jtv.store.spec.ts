@@ -1,6 +1,6 @@
 import '@angular/compiler';
 
-import { createEnvironmentInjector, runInInjectionContext } from '@angular/core';
+import { createEnvironmentInjector, EnvironmentInjector, Injector, runInInjectionContext } from '@angular/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { JtvStore } from './jtv.store';
@@ -10,12 +10,19 @@ import { JtvFileService } from '../services/jtv-file.service';
 import { JtvSettingsService } from '../services/jtv-settings.service';
 import { PreinstalledSubmachineService } from '../services/preinstalled-submachine.service';
 import { RecentMachinesService } from '../services/recent-machines.service';
+import copiadoraFile from '../../assets/examples/copiadora.jtv.json';
 import copiadora2File from '../../assets/examples/copiadora2.jtv.json';
 import igualesAbcFile from '../../assets/examples/iguales_abc.jtv.json';
+import monusFile from '../../assets/examples/monus.jtv.json';
+import multiplicadoraFile from '../../assets/examples/multiplicadora.jtv.json';
+import multiplicadora2File from '../../assets/examples/multiplicadora2.jtv.json';
+import palindromeFile from '../../assets/examples/palindrome.jtv.json';
+import tarea3vfinalFile from '../../assets/examples/tarea3vfinal.jtv.json';
+
+type TestJtvStore = JtvStore & { destroy: () => void };
+let storage: Map<string, string>;
 
 describe('JtvStore ATE subtrace navigation', () => {
-  let storage: Map<string, string>;
-
   beforeEach(() => {
     storage = new Map<string, string>();
     storage.set('jtv-settings', JSON.stringify({
@@ -35,14 +42,7 @@ describe('JtvStore ATE subtrace navigation', () => {
   });
 
   it('continues an expanded submachine trace internally and propagates its first tape on return', () => {
-    const injector = createEnvironmentInjector([
-      JtvStore,
-      JtvFileService,
-      JtvFileValidatorService,
-      JtvSettingsService,
-      PreinstalledSubmachineService,
-      RecentMachinesService,
-    ]);
+    const injector = createJtvInjector();
 
     try {
       const store = runInInjectionContext(injector, () => injector.get(JtvStore));
@@ -93,14 +93,7 @@ describe('JtvStore ATE subtrace navigation', () => {
   });
 
   it('returns from a suspended submachine trace without continuing it', () => {
-    const injector = createEnvironmentInjector([
-      JtvStore,
-      JtvFileService,
-      JtvFileValidatorService,
-      JtvSettingsService,
-      PreinstalledSubmachineService,
-      RecentMachinesService,
-    ]);
+    const injector = createJtvInjector();
 
     try {
       const store = runInInjectionContext(injector, () => injector.get(JtvStore));
@@ -130,14 +123,7 @@ describe('JtvStore ATE subtrace navigation', () => {
   });
 
   it('expands nondeterministic submachine branches with terminal, suspended, hanging and nested nondeterministic outcomes', () => {
-    const injector = createEnvironmentInjector([
-      JtvStore,
-      JtvFileService,
-      JtvFileValidatorService,
-      JtvSettingsService,
-      PreinstalledSubmachineService,
-      RecentMachinesService,
-    ]);
+    const injector = createJtvInjector();
 
     try {
       const store = runInInjectionContext(injector, () => injector.get(JtvStore));
@@ -201,14 +187,7 @@ describe('JtvStore ATE subtrace navigation', () => {
       maxTapeCount: 10,
       oldNotation: false,
     }));
-    const injector = createEnvironmentInjector([
-      JtvStore,
-      JtvFileService,
-      JtvFileValidatorService,
-      JtvSettingsService,
-      PreinstalledSubmachineService,
-      RecentMachinesService,
-    ]);
+    const injector = createJtvInjector();
 
     try {
       const store = runInInjectionContext(injector, () => injector.get(JtvStore));
@@ -263,14 +242,7 @@ describe('JtvStore ATE subtrace navigation', () => {
       maxTapeCount: 10,
       oldNotation: false,
     }));
-    const injector = createEnvironmentInjector([
-      JtvStore,
-      JtvFileService,
-      JtvFileValidatorService,
-      JtvSettingsService,
-      PreinstalledSubmachineService,
-      RecentMachinesService,
-    ]);
+    const injector = createJtvInjector();
 
     try {
       const store = runInInjectionContext(injector, () => injector.get(JtvStore));
@@ -293,6 +265,138 @@ describe('JtvStore ATE subtrace navigation', () => {
       });
     } finally {
       injector.destroy();
+    }
+  });
+
+  it.each([
+    [
+      'COPIADORA',
+      copiadoraFile as JtvFile,
+      ['aba'],
+      [
+        {
+          headPosition: 8,
+          cells: {
+            1: 'a',
+            2: 'b',
+            3: 'a',
+            5: 'a',
+            6: 'b',
+            7: 'a',
+          },
+        },
+      ],
+    ],
+    [
+      'MONUS',
+      monusFile as JtvFile,
+      ['111111#1111'],
+      [
+        {
+          headPosition: 3,
+          cells: {
+            1: '1',
+            2: '1',
+          },
+        },
+      ],
+    ],
+    [
+      'MULTIPLICADORA',
+      multiplicadoraFile as JtvFile,
+      ['11111#11'],
+      [
+        {
+          headPosition: 11,
+          cells: {
+            1: '1',
+            2: '1',
+            3: '1',
+            4: '1',
+            5: '1',
+            6: '1',
+            7: '1',
+            8: '1',
+            9: '1',
+            10: '1',
+          },
+        },
+      ],
+    ],
+    [
+      'MULTIPLICADORA2',
+      multiplicadora2File as JtvFile,
+      ['11#11'],
+      [
+        {
+          headPosition: 5,
+          cells: {
+            1: '1',
+            2: '1',
+            3: '1',
+            4: '1',
+          },
+        },
+      ],
+    ],
+    [
+      'PALINDROME',
+      palindromeFile as JtvFile,
+      ['abba'],
+      [
+        {
+          headPosition: 2,
+          cells: {
+            1: 'y',
+          },
+        },
+      ],
+    ],
+    [
+      'TAREA3VFINAL',
+      tarea3vfinalFile as JtvFile,
+      ['10101#1111#s#100#r'],
+      [
+        {
+          headPosition: 7,
+          cells: {
+            1: '1',
+            2: '0',
+            3: '0',
+            4: '0',
+            5: '0',
+            6: '0',
+          },
+        },
+        {
+          headPosition: 0,
+          cells: {},
+        },
+      ],
+    ],
+  ])('executes the %s example from the store and records Stop in the ATE', (
+    _name,
+    file,
+    inputs,
+    expectedSnapshots,
+  ) => {
+    const store = createStoreWithBurstSize(1000);
+
+    try {
+      store.importMachineFile(file);
+
+      for (const [index, input] of inputs.entries()) {
+        store.setTapeValue(`tape-${index + 1}`, input);
+      }
+
+      expect(store.runMachineOnFirstTape()).toBe(true);
+      expect(store.ate().children.at(-1)).toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/stop_ATE.gif',
+        kind: 'stop',
+      }));
+      expect(store.tapeSnapshots()).toEqual(expectedSnapshots);
+    } finally {
+      store.destroy();
     }
   });
 });
@@ -454,6 +558,31 @@ function createSubmachineExpansionFile(): JtvFile {
       links: [],
     },
   };
+}
+
+function createStoreWithBurstSize(burstSize: number): TestJtvStore {
+  storage.set('jtv-settings', JSON.stringify({
+    burstSize,
+    maxTapeCount: 10,
+    oldNotation: false,
+  }));
+  const injector = createJtvInjector();
+  const store = runInInjectionContext(injector, () => injector.get(JtvStore));
+
+  return Object.assign(store, {
+    destroy: () => injector.destroy(),
+  });
+}
+
+function createJtvInjector(): EnvironmentInjector {
+  return createEnvironmentInjector([
+    JtvStore,
+    JtvFileService,
+    JtvFileValidatorService,
+    JtvSettingsService,
+    PreinstalledSubmachineService,
+    RecentMachinesService,
+  ], Injector.NULL as unknown as EnvironmentInjector);
 }
 
 function createSubmachineNondeterministicFile(): JtvFile {

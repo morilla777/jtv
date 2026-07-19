@@ -61,7 +61,10 @@
             ],
             "styles": [
               "src/styles.scss"
-            ]
+            ],
+            "loader": {
+              ".jtv": "text"
+            }
           },
           "configurations": {
             "local": {
@@ -197,7 +200,8 @@
           "options": {
             "buildTarget": "jtv:build:development",
             "runner": "vitest",
-            "tsConfig": "tsconfig.spec.json"
+            "tsConfig": "tsconfig.spec.json",
+            "watch": false
           }
         }
       }
