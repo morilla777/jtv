@@ -2053,16 +2053,11 @@ export class JtvStore {
 
     const frameTapes = this.cloneTapeStates(frame.tapes);
     const parentNode = this.findAteNode(frame.ate, frame.parentAteNodeId);
-    const callerTapeIndex = parentNode?.subtrace?.callerTapeIndex;
     const subtraceResultSnapshot = options.propagateResult === false
       ? undefined
       : terminalNode
       ? this.replayTapeSnapshotsToAteNode(terminalNode)?.[0]
       : current.tapes[0]?.tape.getSnapshot();
-
-    if (callerTapeIndex !== undefined && subtraceResultSnapshot && frameTapes[callerTapeIndex]) {
-      frameTapes[callerTapeIndex].tape.restoreSnapshot(subtraceResultSnapshot);
-    }
 
     if (parentNode?.subtrace && subtraceResultSnapshot) {
       (parentNode.subtrace as { finalTapeSnapshots: readonly TapeSnapshot[] }).finalTapeSnapshots = [

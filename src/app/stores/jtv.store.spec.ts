@@ -122,6 +122,52 @@ describe('JtvStore ATE subtrace navigation', () => {
     }
   });
 
+  it('restores the caller ATE tape snapshot after navigating back from a completed submachine trace', () => {
+    const store = createStoreWithBurstSize(20);
+
+    try {
+      store.importMachineFile(createSubmachineThenCallerWriteFile());
+      expect(store.runMachineOnFirstTape()).toBe(true);
+
+      const machineNode = store.ate().children[0];
+      const mainStopNode = store.ate().children.at(-1)!;
+      expect(machineNode).toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/M_ATE.gif',
+        label: 'SUB_WRITE()',
+      }));
+      expect(mainStopNode).toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/stop_ATE.gif',
+        kind: 'stop',
+      }));
+
+      expect(store.continueAteExecution(machineNode.id)).toBe(true);
+      expect(store.selectedMachine().name).toBe('SUB_WRITE');
+      const submachineStopNode = store.ate().children.at(-1)!;
+      expect(store.continueAteExecution(submachineStopNode.id)).toBe(true);
+      expect(store.selectedMachine().name).toBe('MAIN');
+
+      store.selectAteNode(mainStopNode.id);
+      expect(store.selectedTapeSnapshot()).toEqual({
+        headPosition: 1,
+        cells: {
+          0: 'a',
+          1: 'c',
+        },
+      });
+
+      store.clearAte();
+      expect(store.selectedTapeSnapshot()).toEqual({
+        headPosition: 1,
+        cells: {
+          0: 'a',
+          1: 'c',
+        },
+      });
+    } finally {
+      store.destroy();
+    }
+  });
+
   it('expands nondeterministic submachine branches with terminal, suspended, hanging and nested nondeterministic outcomes', () => {
     const injector = createJtvInjector();
 
@@ -553,6 +599,165 @@ function createSubmachineExpansionFile(): JtvFile {
           tapeIndex: 0,
           initial: true,
           position: { x: 200, y: 200 },
+        },
+      ],
+      links: [],
+    },
+  };
+}
+
+function createSubmachineThenCallerWriteFile(): JtvFile {
+  return {
+    format: 'jtv-web-machine',
+    version: 2,
+    machine: {
+      id: 'main-sub-then-write',
+      name: 'MAIN',
+    },
+    parameterAssignments: {},
+    metaValues: {
+      variables: [],
+      parameters: [],
+    },
+    tapeCount: 1,
+    submachines: [
+      {
+        format: 'jtv-web-machine',
+        version: 2,
+        machine: {
+          id: 'sub-write',
+          name: 'SUB_WRITE',
+          shortName: 'SUB',
+          description: '',
+        },
+        parameterAssignments: {},
+        metaValues: {
+          variables: [],
+          parameters: [],
+        },
+        tapeCount: 1,
+        submachines: [],
+        graph: {
+          initialGroupId: 'sub-write-group',
+          groups: [
+            {
+              id: 'sub-write-group',
+              nodeIds: ['sub-write-a'],
+            },
+          ],
+          nodes: [
+            {
+              id: 'sub-write-a',
+              type: 'writer',
+              name: 'a',
+              tapeIndex: 0,
+              isInitial: true,
+            },
+          ],
+          links: [],
+          autolinks: [],
+        },
+        view: {
+          groups: [
+            {
+              groupId: 'sub-write-group',
+              label: 'a',
+              position: { x: 100, y: 100 },
+              width: 28,
+              height: 32,
+            },
+          ],
+          nodes: [
+            {
+              nodeId: 'sub-write-a',
+              groupId: 'sub-write-group',
+              kind: 'text',
+              label: 'a',
+              tapeIndex: 0,
+              initial: true,
+              position: { x: 100, y: 100 },
+            },
+          ],
+          links: [],
+        },
+      },
+    ],
+    graph: {
+      initialGroupId: 'main-group',
+      groups: [
+        {
+          id: 'main-group',
+          nodeIds: ['call-sub', 'move-right', 'write-c'],
+        },
+      ],
+      nodes: [
+        {
+          id: 'call-sub',
+          type: 'submachine',
+          name: 'M',
+          tapeIndex: 0,
+          isInitial: true,
+          submachineId: 'sub-write',
+          submachineName: 'SUB_WRITE',
+          displaySymbol: 'M',
+          parameterName: '',
+          submachineParameterAssignments: {},
+        },
+        {
+          id: 'move-right',
+          type: 'move-right',
+          name: 'R',
+          tapeIndex: 0,
+          isInitial: false,
+        },
+        {
+          id: 'write-c',
+          type: 'writer',
+          name: 'c',
+          tapeIndex: 0,
+          isInitial: false,
+        },
+      ],
+      links: [],
+      autolinks: [],
+    },
+    view: {
+      groups: [
+        {
+          groupId: 'main-group',
+          label: 'MRc',
+          position: { x: 200, y: 200 },
+          width: 68,
+          height: 32,
+        },
+      ],
+      nodes: [
+        {
+          nodeId: 'call-sub',
+          groupId: 'main-group',
+          kind: 'submachine',
+          label: 'M',
+          tapeIndex: 0,
+          initial: true,
+          position: { x: 200, y: 200 },
+        },
+        {
+          nodeId: 'move-right',
+          groupId: 'main-group',
+          kind: 'text',
+          label: 'R',
+          tapeIndex: 0,
+          initial: false,
+          position: { x: 220, y: 200 },
+        },
+        {
+          nodeId: 'write-c',
+          groupId: 'main-group',
+          kind: 'text',
+          label: 'c',
+          tapeIndex: 0,
+          initial: false,
+          position: { x: 240, y: 200 },
         },
       ],
       links: [],
