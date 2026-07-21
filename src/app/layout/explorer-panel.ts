@@ -61,10 +61,10 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
       />
 
       <div class="panel-body">
-        <p-tabs value="ate" class="explorer-tabs" [style]="tabsStyle">
+        <p-tabs [(value)]="activeExplorerTab" class="explorer-tabs" [style]="tabsStyle">
           <p-tablist>
             <p-tab value="ate">{{ 'explorer.ett' | translate }}</p-tab>
-            <p-tab value="machines">{{ 'explorer.machines' | translate }}</p-tab>
+            <p-tab value="machines" [disabled]="machineTreeDisabled()">{{ 'explorer.machines' | translate }}</p-tab>
           </p-tablist>
 
           <p-tabpanels>
@@ -383,6 +383,8 @@ export class ExplorerPanel {
   };
 
   readonly mainMachineNodes = computed<TreeNode[]>(() => [this.toMachineTreeNode(this.store.machineTree())]);
+  readonly machineTreeDisabled = computed(() => this.store.ate().children.length > 0);
+  activeExplorerTab: 'ate' | 'machines' = 'ate';
   machineContextMenuOpen = false;
   machineContextMenuPosition = { x: 0, y: 0 };
   machinePropertiesDialogVisible = false;
@@ -510,6 +512,12 @@ export class ExplorerPanel {
       this.scrollSelectedAteNodeIntoView();
     }
   });
+  private readonly syncExecutionTabState = effect(() => {
+    if (this.machineTreeDisabled()) {
+      this.activeExplorerTab = 'ate';
+      this.machineContextMenuOpen = false;
+    }
+  });
 
   private toTreeNode(node: AteNode): TreeNode {
     return {
@@ -590,12 +598,21 @@ export class ExplorerPanel {
   }
 
   selectMachineNode(node: TreeNode): void {
+    if (this.machineTreeDisabled()) {
+      return;
+    }
+
     this.store.selectDesignMachine(node.data?.machineId ?? '');
   }
 
   showMachineContextMenu(node: TreeNode, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+
+    if (this.machineTreeDisabled()) {
+      this.machineContextMenuOpen = false;
+      return;
+    }
 
     this.selectedMachineNode = node;
     this.store.selectDesignMachine(node.data?.machineId ?? '');
