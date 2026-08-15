@@ -23,7 +23,14 @@ import { SymbolValue } from '../models/core/symbol-value';
 import { Tape, TapeSnapshot } from '../models/core/tape';
 import { WriterNode } from '../models/core/writer-node';
 import { SubmachineDefinition } from '../models/core/execution-context';
-import { AutolinkOrientation, MachineGraphView, MachineLinkKind, MachineLinkView, ViewPoint } from '../models/view';
+import {
+  AutolinkOrientation,
+  MachineGraphView,
+  MachineLinkKind,
+  MachineLinkView,
+  MachineNodeView,
+  ViewPoint,
+} from '../models/view';
 import {
   createJtvCanvasFragment,
   createJtvFileFromState,
@@ -188,7 +195,7 @@ function collectMachineMetaValues(
   declaredMetaValues: JtvMetaValues = { variables: [], parameters: [] },
 ): JtvMetaValues {
   const variables = new Set(declaredMetaValues.variables);
-  const parameters = new Set<string>();
+  const parameters = new Set(declaredMetaValues.parameters);
 
   for (const group of graph.groups) {
     for (const node of getMachineGroupNodes(group)) {
@@ -1114,8 +1121,13 @@ export class JtvStore {
         this.insertMachineNodeAfter(targetGroup, targetNode, insertedNode);
       }
 
+      const insertedNodeWidth = this.getMachineNodeLayoutStep(insertedNode);
+      const targetNodeWidth = this.getMachineNodeViewLayoutStep(targetNodeView);
+      const insertionStep = side === 'left'
+        ? insertedNodeWidth
+        : targetNodeWidth + insertedNodeWidth - MACHINE_NODE_STEP;
       const insertedNodePosition = {
-        x: targetNodeView.position.x + (side === 'left' ? 0 : MACHINE_NODE_STEP),
+        x: targetNodeView.position.x + (side === 'left' ? 0 : targetNodeWidth),
         y: targetNodeView.position.y,
       };
       const shiftedNodes = current.machineGraphView.nodes.map((node) => {
@@ -1136,7 +1148,7 @@ export class JtvStore {
           initial: node.nodeId === targetNode.id ? targetNode.isInitial : node.initial,
           position: {
             ...node.position,
-            x: node.position.x + MACHINE_NODE_STEP,
+            x: node.position.x + insertionStep,
           },
         };
       });
@@ -1153,7 +1165,7 @@ export class JtvStore {
             ? {
               ...groupView,
               label: formatGroupLabel(targetGroup),
-              width: (groupView.width ?? 0) + MACHINE_NODE_STEP,
+              width: (groupView.width ?? 0) + insertionStep,
             }
             : groupView),
           nodes: [
@@ -1182,7 +1194,7 @@ export class JtvStore {
               points: [
                 {
                   ...sourcePoint,
-                  x: sourcePoint.x + MACHINE_NODE_STEP,
+                  x: sourcePoint.x + insertionStep,
                 },
                 ...restPoints,
               ],
@@ -2643,6 +2655,12 @@ export class JtvStore {
       current,
       existing?.submachineIds ?? [],
     ));
+    const savedMachine = this.designMachines.get(this.activeDesignMachineId);
+
+    if (savedMachine) {
+      this.syncSubmachineNodeReferences(savedMachine);
+    }
+
     this.bumpMachineWorkspaceRevision();
   }
 
@@ -2793,6 +2811,176 @@ export class JtvStore {
         this.markDesignMachineDirty(machine.id);
       }
     }
+  }
+
+  private syncSubmachineNodeReferences(definition: JtvDesignMachine): void {
+    for (const machine of this.designMachines.values()) {
+      const updatedNodeIds = new Set<string>();
+      const nodeLayoutStepDeltas = new Map<string, number>();
+
+      for (const group of machine.machineGraph.groups) {
+        for (const node of getMachineGroupNodes(group)) {
+          if (!(node instanceof SubmachineNode) || node.submachineId !== definition.id) {
+            continue;
+          }
+
+          const nextAssignments = this.createCustomSubmachineNodeParameterAssignments(definition, node.parameterAssignments);
+          const nameChanged = node.submachineName !== definition.selectedMachine.name;
+          const assignmentsChanged = !this.areParameterAssignmentsEqual(node.parameterAssignments, nextAssignments);
+          const oldViewNode = machine.machineGraphView.nodes.find((viewNode) => viewNode.nodeId === node.id);
+          const previousLayoutStep = oldViewNode ? this.getMachineNodeViewLayoutStep(oldViewNode) : MACHINE_NODE_STEP;
+
+          if (!nameChanged && !assignmentsChanged) {
+            continue;
+          }
+
+          node.submachineName = definition.selectedMachine.name;
+          node.setParameterAssignments(nextAssignments);
+          const nextLayoutStep = this.getMachineNodeLayoutStep(node);
+
+          updatedNodeIds.add(node.id);
+
+          if (nextLayoutStep !== previousLayoutStep) {
+            nodeLayoutStepDeltas.set(node.id, nextLayoutStep - previousLayoutStep);
+          }
+        }
+      }
+
+      if (updatedNodeIds.size === 0) {
+        continue;
+      }
+
+      const updatedMachineGraphView = this.reflowMachineGraphViewAfterNodeLayoutChanges(
+        {
+          ...machine.machineGraphView,
+          nodes: machine.machineGraphView.nodes.map((viewNode) => {
+            if (!updatedNodeIds.has(viewNode.nodeId)) {
+              return viewNode;
+            }
+
+            const node = this.getMachineNodesById(machine.machineGraph).get(viewNode.nodeId);
+
+            return node instanceof SubmachineNode
+              ? {
+                ...viewNode,
+                subscriptLabel: node.getParameterDisplayValue(),
+                subscriptOverline: node.hasNegatedParameterDisplay(),
+              }
+              : viewNode;
+          }),
+        },
+        machine.machineGraph,
+        updatedNodeIds,
+        nodeLayoutStepDeltas,
+      );
+
+      const updatedMachine: JtvDesignMachine = {
+        ...machine,
+        machineGraph: {
+          ...machine.machineGraph,
+          groups: [...machine.machineGraph.groups],
+        },
+        machineGraphView: updatedMachineGraphView,
+      };
+
+      this.designMachines.set(machine.id, updatedMachine);
+
+      if (machine.id === this.activeDesignMachineId) {
+        this.state.update((current) => ({
+          ...current,
+          machineGraph: updatedMachine.machineGraph,
+          machineGraphView: updatedMachine.machineGraphView,
+        }));
+      }
+
+      this.markDesignMachineDirty(machine.id);
+    }
+  }
+
+  private reflowMachineGraphViewAfterNodeLayoutChanges(
+    view: MachineGraphView,
+    graph: MachineGraph,
+    updatedNodeIds: ReadonlySet<string>,
+    nodeLayoutStepDeltas: ReadonlyMap<string, number>,
+  ): MachineGraphView {
+    const changedGroupIds = new Set<string>();
+    const nodeShifts = new Map<string, number>();
+    const groupWidthDeltas = new Map<string, number>();
+
+    for (const groupView of view.groups) {
+      const nodes = view.nodes
+        .filter((node) => node.groupId === groupView.groupId)
+        .sort((left, right) => left.position.x - right.position.x);
+      let accumulatedDelta = 0;
+
+      for (const node of nodes) {
+        if (updatedNodeIds.has(node.nodeId) || accumulatedDelta !== 0) {
+          changedGroupIds.add(groupView.groupId);
+        }
+
+        if (accumulatedDelta !== 0) {
+          nodeShifts.set(node.nodeId, accumulatedDelta);
+        }
+
+        accumulatedDelta += nodeLayoutStepDeltas.get(node.nodeId) ?? 0;
+      }
+
+      if (accumulatedDelta !== 0) {
+        groupWidthDeltas.set(groupView.groupId, accumulatedDelta);
+      }
+    }
+
+    if (changedGroupIds.size === 0) {
+      return view;
+    }
+
+    const nodes = view.nodes.map((node) => {
+      const shift = nodeShifts.get(node.nodeId) ?? 0;
+
+      return shift === 0
+        ? node
+        : {
+          ...node,
+          position: {
+            ...node.position,
+            x: node.position.x + shift,
+          },
+        };
+    });
+    const groups = view.groups.map((group) => {
+      const delta = groupWidthDeltas.get(group.groupId) ?? 0;
+
+      return delta === 0
+        ? group
+        : {
+          ...group,
+          width: Math.max(MACHINE_NODE_STEP, (group.width ?? MACHINE_NODE_STEP) + delta),
+        };
+    });
+
+    return {
+      ...view,
+      groups,
+      nodes,
+      links: this.refreshLinkViewsForGroups(
+        view.links,
+        Array.from(changedGroupIds),
+        nodes,
+        graph.groups,
+        graph.autolinks ?? [],
+      ),
+    };
+  }
+
+  private areParameterAssignmentsEqual(
+    first: Readonly<Record<string, string>>,
+    second: Readonly<Record<string, string>>,
+  ): boolean {
+    const firstKeys = Object.keys(first).sort((left, right) => left.localeCompare(right));
+    const secondKeys = Object.keys(second).sort((left, right) => left.localeCompare(right));
+
+    return firstKeys.length === secondKeys.length &&
+      firstKeys.every((key, index) => key === secondKeys[index] && first[key] === second[key]);
   }
 
   private collectDesignMachineSubtreeIds(machineId: string): string[] {
@@ -2995,7 +3183,7 @@ export class JtvStore {
 
   private refreshMachineMetaValues(): void {
     this.state.update((current) => {
-      const metaValues = collectMachineMetaValues(current.machineGraph, current.parameterAssignments, current.metaValues);
+      const metaValues = collectMachineMetaValues(current.machineGraph, current.parameterAssignments);
 
       if (
         metaValues.variables.join('\u0000') === current.metaValues.variables.join('\u0000') &&
@@ -3488,6 +3676,9 @@ export class JtvStore {
 
     if (toolId === 'submachine') {
       const submachine = this.getSelectedChildSubmachine();
+      const parameterAssignments = submachine
+        ? this.createCustomSubmachineNodeParameterAssignments(submachine)
+        : {};
 
       return submachine
         ? new SubmachineNode(
@@ -3496,7 +3687,7 @@ export class JtvStore {
           submachine.selectedMachine.name,
           'M',
           '',
-          {},
+          parameterAssignments,
           tapeIndex,
         )
         : null;
@@ -3527,6 +3718,41 @@ export class JtvStore {
 
   private getMachineNodeViewKind(node: MachineNode): 'text' | 'parameter' | 'hub' | 'submachine' {
     return getMachineNodeViewKind(node);
+  }
+
+  private getMachineNodeLayoutStep(node: MachineNode): number {
+    const subscriptLabel = node instanceof SubmachineNode ? node.getParameterDisplayValue() : undefined;
+
+    return this.getLayoutStepForSubscript(subscriptLabel);
+  }
+
+  private getMachineNodeViewLayoutStep(node: MachineNodeView): number {
+    return this.getLayoutStepForSubscript(node.subscriptLabel);
+  }
+
+  private getLayoutStepForSubscript(subscriptLabel: string | undefined): number {
+    if (!subscriptLabel) {
+      return MACHINE_NODE_STEP;
+    }
+
+    return Math.max(MACHINE_NODE_STEP, 31 + subscriptLabel.length * 4);
+  }
+
+  private createCustomSubmachineNodeParameterAssignments(
+    submachine: JtvDesignMachine,
+    existingAssignments: Readonly<Record<string, string>> = {},
+  ): Readonly<Record<string, string>> {
+    const parameterNames = new Set([
+      ...submachine.metaValues.parameters,
+      ...Object.keys(submachine.parameterAssignments),
+    ]);
+    const assignments: Record<string, string> = {};
+
+    for (const parameterName of Array.from(parameterNames).sort((left, right) => left.localeCompare(right))) {
+      assignments[parameterName] = existingAssignments[parameterName] ?? submachine.parameterAssignments[parameterName] ?? '';
+    }
+
+    return assignments;
   }
 
   private createLinkBetweenNodes(

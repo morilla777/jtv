@@ -19,8 +19,12 @@ import { SubmachineDefinition } from './execution-context';
 import { SubmachineNode } from './submachine-node';
 import { VariableValue } from './variable-value';
 import { WriterNode } from './writer-node';
+import binarioDecimalFile from '../../../assets/examples/binario_decimal.jtv.json';
+import binarioUnarioFile from '../../../assets/examples/binario_unario.jtv.json';
 import copiadora2File from '../../../assets/examples/copiadora2.jtv.json';
 import copiadoraFile from '../../../assets/examples/copiadora.jtv.json';
+import decimalBinarioFile from '../../../assets/examples/decimal_binario.jtv.json';
+import decimalUnarioFile from '../../../assets/examples/decimal_unario.jtv.json';
 import igualesAbcFile from '../../../assets/examples/iguales_abc.jtv.json';
 import monusFile from '../../../assets/examples/monus.jtv.json';
 import multiplicadoraFile from '../../../assets/examples/multiplicadora.jtv.json';
@@ -30,6 +34,8 @@ import subColgFile from '../../../assets/examples/sub_colg.jtv.json';
 import subExpandFile from '../../../assets/examples/sub_expand.jtv.json';
 import subNdFile from '../../../assets/examples/sub_nd.jtv.json';
 import tarea3vfinalFile from '../../../assets/examples/tarea3vfinal.jtv.json';
+import unarioBinarioFile from '../../../assets/examples/unario_binario.jtv.json';
+import unarioDecimalFile from '../../../assets/examples/unario_decimal.jtv.json';
 import buscadoraLFile from '../../../assets/submachines/buscadora_l.jtv.json';
 import buscadoraNotLFile from '../../../assets/submachines/buscadora_not_l.jtv.json';
 import buscadoraNotRFile from '../../../assets/submachines/buscadora_not_r.jtv.json';
@@ -1466,6 +1472,101 @@ describe('MachineGraphRunner', () => {
         },
       },
     ]);
+  });
+
+  it.each([
+    ['1', '1'],
+    ['11', '10'],
+    ['111', '11'],
+    ['1111', '100'],
+    ['11111', '101'],
+    ['111111', '110'],
+    ['11111111', '1000'],
+  ])('executes the UNARIO_BINARIO example for "%s"', (input, expectedBinary) => {
+    const tapes = runExampleMachineTapes(unarioBinarioFile as JtvFile, [input, '']);
+
+    expect(tapeSnapshotToDelimitedString(tapes[0])).toBe(`#${expectedBinary}#`);
+    expect(tapes[0].headPosition).toBe(expectedBinary.length + 1);
+    expect(Object.values(tapes[0].cells)).not.toContain('s');
+  });
+
+  it.each([
+    ['1', '1'],
+    ['10', '11'],
+    ['11', '111'],
+    ['100', '1111'],
+    ['101', '11111'],
+    ['110', '111111'],
+    ['1000', '11111111'],
+  ])('executes the BINARIO_UNARIO example for "%s"', (input, expectedUnary) => {
+    const tapes = runExampleMachineTapes(binarioUnarioFile as JtvFile, [input, '']);
+
+    expect(tapeSnapshotToDelimitedString(tapes[0])).toBe(`#${expectedUnary}#`);
+    expect(tapes[0].headPosition).toBe(expectedUnary.length + 1);
+  });
+
+  it.each([
+    ['1', '1'],
+    ['11111', '5'],
+    ['111111111', '9'],
+    ['1111111111', '10'],
+    ['11111111111', '11'],
+    ['111111111111', '12'],
+  ])('executes the UNARIO_DECIMAL example for "%s"', (input, expectedDecimal) => {
+    const tapes = runExampleMachineTapes(unarioDecimalFile as JtvFile, [input, '']);
+
+    expect(tapeSnapshotToDelimitedString(tapes[0])).toBe(`#${expectedDecimal}#`);
+    expect(tapes[0].headPosition).toBe(expectedDecimal.length + 1);
+    expect(Object.values(tapes[0].cells)).not.toContain('s');
+  });
+
+  it.each([
+    ['1', '1'],
+    ['5', '11111'],
+    ['9', '111111111'],
+    ['10', '1111111111'],
+    ['11', '11111111111'],
+    ['12', '111111111111'],
+  ])('executes the DECIMAL_UNARIO example for "%s"', (input, expectedUnary) => {
+    const tapes = runExampleMachineTapes(decimalUnarioFile as JtvFile, [input, '']);
+
+    expect(tapeSnapshotToDelimitedString(tapes[0])).toBe(`#${expectedUnary}#`);
+    expect(tapes[0].headPosition).toBe(expectedUnary.length + 1);
+    expect(Object.values(tapes[0].cells)).not.toContain('s');
+  });
+
+  it.each([
+    ['1', '1'],
+    ['10', '2'],
+    ['11', '3'],
+    ['100', '4'],
+    ['101', '5'],
+    ['1000', '8'],
+    ['1010', '10'],
+    ['1100', '12'],
+  ])('executes the BINARIO_DECIMAL example for "%s"', (input, expectedDecimal) => {
+    const tapes = runExampleMachineTapes(binarioDecimalFile as JtvFile, [input, '']);
+
+    expect(tapeSnapshotToDelimitedString(tapes[0])).toBe(`#${expectedDecimal}#`);
+    expect(tapes[0].headPosition).toBe(expectedDecimal.length + 1);
+    expect(Object.values(tapes[0].cells)).not.toContain('s');
+  });
+
+  it.each([
+    ['1', '1'],
+    ['2', '10'],
+    ['3', '11'],
+    ['4', '100'],
+    ['5', '101'],
+    ['8', '1000'],
+    ['10', '1010'],
+    ['12', '1100'],
+  ])('executes the DECIMAL_BINARIO example for "%s"', (input, expectedBinary) => {
+    const tapes = runExampleMachineTapes(decimalBinarioFile as JtvFile, [input, '']);
+
+    expect(tapeSnapshotToDelimitedString(tapes[0])).toBe(`#${expectedBinary}#`);
+    expect(tapes[0].headPosition).toBe(expectedBinary.length + 1);
+    expect(Object.values(tapes[0].cells)).not.toContain('s');
   });
 
   it.each([

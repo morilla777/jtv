@@ -348,6 +348,23 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
               }
             }
 
+            @for (node of machineGraphView().nodes; track node.nodeId) {
+              @if (node.kind === 'hub') {
+                <circle
+                  [attr.cx]="node.position.x"
+                  [attr.cy]="node.position.y"
+                  r="14"
+                  class="machine-hub-hit-area"
+                  (mouseenter)="hoverNode(node.nodeId, $event)"
+                  (mousemove)="hoverNode(node.nodeId, $event)"
+                  (mouseleave)="clearHoveredElement()"
+                  (pointerdown)="startDraggingNodeGroup(node.nodeId, $event)"
+                  (click)="handleNodeClick(node.nodeId, $event); $event.stopPropagation()"
+                  (contextmenu)="showNodeContextMenu(node.nodeId, $event)"
+                ></circle>
+              }
+            }
+
             @if (transitionDraftPath(); as draftPath) {
               <path
                 [attr.d]="draftPath"
@@ -530,6 +547,13 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
 
     .machine-hub {
       fill: #000;
+    }
+
+    .machine-hub-hit-area {
+      fill: transparent;
+      stroke: transparent;
+      pointer-events: all;
+      cursor: default;
     }
 
     .machine-hub-selected {
@@ -2067,7 +2091,9 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   }
 
   private getNodeVisualBounds(node: MachineNodeView): { x: number; y: number; width: number; height: number } {
-    const width = node.width ?? Math.max(16, node.label.length * 14);
+    const subscriptWidth = node.subscriptLabel ? node.subscriptLabel.length * 8 + 18 : 0;
+    const captionWidth = node.submachineShortName ? node.submachineShortName.length * 8 + 10 : 0;
+    const width = node.width ?? Math.max(16, node.label.length * 14 + subscriptWidth, captionWidth);
     const hasSubmachineCaption = !!node.submachineShortName;
     const height = node.height ?? (hasSubmachineCaption ? 42 : 32);
 

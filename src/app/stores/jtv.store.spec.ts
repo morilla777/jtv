@@ -445,7 +445,203 @@ describe('JtvStore ATE subtrace navigation', () => {
       store.destroy();
     }
   });
+
+  it('inserts custom submachines with their declared parameters as editable subscripts', () => {
+    const store = createStoreWithBurstSize(20);
+
+    try {
+      store.importMachineFile(createCustomParameterizedSubmachineFile());
+
+      store.selectTool('submachine');
+      store.insertActiveToolNodeAt({ x: 200, y: 120 });
+
+      const insertedNode = store.machineGraphView().nodes.find((node) => node.label === 'M');
+
+      expect(insertedNode).toEqual(expect.objectContaining({
+        kind: 'submachine',
+        subscriptLabel: 'A,B',
+      }));
+
+      store.selectTool('pointer');
+      const editState = store.getCanvasSubmachineParameterEditState(insertedNode!.nodeId);
+
+      expect(editState).toEqual({
+        nodeId: insertedNode!.nodeId,
+        parameters: ['A', 'B'],
+        assignments: {
+          A: '',
+          B: '',
+        },
+      });
+
+      store.updateCanvasSubmachineParameterAssignments(insertedNode!.nodeId, {
+        A: 'a',
+        B: 'b',
+      });
+
+      expect(store.machineGraphView().nodes.find((node) => node.nodeId === insertedNode!.nodeId)).toEqual(
+        expect.objectContaining({
+          subscriptLabel: 'a,b',
+        }),
+      );
+
+      store.selectTool('symbol-lowercase');
+      store.selectSymbol('c');
+      store.insertActiveToolNodeNear(insertedNode!.nodeId, 'right');
+
+      const insertedNeighbor = store.machineGraphView().nodes.find((node) => node.label === 'c');
+
+      expect(insertedNeighbor?.position.x).toBeGreaterThan(220);
+
+      const childMachineId = store.machineTree().children?.[0]?.id;
+
+      expect(childMachineId).toBeTruthy();
+
+      store.selectDesignMachine(childMachineId!);
+      store.selectTool('symbol-uppercase');
+      store.selectParameter('C');
+      store.insertActiveToolNodeAt({ x: 100, y: 100 });
+      store.selectDesignMachine(store.rootMachineTreeNodeId());
+
+      const expandedNeighborX = store.machineGraphView().nodes.find((node) => node.label === 'c')?.position.x;
+
+      expect(store.machineGraphView().nodes.find((node) => node.nodeId === insertedNode!.nodeId)).toEqual(
+        expect.objectContaining({
+          subscriptLabel: 'a,b,C',
+        }),
+      );
+
+      expect(expandedNeighborX).toBeGreaterThan(insertedNeighbor!.position.x);
+
+      store.selectDesignMachine(childMachineId!);
+      store.selectTool('pointer');
+      const parameterCNode = store.machineGraphView().nodes.find((node) => node.label === 'C');
+
+      expect(parameterCNode).toBeTruthy();
+
+      store.deleteCanvasNode(parameterCNode!.nodeId);
+      store.selectDesignMachine(store.rootMachineTreeNodeId());
+
+      const compactedNeighborX = store.machineGraphView().nodes.find((node) => node.label === 'c')?.position.x;
+
+      expect(store.machineGraphView().nodes.find((node) => node.nodeId === insertedNode!.nodeId)).toEqual(
+        expect.objectContaining({
+          subscriptLabel: 'a,b',
+        }),
+      );
+      expect(compactedNeighborX).toBe(insertedNeighbor!.position.x);
+    } finally {
+      store.destroy();
+    }
+  });
 });
+
+function createCustomParameterizedSubmachineFile(): JtvFile {
+  return {
+    format: 'jtv-web-machine',
+    version: 2,
+    machine: {
+      id: 'main-custom-parameters',
+      name: 'MAIN',
+    },
+    parameterAssignments: {},
+    metaValues: {
+      variables: [],
+      parameters: [],
+    },
+    tapeCount: 1,
+    submachines: [
+      {
+        format: 'jtv-web-machine',
+        version: 2,
+        machine: {
+          id: 'parameterized-child',
+          name: 'PARAM_CHILD',
+          shortName: 'PCH',
+          description: '',
+        },
+        parameterAssignments: {},
+        metaValues: {
+          variables: [],
+          parameters: ['A', 'B'],
+        },
+        tapeCount: 1,
+        submachines: [],
+        graph: {
+          initialGroupId: 'parameterized-child-group',
+          groups: [
+            {
+              id: 'parameterized-child-group',
+              nodeIds: ['parameterized-child-node-a', 'parameterized-child-node-b'],
+            },
+          ],
+          nodes: [
+            {
+              id: 'parameterized-child-node-a',
+              type: 'writer',
+              name: 'A',
+              tapeIndex: 0,
+              isInitial: true,
+            },
+            {
+              id: 'parameterized-child-node-b',
+              type: 'writer',
+              name: 'B',
+              tapeIndex: 0,
+              isInitial: false,
+            },
+          ],
+          links: [],
+          autolinks: [],
+        },
+        view: {
+          groups: [
+            {
+              groupId: 'parameterized-child-group',
+              label: 'AB',
+              position: { x: 100, y: 100 },
+              width: 40,
+              height: 32,
+            },
+          ],
+          nodes: [
+            {
+              nodeId: 'parameterized-child-node-a',
+              groupId: 'parameterized-child-group',
+              kind: 'parameter',
+              label: 'A',
+              tapeIndex: 0,
+              initial: true,
+              position: { x: 100, y: 100 },
+            },
+            {
+              nodeId: 'parameterized-child-node-b',
+              groupId: 'parameterized-child-group',
+              kind: 'parameter',
+              label: 'B',
+              tapeIndex: 0,
+              initial: false,
+              position: { x: 120, y: 100 },
+            },
+          ],
+          links: [],
+        },
+      },
+    ],
+    graph: {
+      initialGroupId: '',
+      groups: [],
+      nodes: [],
+      links: [],
+      autolinks: [],
+    },
+    view: {
+      groups: [],
+      nodes: [],
+      links: [],
+    },
+  };
+}
 
 function createSubmachineExpansionFile(): JtvFile {
   return {

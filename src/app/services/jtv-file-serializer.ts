@@ -668,7 +668,7 @@ function collectMetaValues(
   declaredMetaValues?: JtvMetaValues,
 ): JtvMetaValues {
   const variables = new Set(declaredMetaValues?.variables ?? []);
-  const parameters = new Set<string>();
+  const parameters = new Set(declaredMetaValues?.parameters ?? []);
 
   for (const node of getMachineNodes(graph)) {
     if (node instanceof SubmachineNode) {

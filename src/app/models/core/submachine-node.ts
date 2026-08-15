@@ -142,6 +142,14 @@ export class SubmachineNode extends AbstractMachineNode {
       return this.displaySubscriptLabel;
     }
 
+    const parameterNames = Object.keys(this.parameterAssignments).sort((left, right) => left.localeCompare(right));
+
+    if (parameterNames.length > 0) {
+      return parameterNames
+        .map((parameterName) => this.parameterAssignments[parameterName] || parameterName)
+        .join(',');
+    }
+
     return this.parameterAssignments[this.parameterName] ?? this.parameterName;
   }
 

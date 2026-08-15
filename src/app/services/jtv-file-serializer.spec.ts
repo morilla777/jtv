@@ -280,7 +280,7 @@ describe('JTV file serializer', () => {
     expect(restored.tapeCount).toBe(2);
   });
 
-  it('drops explicitly declared parameters when they are not referenced by the graph', () => {
+  it('preserves explicitly declared parameters even when they are not referenced by the graph', () => {
     const node = new WriterNode('write-a', 'a', 0, true);
     const group = new LinearMachineGroup('group-a', node, node);
     const graph: MachineGraph = {
@@ -309,7 +309,7 @@ describe('JTV file serializer', () => {
 
     expect(file.metaValues).toEqual({
       variables: ['σ'],
-      parameters: [],
+      parameters: ['C'],
     });
     expect(restored.metaValues).toEqual(file.metaValues);
   });
