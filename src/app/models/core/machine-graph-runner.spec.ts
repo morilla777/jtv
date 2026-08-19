@@ -1232,6 +1232,11 @@ describe('MachineGraphRunner', () => {
 
     expect(result).toEqual({
       status: 'error',
+      continuation: {
+        currentGroupId: parentGroup.id,
+        currentNodeId: submachineNode.id,
+        phase: 'after-node',
+      },
       traceTerminalRecorded: true,
     });
     expect(traceRecorder.root.children).toEqual([

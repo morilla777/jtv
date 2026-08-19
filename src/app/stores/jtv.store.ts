@@ -10,6 +10,7 @@ import { MachineGraphRunner } from '../models/core/machine-graph-runner';
 import {
   isLegacyTerminalHangingResult,
   type MachineGraphExecutionPoint,
+  type MachineGraphRunResult,
 } from '../models/core/machine-graph-run-result';
 import { MachineGroup } from '../models/core/machine-group';
 import { MachineNode } from '../models/core/machine-node';
@@ -1005,7 +1006,7 @@ export class JtvStore {
         return current;
       }
 
-      node.setParameterAssignments(assignments);
+      node.setParameterAssignments(this.mergeSubmachineParameterAssignments(node.parameterAssignments, assignments));
       changed = true;
 
       return {
@@ -1896,6 +1897,7 @@ export class JtvStore {
 
     if (result.traceTerminalRecorded) {
       // The executed node already recorded a specialized terminal ATE entry.
+      this.attachLastTraceNodeContinuation(traceRecorder.root, result, context);
     } else if (result.status === 'completed') {
       traceRecorder.recordStop();
     } else if (result.status === 'suspended' && result.continuation) {
@@ -1958,6 +1960,7 @@ export class JtvStore {
     });
 
     if (result.traceTerminalRecorded) {
+      this.attachLastTraceNodeContinuation(expandNode, result, context);
       keepMutableReplayContinuation(expandNode);
       deleteMutableContinuation(expandNode);
     } else if (result.status === 'completed') {
@@ -2063,19 +2066,33 @@ export class JtvStore {
       return;
     }
 
-    const frameTapes = this.cloneTapeStates(frame.tapes);
     const parentNode = this.findAteNode(frame.ate, frame.parentAteNodeId);
-    const subtraceResultSnapshot = options.propagateResult === false
-      ? undefined
-      : terminalNode
+    const subtraceResultSnapshot = terminalNode
       ? this.replayTapeSnapshotsToAteNode(terminalNode)?.[0]
       : current.tapes[0]?.tape.getSnapshot();
+    let frameTapes = this.cloneTapeStates(frame.tapes);
 
     if (parentNode?.subtrace && subtraceResultSnapshot) {
-      (parentNode.subtrace as { finalTapeSnapshots: readonly TapeSnapshot[] }).finalTapeSnapshots = [
+      const callerTapeIndex = parentNode.subtrace.callerTapeIndex ?? 0;
+      const mutableSubtrace = parentNode.subtrace as {
+        root: AteNode;
+        finalTapeSnapshots: readonly TapeSnapshot[];
+      };
+
+      if (parentNode.continuation && frameTapes[callerTapeIndex]) {
+        frameTapes[callerTapeIndex].tape.restoreSnapshot(subtraceResultSnapshot);
+      }
+
+      mutableSubtrace.root = current.ate;
+      mutableSubtrace.finalTapeSnapshots = [
         subtraceResultSnapshot,
         ...parentNode.subtrace.finalTapeSnapshots.slice(1),
       ];
+    }
+
+    if (terminalNode?.kind === 'stop' && parentNode?.continuation && subtraceResultSnapshot) {
+      frameTapes = this.continueInvokerAfterCompletedSubtrace(frame, parentNode, frameTapes);
+      deleteMutableContinuation(parentNode);
     }
 
     this.activeDesignMachineId = frame.activeDesignMachineId;
@@ -3720,6 +3737,23 @@ export class JtvStore {
     return getMachineNodeViewKind(node);
   }
 
+  private mergeSubmachineParameterAssignments(
+    currentAssignments: Readonly<Record<string, string>>,
+    nextAssignments: Readonly<Record<string, string>>,
+  ): Readonly<Record<string, string>> {
+    const parameterNames = new Set([
+      ...Object.keys(currentAssignments),
+      ...Object.keys(nextAssignments),
+    ]);
+    const assignments: Record<string, string> = {};
+
+    for (const parameterName of Array.from(parameterNames).sort((left, right) => left.localeCompare(right))) {
+      assignments[parameterName] = nextAssignments[parameterName] ?? '';
+    }
+
+    return assignments;
+  }
+
   private getMachineNodeLayoutStep(node: MachineNode): number {
     const subscriptLabel = node instanceof SubmachineNode ? node.getParameterDisplayValue() : undefined;
 
@@ -3915,7 +3949,9 @@ export class JtvStore {
 
     const continuationAncestor = [...targetPath]
       .reverse()
-      .find((node) => node.replayContinuation ?? node.continuation);
+      .find((node) => node.id !== targetNode.id || !targetNode.subtrace
+        ? node.replayContinuation ?? node.continuation
+        : undefined);
     const containerNode = continuationAncestor ?? state.ate;
     const replayContinuation = continuationAncestor?.replayContinuation ?? continuationAncestor?.continuation;
     const baseSnapshots = replayContinuation?.tapeSnapshots ??
@@ -4041,6 +4077,143 @@ export class JtvStore {
     return this.state().machineGraph.links
       .find((item) => item.id === continuation.forcedTransitionId)
       ?.getAteLabel(showTapeIndexes) ?? '';
+  }
+
+  private continueInvokerAfterCompletedSubtrace(
+    frame: AteNavigationFrame,
+    parentNode: AteNode,
+    frameTapes: JtvTapeState[],
+  ): JtvTapeState[] {
+    const continuation = parentNode.continuation;
+
+    if (!continuation) {
+      return frameTapes;
+    }
+
+    const context = {
+      tapes: frameTapes.map((tapeState) => tapeState.tape),
+      metaValues: this.createMetaValuesFromContinuation(continuation),
+      maxSteps: this.settingsService.getSettings().burstSize,
+      submachines: this.createExecutionSubmachines(),
+    };
+    const traceRecorder = new AteTraceRecorder(frame.selectedMachine.name, {
+      root: frame.ate,
+      showTapeIndexes: frameTapes.length > 1,
+      nextEntryId: this.getAteTraceNodes(frame.ate).length + 1,
+    });
+    const result = this.machineGraphRunner.runBurst(frame.machineGraph, context, traceRecorder, {
+      maxSteps: this.settingsService.getSettings().burstSize,
+      startAt: {
+        currentGroupId: continuation.currentGroupId,
+        currentNodeId: continuation.currentNodeId,
+        phase: continuation.phase,
+        forcedTransitionId: continuation.forcedTransitionId,
+      },
+    });
+
+    this.recordRunTerminalOnGraph(traceRecorder, result, context, frame.machineGraph, frameTapes.length > 1);
+
+    return frameTapes.map((tapeState) => ({ ...tapeState }));
+  }
+
+  private recordRunTerminalOnGraph(
+    traceRecorder: AteTraceRecorder,
+    result: MachineGraphRunResult,
+    context: { tapes: readonly Tape[]; metaValues: MetaValueDictionary },
+    graph: MachineGraph,
+    showTapeIndexes: boolean,
+  ): void {
+    if (result.traceTerminalRecorded) {
+      this.attachLastTraceNodeContinuation(traceRecorder.root, result, context);
+      return;
+    }
+
+    if (result.status === 'completed') {
+      traceRecorder.recordStop();
+      return;
+    }
+
+    if (result.status === 'suspended' && result.continuation) {
+      traceRecorder.recordExpand(this.createAteContinuationSnapshot(result.continuation, context));
+      return;
+    }
+
+    if (result.status === 'nondeterministic' && result.continuations) {
+      this.recordNondeterministicContinuationsOnGraph(traceRecorder, result.continuations, context, graph, showTapeIndexes);
+      return;
+    }
+
+    if (isLegacyTerminalHangingResult(result, graph.initialGroupId)) {
+      traceRecorder.recordStop();
+      return;
+    }
+
+    if (result.status === 'hanging') {
+      traceRecorder.recordHanging();
+      return;
+    }
+
+    if (result.status === 'error' || result.status === 'failed') {
+      traceRecorder.recordError();
+    }
+  }
+
+  private recordNondeterministicContinuationsOnGraph(
+    traceRecorder: AteTraceRecorder,
+    continuations: readonly MachineGraphExecutionPoint[],
+    context: { tapes: readonly Tape[]; metaValues: MetaValueDictionary },
+    graph: MachineGraph,
+    showTapeIndexes: boolean,
+  ): void {
+    traceRecorder.recordNondeterminism();
+
+    for (const continuation of continuations) {
+      traceRecorder.recordExpand(
+        this.createAteContinuationSnapshot(continuation, context),
+        this.getContinuationTransitionLabelFromGraph(continuation, graph, showTapeIndexes),
+      );
+    }
+  }
+
+  private getContinuationTransitionLabelFromGraph(
+    continuation: MachineGraphExecutionPoint,
+    graph: MachineGraph,
+    showTapeIndexes: boolean,
+  ): string {
+    if (!continuation.forcedTransitionId) {
+      return '';
+    }
+
+    const autolink = graph.autolinks?.find((item) => item.id === continuation.forcedTransitionId);
+
+    if (autolink) {
+      return autolink.getAteLabel(showTapeIndexes);
+    }
+
+    return graph.links
+      .find((item) => item.id === continuation.forcedTransitionId)
+      ?.getAteLabel(showTapeIndexes) ?? '';
+  }
+
+  private attachLastTraceNodeContinuation(
+    root: AteNode,
+    result: MachineGraphRunResult,
+    context: { tapes: readonly Tape[]; metaValues: MetaValueDictionary },
+  ): void {
+    if (!result.continuation) {
+      return;
+    }
+
+    const lastNode = root.children[root.children.length - 1];
+
+    if (!lastNode?.machineNodeId) {
+      return;
+    }
+
+    (lastNode as { continuation?: AteContinuationSnapshot }).continuation = this.createAteContinuationSnapshot(
+      result.continuation,
+      context,
+    );
   }
 
   private createContinuationExecutionContext(continuation: AteContinuationSnapshot): {

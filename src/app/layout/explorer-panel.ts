@@ -520,6 +520,10 @@ export class ExplorerPanel {
   });
 
   private toTreeNode(node: AteNode): TreeNode {
+    const expanded = node.kind === 'root' ||
+      this.expandedAteNodeIds().has(node.id) ||
+      (node.kind === 'expand' && node.children.length > 0 && !node.continuation);
+
     return {
       key: node.id,
       label: this.getAteNodeLabel(node),
@@ -527,9 +531,10 @@ export class ExplorerPanel {
         iconSrc: node.kind === 'root' ? this.getAteRootIconSrc() : this.getAteIconSrc(node.iconSrc),
         ateNodeId: node.id,
       },
-      expanded: node.kind === 'root' || this.expandedAteNodeIds().has(node.id),
+      expanded,
+      leaf: node.children.length === 0,
       selectable: true,
-      children: node.children.map((child) => this.toTreeNode(child)),
+      children: expanded ? node.children.map((child) => this.toTreeNode(child)) : [],
     };
   }
 
@@ -583,7 +588,9 @@ export class ExplorerPanel {
   }
 
   handleAteNodeCollapse(node: TreeNode): void {
-    const collapsedIds = this.flattenAteTreeNodeIds(node);
+    const nodeId = node.data?.ateNodeId;
+    const collapsedAteNode = nodeId ? this.findAteNodeById(this.store.ate(), nodeId) : null;
+    const collapsedIds = collapsedAteNode ? this.flattenAteNodeIds(collapsedAteNode) : [];
 
     this.expandedAteNodeIds.update((current) => {
       const next = new Set(current);
@@ -943,32 +950,45 @@ export class ExplorerPanel {
   }
 
   private focusAteExpandedBranch(ateNodeId: string): void {
-    const path = this.findTreeNodePathByAteNodeId(this.ateNodes(), ateNodeId);
+    const path = this.findAteNodeIdPath(this.store.ate(), ateNodeId);
 
-    this.expandedAteNodeIds.set(new Set(path.map((item) => item.data?.ateNodeId).filter(Boolean)));
+    this.expandedAteNodeIds.set(new Set(path));
   }
 
-  private findTreeNodePathByAteNodeId(nodes: readonly TreeNode[], ateNodeId: string): TreeNode[] {
-    for (const node of nodes) {
-      if (node.data?.ateNodeId === ateNodeId) {
-        return [node];
-      }
+  private findAteNodeIdPath(root: AteNode, ateNodeId: string): string[] {
+    if (root.id === ateNodeId) {
+      return [root.id];
+    }
 
-      const childPath = this.findTreeNodePathByAteNodeId(node.children ?? [], ateNodeId);
+    for (const child of root.children) {
+      const childPath = this.findAteNodeIdPath(child, ateNodeId);
 
       if (childPath.length > 0) {
-        return [node, ...childPath];
+        return [root.id, ...childPath];
       }
     }
 
     return [];
   }
 
-  private flattenAteTreeNodeIds(node: TreeNode): string[] {
-    const nodeId = node.data?.ateNodeId;
-    const childIds = node.children?.flatMap((child) => this.flattenAteTreeNodeIds(child)) ?? [];
+  private findAteNodeById(root: AteNode, ateNodeId: string): AteNode | null {
+    if (root.id === ateNodeId) {
+      return root;
+    }
 
-    return nodeId ? [nodeId, ...childIds] : childIds;
+    for (const child of root.children) {
+      const match = this.findAteNodeById(child, ateNodeId);
+
+      if (match) {
+        return match;
+      }
+    }
+
+    return null;
+  }
+
+  private flattenAteNodeIds(node: AteNode): string[] {
+    return [node.id, ...node.children.flatMap((child) => this.flattenAteNodeIds(child))];
   }
 
   private waitForAteTreeRender(): Promise<void> {

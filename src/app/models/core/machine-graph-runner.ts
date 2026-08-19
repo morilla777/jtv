@@ -76,6 +76,11 @@ export class MachineGraphRunner {
 
             return {
               ...nodeExecutionResult,
+              continuation: {
+                currentGroupId: currentGroup.id,
+                currentNodeId: currentNode.id,
+                phase: 'after-node',
+              },
               traceTerminalRecorded: true,
             };
           }

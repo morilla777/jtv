@@ -87,6 +87,21 @@ describe('JtvStore ATE subtrace navigation', () => {
           1: 'b',
         },
       });
+
+      expect(store.continueAteExecution(machineExpandNode.id)).toBe(true);
+      expect(store.selectedMachine().name).toBe('SUB_EXPAND');
+      expect(store.ate().children[2].children.at(-1)).toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/stop_ATE.gif',
+        kind: 'stop',
+      }));
+      expect(store.ate().children[2].continuation).toBeUndefined();
+      const revisitedStopNode = store.ate().children[2].children.at(-1)!;
+      expect(store.continueAteExecution(revisitedStopNode.id)).toBe(true);
+      expect(store.selectedMachine().name).toBe('MAIN');
+      expect(store.ate().children).toHaveLength(2);
+
+      expect(store.continueAteExecution(machineExpandNode.id)).toBe(true);
+      expect(store.returnFromAteSubtrace()).toBe(true);
     } finally {
       injector.destroy();
     }
@@ -484,6 +499,21 @@ describe('JtvStore ATE subtrace navigation', () => {
           subscriptLabel: 'a,b',
         }),
       );
+
+      store.updateCanvasSubmachineParameterAssignments(insertedNode!.nodeId, {
+        A: 'a',
+      });
+
+      expect(store.machineGraphView().nodes.find((node) => node.nodeId === insertedNode!.nodeId)).toEqual(
+        expect.objectContaining({
+          subscriptLabel: 'a,B',
+        }),
+      );
+
+      store.updateCanvasSubmachineParameterAssignments(insertedNode!.nodeId, {
+        A: 'a',
+        B: 'b',
+      });
 
       store.selectTool('symbol-lowercase');
       store.selectSymbol('c');
