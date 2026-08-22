@@ -52,6 +52,10 @@ To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use th
 ng test
 ```
 
+## License
+
+This project is licensed under the MIT License. See [LICENSE.txt](./LICENSE.txt).
+
 ## Running end-to-end tests
 
 For end-to-end (e2e) testing, run:
