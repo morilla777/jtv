@@ -47,26 +47,31 @@ interface LanguageOption {
             </button>
 
             @if (fileMenuOpen) {
-              <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
+              <div class="file-menu-panel file-menu-file-panel" role="menu" (click)="$event.stopPropagation()">
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'new')">
                   <img class="file-menu-icon" src="assets/images/New16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.new' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+N</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'open')">
                   <img class="file-menu-icon" src="assets/images/Open16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.open' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+O</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'save')">
                   <img class="file-menu-icon" src="assets/images/Save16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.save' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+S</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'saveAs')">
                   <img class="file-menu-icon" src="assets/images/SaveAs16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.saveAs' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+Shift+S</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'import')">
                   <img class="file-menu-icon" src="assets/images/Import16.gif" alt="" />
-                  <span>{{ 'topbar.import' | translate }}</span>
+                  <span>{{ 'topbar.menu.file.import' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+I</span>
                 </button>
                 <div class="file-menu-recent-group">
                   <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || recentMachines().length === 0">
@@ -95,6 +100,7 @@ interface LanguageOption {
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'print')">
                   <img class="file-menu-icon" src="assets/images/Print16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.print' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+P</span>
                 </button>
               </div>
             }
@@ -114,14 +120,16 @@ interface LanguageOption {
             </button>
 
             @if (settingsMenuOpen) {
-              <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
+              <div class="file-menu-panel settings-menu-panel" role="menu" (click)="$event.stopPropagation()">
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runSettingsMenuAction($event, 'burstSize')">
                   <span class="pi pi-bolt"></span>
                   <span>{{ 'topbar.menu.settings.burstSize' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+B</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runSettingsMenuAction($event, 'notationChange')">
                   <img class="file-menu-icon" src="assets/images/NotationChange16.gif" alt="" />
                   <span>{{ 'topbar.menu.settings.notationChange' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+Shift+N</span>
                 </button>
               </div>
             }
@@ -141,38 +149,46 @@ interface LanguageOption {
             </button>
 
             @if (editMenuOpen) {
-              <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
+              <div class="file-menu-panel edit-menu-panel" role="menu" (click)="$event.stopPropagation()">
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !canUndo" (click)="runEditMenuAction($event, 'undo')">
                   <img class="file-menu-icon" src="assets/images/Undo16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.undo' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+Z</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !canRedo" (click)="runEditMenuAction($event, 'redo')">
                   <img class="file-menu-icon" src="assets/images/Redo16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.redo' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+Y</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !canMakeSelectedCanvasNodeInitial" (click)="runEditMenuAction($event, 'makeInitial')">
                   <img class="file-menu-icon" src="assets/images/Start16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.makeInitial' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+M</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !hasSelectedCanvasNode" (click)="runEditMenuAction($event, 'changeTape')">
                   <img class="file-menu-icon" src="assets/images/ChangeTape16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.changeTape' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+T</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !hasCanvasSelection" (click)="runEditMenuAction($event, 'cut')">
                   <img class="file-menu-icon" src="assets/images/Cut16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.cut' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+X</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !hasCanvasSelection" (click)="runEditMenuAction($event, 'copy')">
                   <img class="file-menu-icon" src="assets/images/Copy16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.copy' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+C</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !canPasteCanvasElements" (click)="runEditMenuAction($event, 'paste')">
                   <img class="file-menu-icon" src="assets/images/Paste16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.paste' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+V</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !hasCanvasSelection" (click)="runEditMenuAction($event, 'delete')">
                   <img class="file-menu-icon" src="assets/images/Delete16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.delete' | translate }}</span>
+                  <span class="menu-shortcut">Delete</span>
                 </button>
               </div>
             }
@@ -192,14 +208,16 @@ interface LanguageOption {
             </button>
 
             @if (helpMenuOpen) {
-              <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
+              <div class="file-menu-panel help-menu-panel" role="menu" (click)="$event.stopPropagation()">
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runHelpMenuAction($event, 'contents')">
                   <span class="pi pi-book"></span>
                   <span>{{ 'topbar.menu.help.contents' | translate }}</span>
+                  <span class="menu-shortcut">F1</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runHelpMenuAction($event, 'about')">
                   <img class="file-menu-icon" src="assets/images/Info16.gif" alt="" />
                   <span>{{ 'topbar.menu.help.about' | translate }}</span>
+                  <span class="menu-shortcut">Ctrl+F1</span>
                 </button>
               </div>
             }
@@ -469,8 +487,10 @@ interface LanguageOption {
         [resizable]="false"
         styleClass="about-dialog"
       >
-        <img [src]="aboutSplashImageSrc" alt="Java Turing Visual" class="about-splash-image" />
-        <div class="about-legacy-text" [innerHTML]="'aboutDialog.legacyText' | translate"></div>
+        <div class="about-dialog-body">
+          <img [src]="aboutSplashImageSrc" alt="Java Turing Visual" class="about-splash-image" />
+          <div class="about-legacy-text" [innerHTML]="'aboutDialog.legacyText' | translate"></div>
+        </div>
       </p-dialog>
     </div>
   `,
@@ -539,6 +559,22 @@ interface LanguageOption {
       box-shadow: var(--p-overlay-popover-shadow);
     }
 
+    .file-menu-file-panel {
+      min-width: 23rem;
+    }
+
+    .edit-menu-panel {
+      min-width: 21rem;
+    }
+
+    .settings-menu-panel {
+      min-width: 20rem;
+    }
+
+    .help-menu-panel {
+      min-width: 17rem;
+    }
+
     .file-menu-item {
       display: flex;
       align-items: center;
@@ -553,6 +589,18 @@ interface LanguageOption {
       cursor: pointer;
       font: inherit;
       text-align: left;
+    }
+
+    .file-menu-item > span:not(.menu-shortcut):not(.pi) {
+      flex: 1 1 auto;
+    }
+
+    .menu-shortcut {
+      flex: 0 0 auto;
+      margin-left: 1rem;
+      color: var(--p-text-muted-color);
+      font-size: 0.75rem;
+      white-space: nowrap;
     }
 
     .file-menu-item:hover {
@@ -581,7 +629,7 @@ interface LanguageOption {
       z-index: 1002;
       display: flex;
       flex-direction: column;
-      min-width: 12rem;
+      min-width: 15rem;
       padding: 0.25rem;
       visibility: hidden;
       opacity: 0;
@@ -619,6 +667,14 @@ interface LanguageOption {
       object-fit: contain;
       image-rendering: pixelated;
       flex: 0 0 auto;
+    }
+
+    .file-menu-item > .pi {
+      width: 16px;
+      flex: 0 0 16px;
+      text-align: center;
+      font-size: 0.875rem;
+      line-height: 1;
     }
 
     .jtv-topbar {
@@ -748,19 +804,27 @@ interface LanguageOption {
     }
 
     :host ::ng-deep .about-dialog {
-      width: min(92vw, 608px);
+      width: min(94vw, 980px);
     }
 
     :host ::ng-deep .about-dialog .p-dialog-content {
-      padding: 0 10% 1rem;
+      max-height: min(82vh, 760px);
+      padding: 0 1rem 1rem;
       overflow: auto;
+    }
+
+    .about-dialog-body {
+      display: grid;
+      grid-template-columns: minmax(360px, 1.25fr) minmax(280px, 0.75fr);
+      align-items: start;
+      gap: 1rem;
     }
 
     .about-splash-image {
       display: block;
-      width: 82%;
+      width: 100%;
       height: auto;
-      margin: 0 auto 1rem;
+      margin: 0;
     }
 
     .about-legacy-text {
@@ -779,6 +843,17 @@ interface LanguageOption {
 
     .about-legacy-text ::ng-deep a {
       color: var(--p-primary-color);
+    }
+
+    @media (max-width: 760px) {
+      .about-dialog-body {
+        grid-template-columns: 1fr;
+      }
+
+      .about-splash-image {
+        width: min(100%, 560px);
+        margin: 0 auto;
+      }
     }
   `],
 })
@@ -1137,6 +1212,49 @@ export class Topbar {
     this.helpMenuOpen = false;
   }
 
+  @HostListener('document:keydown', ['$event'])
+  handleKeyboardShortcut(event: KeyboardEvent): void {
+    if (this.isEditableTarget(event.target)) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+    const hasPrimaryModifier = event.ctrlKey || event.metaKey;
+
+    if (key === 'delete' && !hasPrimaryModifier && !event.altKey && !event.shiftKey) {
+      event.preventDefault();
+
+      if (!this.executionLocked) {
+        this.deleteSelectedCanvasElement();
+      }
+
+      return;
+    }
+
+    if (key === 'f1') {
+      event.preventDefault();
+
+      if (hasPrimaryModifier) {
+        this.openAboutDialogFromShortcut();
+        return;
+      }
+
+      this.openHelpContentsFromShortcut();
+      return;
+    }
+
+    if (this.executionLocked || event.altKey || !hasPrimaryModifier) {
+      return;
+    }
+
+    if (event.shiftKey) {
+      this.handleShiftKeyboardShortcut(event, key);
+      return;
+    }
+
+    this.handlePrimaryKeyboardShortcut(event, key);
+  }
+
   toggleFileMenu(event: Event): void {
     event.stopPropagation();
 
@@ -1319,13 +1437,137 @@ export class Topbar {
     }
 
     if (action === 'contents') {
-      window.open(environment.jtvSite, '_blank', 'noopener');
+      this.openHelpContents();
       return;
     }
 
     if (action === 'about') {
       this.aboutDialogVisible = true;
     }
+  }
+
+  private handlePrimaryKeyboardShortcut(event: KeyboardEvent, key: string): void {
+    if (key === 'n') {
+      event.preventDefault();
+      this.newMachine();
+      return;
+    }
+
+    if (key === 'o') {
+      event.preventDefault();
+      void this.openMachine();
+      return;
+    }
+
+    if (key === 's') {
+      event.preventDefault();
+      void this.saveMachine();
+      return;
+    }
+
+    if (key === 'i') {
+      event.preventDefault();
+      this.importLegacyMachine();
+      return;
+    }
+
+    if (key === 'p') {
+      event.preventDefault();
+      this.printCanvas();
+      return;
+    }
+
+    if (key === 'z') {
+      event.preventDefault();
+      this.undo();
+      return;
+    }
+
+    if (key === 'y') {
+      event.preventDefault();
+      this.redo();
+      return;
+    }
+
+    if (key === 'm') {
+      event.preventDefault();
+      this.makeSelectedCanvasNodeInitial();
+      return;
+    }
+
+    if (key === 't') {
+      event.preventDefault();
+      this.changeSelectedCanvasNodeTape();
+      return;
+    }
+
+    if (key === 'x') {
+      event.preventDefault();
+      this.cutSelectedCanvasElements();
+      return;
+    }
+
+    if (key === 'c') {
+      event.preventDefault();
+      this.copySelectedCanvasElements();
+      return;
+    }
+
+    if (key === 'v') {
+      event.preventDefault();
+      this.pasteCanvasElements();
+      return;
+    }
+
+    if (key === 'b') {
+      event.preventDefault();
+      this.openBurstSizeDialog();
+    }
+  }
+
+  private handleShiftKeyboardShortcut(event: KeyboardEvent, key: string): void {
+    if (key === 's') {
+      event.preventDefault();
+      void this.saveMachineAs();
+      return;
+    }
+
+    if (key === 'n') {
+      event.preventDefault();
+      this.openNotationChangeDialog();
+      return;
+    }
+
+    if (key === 'z') {
+      event.preventDefault();
+      this.redo();
+    }
+  }
+
+  private openHelpContentsFromShortcut(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
+    this.openHelpContents();
+  }
+
+  private openAboutDialogFromShortcut(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
+    this.aboutDialogVisible = true;
+  }
+
+  private openHelpContents(): void {
+    window.open(environment.jtvSite, '_blank', 'noopener');
+  }
+
+  private isEditableTarget(target: EventTarget | null): boolean {
+    const element = target instanceof HTMLElement ? target : null;
+
+    return !!element?.closest('input, textarea, select, [contenteditable="true"], .p-dialog');
   }
 
   newMachine(): void {

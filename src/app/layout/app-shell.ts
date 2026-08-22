@@ -12,8 +12,6 @@ import { TapesPanel } from './tapes-panel';
 import { LoadingOverlay } from '../components/loading-overlay';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvFileService } from '../services/jtv-file.service';
-import { LoadingIndicatorService } from '../services/loading-indicator.service';
-import { JtvStore } from '../stores/jtv.store';
 
 @Component({
   selector: 'app-shell',
@@ -162,8 +160,6 @@ import { JtvStore } from '../stores/jtv.store';
 export class AppShell implements OnInit, OnDestroy {
   private readonly messageService = inject(MessageService);
   private readonly fileService = inject(JtvFileService);
-  private readonly loading = inject(LoadingIndicatorService);
-  private readonly store = inject(JtvStore);
   private readonly subscriptions = new Subscription();
 
   readonly simulationToastModalVisible = signal(false);
@@ -210,32 +206,6 @@ export class AppShell implements OnInit, OnDestroy {
     this.simulationToastModalVisible.set(false);
   }
 
-  @HostListener('document:keydown', ['$event'])
-  handleHistoryShortcut(event: KeyboardEvent): void {
-    if (
-      this.isExecutionLocked() ||
-      !event.ctrlKey ||
-      event.altKey ||
-      event.metaKey ||
-      this.isEditableTarget(event.target)
-    ) {
-      return;
-    }
-
-    const key = event.key.toLowerCase();
-
-    if (key === 'z' && this.store.canUndo()) {
-      event.preventDefault();
-      this.store.undo();
-      return;
-    }
-
-    if (key === 'y' && this.store.canRedo()) {
-      event.preventDefault();
-      this.store.redo();
-    }
-  }
-
   @HostListener('window:resize')
   handleWindowResize(): void {
     this.viewportWidth.set(globalThis.window?.innerWidth ?? 1366);
@@ -245,13 +215,4 @@ export class AppShell implements OnInit, OnDestroy {
     return message.key === 'simulation';
   }
 
-  private isEditableTarget(target: EventTarget | null): boolean {
-    const element = target instanceof HTMLElement ? target : null;
-
-    return !!element?.closest('input, textarea, select, [contenteditable="true"]');
-  }
-
-  private isExecutionLocked(): boolean {
-    return this.loading.visible() || this.store.ate().children.length > 0;
-  }
 }

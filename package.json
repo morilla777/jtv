@@ -1,6 +1,24 @@
 {
   "name": "jtv",
-  "version": "0.0.0",
+  "version": "3.0.0",
+  "description": "Graphical System for Design and Execution of Turing Machines",
+  "author": "Marco Antonio Mora Godoy <morilla777@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://morilla777.github.io/jtv/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morilla777/jtv.git"
+  },
+  "bugs": {
+    "url": "https://github.com/morilla777/jtv/issues"
+  },
+  "keywords": [
+    "turing-machine",
+    "theory-of-computation",
+    "automata",
+    "angular",
+    "education"
+  ],
   "scripts": {
     "ng": "ng",
     "start": "ng serve",

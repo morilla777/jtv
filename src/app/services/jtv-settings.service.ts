@@ -7,7 +7,7 @@ export interface JtvSettings {
 }
 
 export const DEFAULT_JTV_SETTINGS: JtvSettings = {
-  burstSize: 300,
+  burstSize: 10000,
   oldNotation: false,
   maxTapeCount: 10,
 };

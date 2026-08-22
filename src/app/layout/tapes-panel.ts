@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
@@ -7,6 +7,7 @@ import { SelectModule } from 'primeng/select';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvSettingsService } from '../services/jtv-settings.service';
+import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { TranslationService } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 
@@ -55,6 +56,7 @@ interface TapeRowView {
                 class="image-toolbar-button p-button-secondary"
                 [attr.aria-label]="button.labelKey | translate"
                 [title]="button.labelKey | translate"
+                [disabled]="executionLocked()"
                 (click)="button.action?.()"
               >
                 <img [src]="button.icon" alt="" />
@@ -71,6 +73,7 @@ interface TapeRowView {
               size="small"
               class="tape-select"
               appendTo="body"
+              [disabled]="executionLocked()"
               [ariaLabel]="'simulator.tapeSelectAria' | translate"
             />
 
@@ -83,8 +86,21 @@ interface TapeRowView {
               (keydown.enter)="loadSelectedTape(); $event.preventDefault()"
               inputmode="text"
               pattern="[a-z0-9#]*"
+              [disabled]="executionLocked()"
+              [placeholder]="'simulator.tapeInputPlaceholder' | translate"
               [attr.aria-label]="'simulator.tapeInputAria' | translate"
             />
+
+            <button
+              pButton
+              type="button"
+              class="tape-write-button image-toolbar-button p-button-secondary"
+              icon="pi pi-pencil"
+              [attr.aria-label]="'simulator.tapeActions.write' | translate"
+              [title]="'simulator.tapeActions.write' | translate"
+              [disabled]="executionLocked()"
+              (click)="loadSelectedTape()"
+            ></button>
           </div>
         </ng-template>
 
@@ -155,8 +171,14 @@ interface TapeRowView {
                     [attr.height]="tapeCellHeight"
                     [attr.rx]="cell.edge ? 4 : 0"
                     [attr.ry]="cell.edge ? 4 : 0"
-                    class="tape-cell"
+                    class="tape-cell tape-cell-selectable"
                     [class.tape-cell-active]="cell.active"
+                    tabindex="-1"
+                    focusable="false"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="selectTapeCell(tape.id, cell.position)"
+                    (mouseenter)="hoveredTapeCell.set({ tapeId: tape.id, position: cell.position })"
+                    (mouseleave)="clearHoveredTapeCell(tape.id, cell.position)"
                   ></rect>
                   <text [attr.x]="cell.x + tapeCellWidth / 2" [attr.y]="tape.y + cellTextBaselineOffset" text-anchor="middle" class="cell-value">
                     {{ cell.value }}
@@ -295,6 +317,10 @@ interface TapeRowView {
       min-width: 0;
     }
 
+    :host ::ng-deep .tape-write-button {
+      flex: 0 0 2.25rem;
+    }
+
     .tapes-canvas {
       flex: 1;
       min-height: 0;
@@ -302,6 +328,7 @@ interface TapeRowView {
       overflow-y: auto;
       padding: 0.5rem;
       background: var(--p-surface-ground);
+      outline: none;
     }
 
     .tapes-svg {
@@ -309,6 +336,8 @@ interface TapeRowView {
       width: 100%;
       height: auto;
       min-height: 0;
+      outline: none;
+      user-select: none;
     }
 
     .tape-label {
@@ -342,10 +371,23 @@ interface TapeRowView {
       stroke-width: 1.25;
     }
 
+    .tape-cell-selectable {
+      cursor: pointer;
+    }
+
+    .tape-cell-selectable:focus,
+    .tape-cell-selectable:focus-visible {
+      outline: none;
+    }
+
     .tape-cell-active {
       fill: yellow;
       stroke: red;
       stroke-width: 2.5;
+    }
+
+    .tape-cell-selectable:hover {
+      fill: #c000c0;
     }
 
     .tape-head-border {
@@ -360,6 +402,7 @@ interface TapeRowView {
       font-size: 30px;
       font-weight: 600;
       fill: var(--p-text-color);
+      pointer-events: none;
     }
 
   `],
@@ -368,8 +411,11 @@ export class TapesPanel {
   private readonly store = inject(JtvStore);
   private readonly messageService = inject(MessageService);
   private readonly settingsService = inject(JtvSettingsService);
+  private readonly loading = inject(LoadingIndicatorService);
   private readonly i18n = inject(TranslationService);
   private readonly tapeViewStartPositions = signal(new Map<string, number>());
+  readonly hoveredTapeCell = signal<{ tapeId: string; position: number } | null>(null);
+  private readonly keyboardWriteTarget = signal<{ tapeId: string; position: number } | null>(null);
 
   readonly tapeCellCount = 86;
   readonly tapeBaseCellWidth = 32;
@@ -390,6 +436,7 @@ export class TapesPanel {
   readonly tapeEndMarkerX = this.tapeStartX + this.tapeCellCount * this.tapeCellWidth + 2;
   readonly tapeHeadIndex = 43;
   readonly tapePageStep = this.tapeCellCount;
+  readonly executionLocked = computed(() => this.loading.visible() || this.store.ate().children.length > 0);
   readonly tapesViewBox = computed(() => {
     const rows = this.tapeRows();
     const height = Math.max(1, rows.length) * this.tapeRowStep + 20;
@@ -487,6 +534,42 @@ export class TapesPanel {
     this.store.selectTapeIndex(Number(tapeIndex));
   }
 
+  @HostListener('document:keydown', ['$event'])
+  handleTapeKeyboardWrite(event: KeyboardEvent): void {
+    if (
+      this.executionLocked() ||
+      this.isEditableTarget(event.target) ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+
+    const hovered = this.hoveredTapeCell();
+    const target = this.keyboardWriteTarget();
+
+    if (
+      key.length !== 1 ||
+      !/^[a-z0-9#]$/.test(key) ||
+      !hovered ||
+      !target ||
+      hovered.tapeId !== target.tapeId
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    this.store.selectTape(target.tapeId);
+    this.store.writeTapeSymbolAt(target.tapeId, target.position, key);
+    this.keyboardWriteTarget.set({
+      tapeId: target.tapeId,
+      position: target.position + 1,
+    });
+  }
+
   sanitizeTapeValueInput(event: Event): void {
     const input = event.target as HTMLInputElement;
     const value = input.value.replace(/[^a-z0-9#]/g, '');
@@ -501,6 +584,45 @@ export class TapesPanel {
   loadSelectedTape(): void {
     this.store.setSelectedTapeValue(this.tapeValue);
     this.centerSelectedTapePage();
+  }
+
+  selectTapeCell(tapeId: string, position: number): void {
+    if (this.executionLocked()) {
+      return;
+    }
+
+    this.blurActiveElement();
+    const currentRow = this.tapeRows().find((row) => row.id === tapeId);
+
+    if (currentRow) {
+      this.setTapeViewStartPosition(tapeId, currentRow.startPosition);
+    }
+
+    this.store.selectTape(tapeId);
+    this.store.setTapeHeadPosition(tapeId, position);
+    this.keyboardWriteTarget.set({ tapeId, position });
+  }
+
+  clearHoveredTapeCell(tapeId: string, position: number): void {
+    const hovered = this.hoveredTapeCell();
+
+    if (hovered?.tapeId === tapeId && hovered.position === position) {
+      this.hoveredTapeCell.set(null);
+    }
+  }
+
+  private isEditableTarget(target: EventTarget | null): boolean {
+    const element = target instanceof HTMLElement ? target : null;
+
+    return !!element?.closest('input, textarea, select, [contenteditable="true"], .p-dialog');
+  }
+
+  private blurActiveElement(): void {
+    const activeElement = document.activeElement;
+
+    if (activeElement instanceof HTMLElement || activeElement instanceof SVGElement) {
+      activeElement.blur();
+    }
   }
 
   private addTape(): void {

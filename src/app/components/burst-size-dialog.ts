@@ -8,7 +8,7 @@ import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvSettingsService } from '../services/jtv-settings.service';
 
 const MIN_BURST_SIZE = 5;
-const MAX_BURST_SIZE = 1000;
+const MAX_BURST_SIZE = 10000;
 
 @Component({
   selector: 'app-burst-size-dialog',
@@ -21,12 +21,16 @@ const MAX_BURST_SIZE = 1000;
       [closable]="true"
       [draggable]="false"
       [resizable]="false"
-      [style]="{ width: '18rem' }"
+      [style]="{ width: '23rem' }"
       (visibleChange)="onVisibleChange($event)"
       (onHide)="close()"
       (onShow)="resetForm()"
     >
       <form class="burst-size-form" [formGroup]="form" (ngSubmit)="accept()">
+        <p class="burst-size-description">
+          {{ 'burstSizeDialog.description' | translate }}
+        </p>
+
         <label class="burst-size-row" for="burstSizeInput">
           <span>{{ 'burstSizeDialog.burstSize' | translate }}</span>
           <p-inputnumber
@@ -60,6 +64,13 @@ const MAX_BURST_SIZE = 1000;
       flex-direction: column;
       gap: 0.625rem;
       padding-top: 0.125rem;
+    }
+
+    .burst-size-description {
+      margin: 0;
+      color: var(--p-text-muted-color, #64748b);
+      font-size: 0.8125rem;
+      line-height: 1.3;
     }
 
     .burst-size-row {
@@ -100,7 +111,7 @@ export class BurstSizeDialog {
   readonly minBurstSize = MIN_BURST_SIZE;
   readonly maxBurstSize = MAX_BURST_SIZE;
   readonly form = new FormGroup({
-    burstSize: new FormControl(300, {
+    burstSize: new FormControl(10000, {
       nonNullable: true,
       validators: [
         Validators.required,

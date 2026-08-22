@@ -1805,6 +1805,20 @@ export class JtvStore {
     this.syncCurrentHistorySnapshot();
   }
 
+  writeTapeSymbolAt(tapeId: string, position: number, symbolName: string): void {
+    const symbol = SymbolValue.of(symbolName);
+
+    if (!symbol) {
+      return;
+    }
+
+    this.mutateTape(tapeId, (tape) => {
+      tape.setHeadPosition(Math.max(0, position));
+      tape.write(symbol);
+    });
+    this.syncCurrentHistorySnapshot();
+  }
+
   addTape(): void {
     this.state.update((current) => {
       const nextIndex = getNextTapeIndex(current.tapes);

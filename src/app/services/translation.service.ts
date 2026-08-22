@@ -25,7 +25,10 @@ export class TranslationService {
     const saved = localStorage.getItem('jtv-lang');
     if (saved && this.isValidLanguage(saved)) {
       this.currentLang.set(saved);
+      return;
     }
+
+    this.currentLang.set(this.getBrowserLanguage());
   }
 
   translate(key: string, params?: Record<string, string | number>): string {
@@ -51,5 +54,14 @@ export class TranslationService {
     const language = new URLSearchParams(window.location.search).get('lang')?.toLowerCase();
 
     return language && this.isValidLanguage(language) ? language : null;
+  }
+
+  private getBrowserLanguage(): Language {
+    const browserLanguages = [
+      ...(navigator.languages ?? []),
+      navigator.language,
+    ].filter(Boolean);
+
+    return browserLanguages.some((language) => language.toLowerCase().startsWith('es')) ? 'es' : 'en';
   }
 }
