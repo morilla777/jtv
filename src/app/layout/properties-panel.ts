@@ -3,6 +3,7 @@ import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvSettingsService } from '../services/jtv-settings.service';
+import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { TranslationService } from '../services/translation.service';
 import { JtvStore, type JtvToolId } from '../stores/jtv.store';
 
@@ -45,6 +46,7 @@ const NEW_NOTATION_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
                   [attr.aria-label]="btn.tooltipKey ? (btn.tooltipKey | translate) : ''"
                   [title]="btn.tooltipKey ? (btn.tooltipKey | translate) : ''"
                   [class.tool-btn-active]="activeToolId() === btn.toolId"
+                  [disabled]="executionLocked()"
                   class="tool-btn p-button-secondary"
                   (click)="toggleTool(btn)"
                 >
@@ -135,9 +137,12 @@ export class PropertiesPanel {
   private readonly store = inject(JtvStore);
   private readonly messageService = inject(MessageService);
   private readonly settingsService = inject(JtvSettingsService);
+  private readonly loading = inject(LoadingIndicatorService);
   private readonly i18n = inject(TranslationService);
 
   readonly activeToolId = computed(() => this.store.activeToolId());
+  readonly executionBusy = computed(() => this.loading.visible());
+  readonly executionLocked = computed(() => this.executionBusy() || this.store.ate().children.length > 0);
 
   readonly buttons: ToolButton[] = [
     {
@@ -283,6 +288,10 @@ export class PropertiesPanel {
   }
 
   toggleTool(button: ToolButton): void {
+    if (this.executionLocked()) {
+      return;
+    }
+
     if (button.toolId) {
       if (button.toolId === 'submachine' && this.store.activeChildMachineNames().length === 0) {
         this.messageService.add({

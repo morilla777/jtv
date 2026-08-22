@@ -7,6 +7,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { ConditionDialog, ConditionDialogValue } from '../components/condition-dialog';
 import { ParameterAssignmentDialog } from '../components/parameter-assignment-dialog';
 import { JtvSettingsService } from '../services/jtv-settings.service';
+import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { TranslationService } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
@@ -56,6 +57,7 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
         <svg
           #designerSvg
           class="designer-svg"
+          [class.designer-svg-locked]="executionLocked()"
           [style.width.px]="canvasWidth()"
           [style.height.px]="canvasHeight()"
           [attr.viewBox]="viewBox()"
@@ -383,6 +385,9 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
             }
           </g>
         </svg>
+        @if (executionLocked()) {
+          <div class="canvas-interaction-lock" (contextmenu)="$event.preventDefault()" aria-hidden="true"></div>
+        }
       </div>
 
       <app-condition-dialog
@@ -416,16 +421,29 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
     }
 
     .canvas-container {
+      position: relative;
       flex: 1;
       min-height: 0;
       overflow: auto;
       background: #fff;
     }
 
+    .canvas-interaction-lock {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      background: transparent;
+      cursor: wait;
+    }
+
     .designer-svg {
       min-width: 560px;
       min-height: 340px;
       display: block;
+    }
+
+    .designer-svg-locked {
+      pointer-events: none;
     }
 
     .canvas-background {
@@ -673,6 +691,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private readonly messageService = inject(MessageService);
   private readonly i18n = inject(TranslationService);
   private readonly settingsService = inject(JtvSettingsService);
+  private readonly loading = inject(LoadingIndicatorService);
   @ViewChild('nodeContextMenu') private nodeContextMenu?: ContextMenu;
   @ViewChild('linkContextMenu') private linkContextMenu?: ContextMenu;
   @ViewChild('canvasContextMenu') private canvasContextMenu?: ContextMenu;
@@ -714,6 +733,8 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   readonly machineGraphView = computed(() => this.store.machineGraphView());
   readonly viewBox = computed(() => `0 0 ${this.canvasWidth()} ${this.canvasHeight()}`);
   readonly isPointerToolActive = computed(() => this.store.activeToolId() === 'pointer');
+  readonly executionBusy = computed(() => this.loading.visible());
+  readonly executionLocked = computed(() => this.executionBusy() || this.store.ate().children.length > 0);
   readonly canvasSelectionRect = computed(() => {
     const start = this.canvasSelectionStart;
     const current = this.canvasSelectionCurrent();
@@ -868,42 +889,42 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
         iconSrc: 'assets/images/Start16.gif',
       },
       disabled: true,
-      command: () => this.makeContextNodeInitial(),
+      command: () => this.runCanvasEditAction(() => this.makeContextNodeInitial()),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.changeTape'),
       data: {
         iconSrc: 'assets/images/ChangeTape16.gif',
       },
-      command: () => this.changeContextNodeTape(),
+      command: () => this.runCanvasEditAction(() => this.changeContextNodeTape()),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.cut'),
       data: {
         iconSrc: 'assets/images/Cut16.gif',
       },
-      command: () => this.store.cutSelectedCanvasElements(),
+      command: () => this.runCanvasEditAction(() => this.store.cutSelectedCanvasElements()),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.copy'),
       data: {
         iconSrc: 'assets/images/Copy16.gif',
       },
-      command: () => this.store.copySelectedCanvasElements(),
+      command: () => this.runCanvasEditAction(() => this.store.copySelectedCanvasElements()),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.paste'),
       data: {
         iconSrc: 'assets/images/Paste16.gif',
       },
-      command: () => this.store.pasteCanvasElements(),
+      command: () => this.runCanvasEditAction(() => this.store.pasteCanvasElements()),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.delete'),
       data: {
         iconSrc: 'assets/images/Delete16.gif',
       },
-      command: () => this.deleteContextNode(),
+      command: () => this.runCanvasEditAction(() => this.deleteContextNode()),
     },
   ];
   readonly linkContextMenuItems: MenuItem[] = [
@@ -912,28 +933,28 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       data: {
         iconSrc: 'assets/images/Cut16.gif',
       },
-      command: () => this.store.cutSelectedCanvasElements(),
+      command: () => this.runCanvasEditAction(() => this.store.cutSelectedCanvasElements()),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.copy'),
       data: {
         iconSrc: 'assets/images/Copy16.gif',
       },
-      command: () => this.store.copySelectedCanvasElements(),
+      command: () => this.runCanvasEditAction(() => this.store.copySelectedCanvasElements()),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.paste'),
       data: {
         iconSrc: 'assets/images/Paste16.gif',
       },
-      command: () => this.store.pasteCanvasElements(),
+      command: () => this.runCanvasEditAction(() => this.store.pasteCanvasElements()),
     },
     {
       label: this.i18n.translate('topbar.menu.edit.delete'),
       data: {
         iconSrc: 'assets/images/Delete16.gif',
       },
-      command: () => this.deleteContextLink(),
+      command: () => this.runCanvasEditAction(() => this.deleteContextLink()),
     },
   ];
   readonly canvasContextMenuItems: MenuItem[] = [
@@ -942,7 +963,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       data: {
         iconSrc: 'assets/images/Paste16.gif',
       },
-      command: () => this.store.pasteCanvasElements(),
+      command: () => this.runCanvasEditAction(() => this.store.pasteCanvasElements()),
     },
   ];
   private readonly updateContextMenuLabels = effect(() => {
@@ -1489,6 +1510,12 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   }
 
   showNodeContextMenu(nodeId: string, event: MouseEvent): void {
+    if (this.executionLocked()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     if (!this.isPointerToolActive()) {
       this.cancelTransitionDraft(event);
       return;
@@ -1510,6 +1537,12 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   }
 
   showLinkContextMenu(linkId: string, event: MouseEvent): void {
+    if (this.executionLocked()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     if (!this.isPointerToolActive()) {
       this.cancelTransitionDraft(event);
       return;
@@ -1530,6 +1563,12 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   }
 
   showCanvasContextMenu(event: MouseEvent): void {
+    if (this.executionLocked()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     if (!this.isPointerToolActive()) {
       this.cancelTransitionDraft(event);
       return;
@@ -1557,6 +1596,14 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.transitionSourceNodeId.set(null);
     this.transitionDraftEndPoint.set(null);
     this.store.clearCanvasSelection();
+  }
+
+  private runCanvasEditAction(action: () => void): void {
+    if (this.executionLocked()) {
+      return;
+    }
+
+    action();
   }
 
   isHoveredNode(nodeId: string): boolean {

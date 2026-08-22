@@ -125,6 +125,7 @@ interface JtvMachineHistory {
   readonly undoStack: JtvHistorySnapshot[];
   readonly redoStack: JtvHistorySnapshot[];
   lastSnapshot: JtvHistorySnapshot | null;
+  cleanSnapshot: JtvHistorySnapshot | null;
   transactionStart: JtvHistorySnapshot | null;
 }
 
@@ -2007,6 +2008,10 @@ export class JtvStore {
     return result.status !== 'failed' && result.status !== 'error';
   }
 
+  hasAteSubtrace(nodeId: string): boolean {
+    return !!this.findAteNode(this.state().ate, nodeId)?.subtrace;
+  }
+
   returnFromAteSubtrace(): boolean {
     if (this.ateNavigationStack.length === 0) {
       return false;
@@ -2136,7 +2141,7 @@ export class JtvStore {
     this.applyHistorySnapshot(previousSnapshot);
     history.lastSnapshot = previousSnapshot;
     this.bumpHistoryRevision();
-    this.markMachineDirty();
+    this.reconcileActiveMachineDirtyFlag();
   }
 
   redo(): void {
@@ -2153,7 +2158,7 @@ export class JtvStore {
     this.applyHistorySnapshot(nextSnapshot);
     history.lastSnapshot = nextSnapshot;
     this.bumpHistoryRevision();
-    this.markMachineDirty();
+    this.reconcileActiveMachineDirtyFlag();
   }
 
   beginMachineHistoryTransaction(): void {
@@ -2183,7 +2188,7 @@ export class JtvStore {
       history.redoStack.length = 0;
       history.lastSnapshot = currentSnapshot;
       this.bumpHistoryRevision();
-      this.fileService.markDirty();
+      this.markDesignMachineDirty(this.activeDesignMachineId);
     }
   }
 
@@ -2285,7 +2290,27 @@ export class JtvStore {
   }
 
   clearDesignMachineDirtyFlags(): void {
+    this.saveActiveDesignMachine();
+
+    const activeHistory = this.getActiveMachineHistory();
+    const activeSnapshot = this.captureHistorySnapshot();
+
+    activeHistory.lastSnapshot = activeSnapshot;
+    activeHistory.cleanSnapshot = activeSnapshot;
+    activeHistory.transactionStart = null;
+
+    for (const [machineId, history] of this.machineHistories) {
+      if (machineId === this.activeDesignMachineId) {
+        continue;
+      }
+
+      history.cleanSnapshot = history.lastSnapshot;
+      history.transactionStart = null;
+    }
+
     this.dirtyDesignMachineIds.set(new Set());
+    this.fileService.clearDirty();
+    this.bumpMachineWorkspaceRevision();
   }
 
   selectChildSubmachineByName(machineName: string | null): void {
@@ -3181,8 +3206,23 @@ export class JtvStore {
   }
 
   private markDesignMachineDirty(machineId: string): void {
-    this.dirtyDesignMachineIds.update((current) => new Set([...current, machineId]));
-    this.fileService.markDirty();
+    this.setDesignMachineDirty(machineId, true);
+  }
+
+  private setDesignMachineDirty(machineId: string, dirty: boolean): void {
+    this.dirtyDesignMachineIds.update((current) => {
+      const next = new Set(current);
+
+      if (dirty) {
+        next.add(machineId);
+      } else {
+        next.delete(machineId);
+      }
+
+      return next;
+    });
+
+    this.syncFileDirtyFlag();
     this.bumpMachineWorkspaceRevision();
   }
 
@@ -3196,6 +3236,24 @@ export class JtvStore {
 
       return next;
     });
+    this.syncFileDirtyFlag();
+  }
+
+  private syncFileDirtyFlag(): void {
+    if (this.dirtyDesignMachineIds().size > 0) {
+      this.fileService.markDirty();
+    } else {
+      this.fileService.clearDirty();
+    }
+  }
+
+  private reconcileActiveMachineDirtyFlag(): void {
+    const history = this.getActiveMachineHistory();
+    const cleanSnapshot = history.cleanSnapshot;
+    const currentSnapshot = history.lastSnapshot ?? this.captureHistorySnapshot();
+    const isDirty = cleanSnapshot ? !this.areHistorySnapshotsEqual(cleanSnapshot, currentSnapshot) : false;
+
+    this.setDesignMachineDirty(this.activeDesignMachineId, isDirty);
   }
 
   private refreshMachineMetaValues(): void {
@@ -3258,6 +3316,7 @@ export class JtvStore {
       undoStack: [],
       redoStack: [],
       lastSnapshot,
+      cleanSnapshot: lastSnapshot,
       transactionStart: null,
     };
   }

@@ -2,7 +2,7 @@ import { Component, ElementRef, HostListener, ViewChild, computed, effect, injec
 import { ConfirmationService, MenuItem, MessageService, TreeNode } from 'primeng/api';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TabsModule } from 'primeng/tabs';
-import { TreeModule } from 'primeng/tree';
+import { Tree, TreeModule } from 'primeng/tree';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { TranslationService } from '../services/translation.service';
 import { JtvSettingsService } from '../services/jtv-settings.service';
@@ -76,6 +76,7 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
                 (pointerdown)="handleAteTreePointerDown($event)"
               >
                 <p-tree
+                  #ateTree
                   class="ate-tree"
                   [value]="ateNodes()"
                   selectionMode="single"
@@ -86,6 +87,10 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
                   (onNodeCollapse)="handleAteNodeCollapse($event.node)"
                   [style]="treeStyle"
                   [indentation]="0.25"
+                  [virtualScroll]="true"
+                  [virtualScrollItemSize]="20"
+                  [scrollHeight]="'100%'"
+                  [trackBy]="ateTreeTrackBy"
                 >
                   <ng-template pTemplate="default" let-node>
                     <span
@@ -352,6 +357,7 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
 })
 export class ExplorerPanel {
   @ViewChild('existingSubmachineFileInput') private existingSubmachineFileInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('ateTree') private ateTree?: Tree;
 
   private readonly store = inject(JtvStore);
   private readonly i18n = inject(TranslationService);
@@ -381,6 +387,8 @@ export class ExplorerPanel {
     '--p-tree-node-gap': '0.1875rem',
     '--p-tree-node-toggle-button-size': '0.875rem',
   };
+  readonly ateTreeTrackBy = (_index: number, node: TreeNode): string =>
+    String(node.key ?? node.data?.ateNodeId ?? node.label ?? _index);
 
   readonly mainMachineNodes = computed<TreeNode[]>(() => [this.toMachineTreeNode(this.store.machineTree())]);
   readonly machineTreeDisabled = computed(() => this.store.ate().children.length > 0);
@@ -508,8 +516,8 @@ export class ExplorerPanel {
 
     this.selectedAteNode = selectedNodeId ? this.findTreeNodeByAteNodeId(nodes, selectedNodeId) : null;
 
-    if (this.selectedAteNode) {
-      this.scrollSelectedAteNodeIntoView();
+    if (this.selectedAteNode && selectedNodeId) {
+      this.scrollSelectedAteNodeIntoView(selectedNodeId);
     }
   });
   private readonly syncExecutionTabState = effect(() => {
@@ -855,10 +863,12 @@ export class ExplorerPanel {
     event.preventDefault();
     event.stopPropagation();
     const expandedNodeId = node.data?.ateNodeId ?? '';
-    const continued = await this.loading.run(
-      () => this.store.continueAteExecution(node.data?.ateNodeId ?? ''),
-      this.i18n.translate('loading.executing'),
-    );
+    const continued = this.store.hasAteSubtrace(expandedNodeId)
+      ? this.store.continueAteExecution(expandedNodeId)
+      : await this.loading.run(
+        () => this.store.continueAteExecution(expandedNodeId),
+        this.i18n.translate('loading.executing'),
+      );
 
     if (continued) {
       this.focusAteExpandedBranch(expandedNodeId);
@@ -883,10 +893,8 @@ export class ExplorerPanel {
     }
 
     this.lastAteRightClick = null;
-    const returned = await this.loading.run(
-      () => this.store.returnFromAteSubtrace(),
-      this.i18n.translate('loading.executing'),
-    );
+    this.scrollAteTreeToTop();
+    const returned = this.store.returnFromAteSubtrace();
 
     if (returned) {
       this.focusAteExpandedBranch(this.store.selectedAteNode()?.id ?? nodeId);
@@ -999,8 +1007,14 @@ export class ExplorerPanel {
     });
   }
 
-  private scrollSelectedAteNodeIntoView(): void {
+  private scrollSelectedAteNodeIntoView(ateNodeId: string): void {
     window.requestAnimationFrame(() => {
+      const selectedIndex = this.getVisibleAteTreeNodeIndex(ateNodeId);
+
+      if (selectedIndex >= 0) {
+        this.ateTree?.scrollToVirtualIndex(selectedIndex);
+      }
+
       const selectedElement = this.hostElement.nativeElement.querySelector(
         '.ate-tree .p-tree-node-content.p-tree-node-selected',
       );
@@ -1010,6 +1024,17 @@ export class ExplorerPanel {
         inline: 'nearest',
       });
     });
+  }
+
+  private scrollAteTreeToTop(): void {
+    this.ateTree?.scrollToVirtualIndex(0);
+    this.ateTree?.scrollTo({ top: 0 });
+  }
+
+  private getVisibleAteTreeNodeIndex(ateNodeId: string): number {
+    return this.ateNodes()
+      .flatMap((node) => this.flattenSelectableTreeNodes(node))
+      .findIndex((node) => node.data?.ateNodeId === ateNodeId);
   }
 
   private toMachineTreeNode(node: JtvMachineTreeNode): TreeNode {

@@ -12,6 +12,7 @@ import { TapesPanel } from './tapes-panel';
 import { LoadingOverlay } from '../components/loading-overlay';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { JtvFileService } from '../services/jtv-file.service';
+import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { JtvStore } from '../stores/jtv.store';
 
 @Component({
@@ -161,6 +162,7 @@ import { JtvStore } from '../stores/jtv.store';
 export class AppShell implements OnInit, OnDestroy {
   private readonly messageService = inject(MessageService);
   private readonly fileService = inject(JtvFileService);
+  private readonly loading = inject(LoadingIndicatorService);
   private readonly store = inject(JtvStore);
   private readonly subscriptions = new Subscription();
 
@@ -210,7 +212,13 @@ export class AppShell implements OnInit, OnDestroy {
 
   @HostListener('document:keydown', ['$event'])
   handleHistoryShortcut(event: KeyboardEvent): void {
-    if (!event.ctrlKey || event.altKey || event.metaKey || this.isEditableTarget(event.target)) {
+    if (
+      this.isExecutionLocked() ||
+      !event.ctrlKey ||
+      event.altKey ||
+      event.metaKey ||
+      this.isEditableTarget(event.target)
+    ) {
       return;
     }
 
@@ -241,5 +249,9 @@ export class AppShell implements OnInit, OnDestroy {
     const element = target instanceof HTMLElement ? target : null;
 
     return !!element?.closest('input, textarea, select, [contenteditable="true"]');
+  }
+
+  private isExecutionLocked(): boolean {
+    return this.loading.visible() || this.store.ate().children.length > 0;
   }
 }

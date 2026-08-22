@@ -68,6 +68,10 @@ export class JtvFileService {
     }
   }
 
+  clearDirty(): void {
+    this.dirty.set(false);
+  }
+
   async open(): Promise<OpenedJtvFile | null> {
     return this.openFromPicker({ trackCurrentFile: true });
   }

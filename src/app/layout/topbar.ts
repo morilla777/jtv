@@ -39,6 +39,7 @@ interface LanguageOption {
               class="file-menu-trigger"
               [attr.aria-expanded]="fileMenuOpen"
               aria-haspopup="menu"
+              [disabled]="executionLocked"
               (click)="toggleFileMenu($event)"
             >
               <span class="pi pi-file"></span>
@@ -47,28 +48,28 @@ interface LanguageOption {
 
             @if (fileMenuOpen) {
               <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'new')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'new')">
                   <img class="file-menu-icon" src="assets/images/New16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.new' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'open')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'open')">
                   <img class="file-menu-icon" src="assets/images/Open16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.open' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'save')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'save')">
                   <img class="file-menu-icon" src="assets/images/Save16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.save' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'saveAs')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'saveAs')">
                   <img class="file-menu-icon" src="assets/images/SaveAs16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.saveAs' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'import')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'import')">
                   <img class="file-menu-icon" src="assets/images/Import16.gif" alt="" />
                   <span>{{ 'topbar.import' | translate }}</span>
                 </button>
                 <div class="file-menu-recent-group">
-                  <button type="button" role="menuitem" class="file-menu-item" [disabled]="recentMachines().length === 0">
+                  <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || recentMachines().length === 0">
                     <img class="file-menu-icon" src="assets/images/Recent16.gif" alt="" />
                     <span>{{ 'topbar.menu.file.recentMachines' | translate }}</span>
                     <span class="file-menu-submenu-arrow">›</span>
@@ -81,6 +82,7 @@ interface LanguageOption {
                           role="menuitem"
                           class="file-menu-item file-menu-recent-item"
                           [title]="machine.fileName"
+                          [disabled]="executionLocked"
                           (click)="openRecentMachine($event, machine)"
                         >
                           <img class="file-menu-icon" src="assets/images/Gear.gif" alt="" />
@@ -90,7 +92,7 @@ interface LanguageOption {
                     </div>
                   }
                 </div>
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runFileMenuAction($event, 'print')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'print')">
                   <img class="file-menu-icon" src="assets/images/Print16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.print' | translate }}</span>
                 </button>
@@ -104,6 +106,7 @@ interface LanguageOption {
               class="file-menu-trigger"
               [attr.aria-expanded]="settingsMenuOpen"
               aria-haspopup="menu"
+              [disabled]="executionLocked"
               (click)="toggleSettingsMenu($event)"
             >
               <span class="pi pi-cog"></span>
@@ -112,11 +115,11 @@ interface LanguageOption {
 
             @if (settingsMenuOpen) {
               <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runSettingsMenuAction($event, 'burstSize')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runSettingsMenuAction($event, 'burstSize')">
                   <span class="pi pi-bolt"></span>
                   <span>{{ 'topbar.menu.settings.burstSize' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runSettingsMenuAction($event, 'notationChange')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runSettingsMenuAction($event, 'notationChange')">
                   <img class="file-menu-icon" src="assets/images/NotationChange16.gif" alt="" />
                   <span>{{ 'topbar.menu.settings.notationChange' | translate }}</span>
                 </button>
@@ -130,6 +133,7 @@ interface LanguageOption {
               class="file-menu-trigger"
               [attr.aria-expanded]="editMenuOpen"
               aria-haspopup="menu"
+              [disabled]="executionLocked"
               (click)="toggleEditMenu($event)"
             >
               <span class="pi pi-pencil"></span>
@@ -138,35 +142,35 @@ interface LanguageOption {
 
             @if (editMenuOpen) {
               <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
-                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!canUndo" (click)="runEditMenuAction($event, 'undo')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !canUndo" (click)="runEditMenuAction($event, 'undo')">
                   <img class="file-menu-icon" src="assets/images/Undo16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.undo' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!canRedo" (click)="runEditMenuAction($event, 'redo')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !canRedo" (click)="runEditMenuAction($event, 'redo')">
                   <img class="file-menu-icon" src="assets/images/Redo16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.redo' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!canMakeSelectedCanvasNodeInitial" (click)="runEditMenuAction($event, 'makeInitial')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !canMakeSelectedCanvasNodeInitial" (click)="runEditMenuAction($event, 'makeInitial')">
                   <img class="file-menu-icon" src="assets/images/Start16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.makeInitial' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!hasSelectedCanvasNode" (click)="runEditMenuAction($event, 'changeTape')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !hasSelectedCanvasNode" (click)="runEditMenuAction($event, 'changeTape')">
                   <img class="file-menu-icon" src="assets/images/ChangeTape16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.changeTape' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!hasCanvasSelection" (click)="runEditMenuAction($event, 'cut')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !hasCanvasSelection" (click)="runEditMenuAction($event, 'cut')">
                   <img class="file-menu-icon" src="assets/images/Cut16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.cut' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!hasCanvasSelection" (click)="runEditMenuAction($event, 'copy')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !hasCanvasSelection" (click)="runEditMenuAction($event, 'copy')">
                   <img class="file-menu-icon" src="assets/images/Copy16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.copy' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!canPasteCanvasElements" (click)="runEditMenuAction($event, 'paste')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !canPasteCanvasElements" (click)="runEditMenuAction($event, 'paste')">
                   <img class="file-menu-icon" src="assets/images/Paste16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.paste' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" [disabled]="!hasCanvasSelection" (click)="runEditMenuAction($event, 'delete')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !hasCanvasSelection" (click)="runEditMenuAction($event, 'delete')">
                   <img class="file-menu-icon" src="assets/images/Delete16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.delete' | translate }}</span>
                 </button>
@@ -180,6 +184,7 @@ interface LanguageOption {
               class="file-menu-trigger"
               [attr.aria-expanded]="helpMenuOpen"
               aria-haspopup="menu"
+              [disabled]="executionLocked"
               (click)="toggleHelpMenu($event)"
             >
               <span class="pi pi-question-circle"></span>
@@ -188,11 +193,11 @@ interface LanguageOption {
 
             @if (helpMenuOpen) {
               <div class="file-menu-panel" role="menu" (click)="$event.stopPropagation()">
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runHelpMenuAction($event, 'contents')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runHelpMenuAction($event, 'contents')">
                   <span class="pi pi-book"></span>
                   <span>{{ 'topbar.menu.help.contents' | translate }}</span>
                 </button>
-                <button type="button" role="menuitem" class="file-menu-item" (click)="runHelpMenuAction($event, 'about')">
+                <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runHelpMenuAction($event, 'about')">
                   <img class="file-menu-icon" src="assets/images/Info16.gif" alt="" />
                   <span>{{ 'topbar.menu.help.about' | translate }}</span>
                 </button>
@@ -211,6 +216,7 @@ interface LanguageOption {
                 size="small"
                 class="language-select"
                 panelStyleClass="language-select-panel"
+                [disabled]="executionLocked"
                 (onChange)="onLanguageChange($event)"
               >
                 <ng-template #selectedItem let-selectedOption>
@@ -245,6 +251,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.new' | translate"
               [title]="'topbar.new' | translate"
+              [disabled]="executionLocked"
               (click)="newMachine()"
             >
               <img src="assets/images/New24.gif" alt="" />
@@ -255,6 +262,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.file.open' | translate"
               [title]="'topbar.menu.file.open' | translate"
+              [disabled]="executionLocked"
               (click)="openMachine()"
             >
               <img src="assets/images/Open24.gif" alt="" />
@@ -265,6 +273,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.save' | translate"
               [title]="'topbar.save' | translate"
+              [disabled]="executionLocked"
               (click)="saveMachine()"
             >
               <img src="assets/images/Save24.gif" alt="" />
@@ -275,6 +284,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.import' | translate"
               [title]="'topbar.import' | translate"
+              [disabled]="executionLocked"
               (click)="importLegacyMachine()"
             >
               <img src="assets/images/Import24.gif" alt="" />
@@ -285,6 +295,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.print' | translate"
               [title]="'topbar.print' | translate"
+              [disabled]="executionLocked"
               (click)="printCanvas()"
             >
               <img src="assets/images/Print24.gif" alt="" />
@@ -296,7 +307,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.undo' | translate"
               [title]="'topbar.menu.edit.undo' | translate"
-              [disabled]="!canUndo"
+              [disabled]="executionLocked || !canUndo"
               (click)="undo()"
             >
               <img src="assets/images/Undo24.gif" alt="" />
@@ -307,7 +318,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.redo' | translate"
               [title]="'topbar.menu.edit.redo' | translate"
-              [disabled]="!canRedo"
+              [disabled]="executionLocked || !canRedo"
               (click)="redo()"
             >
               <img src="assets/images/Redo24.gif" alt="" />
@@ -318,7 +329,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.cut' | translate"
               [title]="'topbar.menu.edit.cut' | translate"
-              [disabled]="!hasCanvasSelection"
+              [disabled]="executionLocked || !hasCanvasSelection"
               (click)="cutSelectedCanvasElements()"
             >
               <img src="assets/images/Cut24.gif" alt="" />
@@ -329,7 +340,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.copy' | translate"
               [title]="'topbar.menu.edit.copy' | translate"
-              [disabled]="!hasCanvasSelection"
+              [disabled]="executionLocked || !hasCanvasSelection"
               (click)="copySelectedCanvasElements()"
             >
               <img src="assets/images/Copy24.gif" alt="" />
@@ -340,7 +351,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.paste' | translate"
               [title]="'topbar.menu.edit.paste' | translate"
-              [disabled]="!canPasteCanvasElements"
+              [disabled]="executionLocked || !canPasteCanvasElements"
               (click)="pasteCanvasElements()"
             >
               <img src="assets/images/Paste24.gif" alt="" />
@@ -351,7 +362,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.menu.edit.delete' | translate"
               [title]="'topbar.menu.edit.delete' | translate"
-              [disabled]="!hasCanvasSelection"
+              [disabled]="executionLocked || !hasCanvasSelection"
               (click)="deleteSelectedCanvasElement()"
             >
               <img src="assets/images/Delete24.gif" alt="" />
@@ -362,6 +373,7 @@ interface LanguageOption {
               class="notation-button"
               [attr.aria-label]="'topbar.parameterAssignment' | translate"
               [title]="'topbar.parameterAssignment' | translate"
+              [disabled]="executionLocked"
               severity="secondary"
               (onClick)="openParameterAssignmentDialog()"
             />
@@ -371,7 +383,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.execute' | translate"
               [title]="'topbar.execute' | translate"
-              [disabled]="executionFinished"
+              [disabled]="executionLocked"
               (click)="executeMachine()"
             >
               <img src="assets/images/Play24.gif" alt="" />
@@ -382,7 +394,7 @@ interface LanguageOption {
               class="image-toolbar-button p-button-secondary"
               [attr.aria-label]="'topbar.stop' | translate"
               [title]="'topbar.stop' | translate"
-              [disabled]="!executionFinished"
+              [disabled]="!canStopExecution"
               (click)="stopSimulation()"
             >
               <img src="assets/images/Stop24.gif" alt="" />
@@ -398,6 +410,7 @@ interface LanguageOption {
               size="small"
               class="toolbar-select symbol-select"
               panelStyleClass="symbol-select-panel"
+              [disabled]="executionLocked"
               ariaLabel="Símbolo"
             />
             <p-select
@@ -406,6 +419,7 @@ interface LanguageOption {
               size="small"
               class="toolbar-select symbol-select"
               panelStyleClass="symbol-select-panel"
+              [disabled]="executionLocked"
               ariaLabel="Letra griega"
             />
             <p-select
@@ -414,6 +428,7 @@ interface LanguageOption {
               size="small"
               class="toolbar-select symbol-select"
               panelStyleClass="symbol-select-panel"
+              [disabled]="executionLocked"
               ariaLabel="Letra mayúscula"
             />
             <p-select
@@ -421,6 +436,7 @@ interface LanguageOption {
               [(ngModel)]="selectedSubmachineName"
               size="small"
               class="toolbar-select machine-select"
+              [disabled]="executionLocked"
               ariaLabel="Máquina"
             >
               <ng-template #empty></ng-template>
@@ -829,6 +845,10 @@ export class Topbar {
   }
 
   set selectedSymbol(symbol: string) {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.selectSymbol(symbol);
   }
 
@@ -837,6 +857,10 @@ export class Topbar {
   }
 
   set selectedGreekLowercase(variable: string) {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.selectVariable(variable);
   }
 
@@ -845,6 +869,10 @@ export class Topbar {
   }
 
   set selectedUppercase(parameter: string) {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.selectParameter(parameter);
   }
 
@@ -856,28 +884,40 @@ export class Topbar {
     return this.store.parameterAssignments();
   }
 
+  get executionBusy(): boolean {
+    return this.loading.visible();
+  }
+
+  get executionLocked(): boolean {
+    return this.executionBusy || this.executionFinished;
+  }
+
+  get canStopExecution(): boolean {
+    return this.executionFinished;
+  }
+
   get canUndo(): boolean {
-    return this.store.canUndo();
+    return !this.executionLocked && this.store.canUndo();
   }
 
   get canRedo(): boolean {
-    return this.store.canRedo();
+    return !this.executionLocked && this.store.canRedo();
   }
 
   get hasSelectedCanvasNode(): boolean {
-    return this.store.selectedCanvasNodeId() !== null;
+    return !this.executionLocked && this.store.selectedCanvasNodeId() !== null;
   }
 
   get hasCanvasSelection(): boolean {
-    return this.store.hasCanvasSelection();
+    return !this.executionLocked && this.store.hasCanvasSelection();
   }
 
   get canPasteCanvasElements(): boolean {
-    return this.store.canPasteCanvasElements();
+    return !this.executionLocked && this.store.canPasteCanvasElements();
   }
 
   get canMakeSelectedCanvasNodeInitial(): boolean {
-    return this.store.canMakeSelectedCanvasNodeInitial();
+    return !this.executionLocked && this.store.canMakeSelectedCanvasNodeInitial();
   }
 
   get selectedSubmachineName(): string | null {
@@ -885,6 +925,10 @@ export class Topbar {
   }
 
   set selectedSubmachineName(machineName: string | null) {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.selectChildSubmachineByName(machineName);
   }
 
@@ -893,36 +937,68 @@ export class Topbar {
   }
 
   openParameterAssignmentDialog(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.parameterAssignmentDialogVisible = true;
   }
 
   openBurstSizeDialog(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.burstSizeDialogVisible = true;
   }
 
   openNotationChangeDialog(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.notationChangeDialogVisible = true;
   }
 
   saveParameterAssignments(assignments: Record<string, string>): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.assignParameters(assignments);
   }
 
   undo(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.executionFinished = false;
     this.store.undo();
   }
 
   redo(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.executionFinished = false;
     this.store.redo();
   }
 
   printCanvas(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     window.dispatchEvent(new Event('jtv-print-canvas'));
   }
 
   importLegacyMachine(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     const input = document.createElement('input');
 
     input.type = 'file';
@@ -932,6 +1008,10 @@ export class Topbar {
       const file = input.files?.[0] ?? null;
 
       input.remove();
+
+      if (this.executionLocked) {
+        return;
+      }
 
       if (!file) {
         return;
@@ -967,26 +1047,50 @@ export class Topbar {
   }
 
   makeSelectedCanvasNodeInitial(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.makeSelectedCanvasNodeInitial();
   }
 
   changeSelectedCanvasNodeTape(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.changeSelectedCanvasNodeTape();
   }
 
   deleteSelectedCanvasElement(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.deleteSelectedCanvasElement();
   }
 
   cutSelectedCanvasElements(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.cutSelectedCanvasElements();
   }
 
   copySelectedCanvasElements(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.copySelectedCanvasElements();
   }
 
   pasteCanvasElements(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.store.pasteCanvasElements();
   }
 
@@ -1014,6 +1118,10 @@ export class Topbar {
   }
 
   onLanguageChange(event: SelectChangeEvent): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     const selected = event.value as LanguageOption | null;
 
     if (selected) {
@@ -1031,6 +1139,12 @@ export class Topbar {
 
   toggleFileMenu(event: Event): void {
     event.stopPropagation();
+
+    if (this.executionLocked) {
+      this.closeOpenMenus();
+      return;
+    }
+
     this.fileMenuOpen = !this.fileMenuOpen;
     this.settingsMenuOpen = false;
     this.editMenuOpen = false;
@@ -1039,6 +1153,12 @@ export class Topbar {
 
   toggleSettingsMenu(event: Event): void {
     event.stopPropagation();
+
+    if (this.executionLocked) {
+      this.closeOpenMenus();
+      return;
+    }
+
     this.settingsMenuOpen = !this.settingsMenuOpen;
     this.fileMenuOpen = false;
     this.editMenuOpen = false;
@@ -1047,6 +1167,12 @@ export class Topbar {
 
   toggleEditMenu(event: Event): void {
     event.stopPropagation();
+
+    if (this.executionLocked) {
+      this.closeOpenMenus();
+      return;
+    }
+
     this.editMenuOpen = !this.editMenuOpen;
     this.fileMenuOpen = false;
     this.settingsMenuOpen = false;
@@ -1055,6 +1181,12 @@ export class Topbar {
 
   toggleHelpMenu(event: Event): void {
     event.stopPropagation();
+
+    if (this.executionLocked) {
+      this.closeOpenMenus();
+      return;
+    }
+
     this.helpMenuOpen = !this.helpMenuOpen;
     this.fileMenuOpen = false;
     this.settingsMenuOpen = false;
@@ -1065,6 +1197,10 @@ export class Topbar {
     event.preventDefault();
     event.stopPropagation();
     this.fileMenuOpen = false;
+
+    if (this.executionLocked) {
+      return;
+    }
 
     if (action === 'new') {
       this.newMachine();
@@ -1099,6 +1235,10 @@ export class Topbar {
     event.stopPropagation();
     this.settingsMenuOpen = false;
 
+    if (this.executionLocked) {
+      return;
+    }
+
     if (action === 'burstSize') {
       this.openBurstSizeDialog();
       return;
@@ -1114,6 +1254,10 @@ export class Topbar {
     event.preventDefault();
     event.stopPropagation();
     this.editMenuOpen = false;
+
+    if (this.executionLocked) {
+      return;
+    }
 
     if (action === 'undo') {
       this.undo();
@@ -1170,6 +1314,10 @@ export class Topbar {
     event.stopPropagation();
     this.helpMenuOpen = false;
 
+    if (this.executionLocked) {
+      return;
+    }
+
     if (action === 'contents') {
       window.open(environment.jtvSite, '_blank', 'noopener');
       return;
@@ -1181,6 +1329,10 @@ export class Topbar {
   }
 
   newMachine(): void {
+    if (this.executionLocked) {
+      return;
+    }
+
     this.executionFinished = false;
     this.fileService.clearCurrentFile();
     this.store.createNewMachine();
@@ -1195,6 +1347,10 @@ export class Topbar {
   }
 
   async openMachine(): Promise<void> {
+    if (this.executionLocked) {
+      return;
+    }
+
     try {
       const opened = await this.fileService.open();
 
@@ -1221,6 +1377,10 @@ export class Topbar {
     event.preventDefault();
     event.stopPropagation();
     this.fileMenuOpen = false;
+
+    if (this.executionLocked) {
+      return;
+    }
 
     try {
       const handle = await this.recentMachinesService.getHandle(machine);
@@ -1256,6 +1416,10 @@ export class Topbar {
   }
 
   async saveMachine(): Promise<void> {
+    if (this.executionLocked) {
+      return;
+    }
+
     try {
       const fileName = this.getSuggestedMachineFileName();
       const saved = await this.fileService.save(this.store.exportMachineFile(), fileName);
@@ -1276,6 +1440,10 @@ export class Topbar {
   }
 
   async saveMachineAs(): Promise<void> {
+    if (this.executionLocked) {
+      return;
+    }
+
     try {
       const fileName = this.getSuggestedMachineFileName();
 
@@ -1297,6 +1465,10 @@ export class Topbar {
   }
 
   async exportMachineJson(): Promise<void> {
+    if (this.executionLocked) {
+      return;
+    }
+
     try {
       const fileName = this.getSuggestedMachineFileName();
 
@@ -1339,6 +1511,10 @@ export class Topbar {
   }
 
   async executeMachine(): Promise<void> {
+    if (this.executionLocked) {
+      return;
+    }
+
     const hasUnassignedParameters = this.insertedParameters.some((parameter) => !this.parameterAssignments[parameter]);
 
     if (hasUnassignedParameters) {
