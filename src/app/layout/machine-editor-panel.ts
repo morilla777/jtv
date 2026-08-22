@@ -1,7 +1,8 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { ConfirmationService } from 'primeng/api';
 
 import { TranslatePipe } from '../pipes/translate.pipe';
+import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { TranslationService } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
 import { DesignerCanvasPanel } from './designer-canvas-panel';
@@ -16,8 +17,10 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
           <div
             class="machine-tab"
             [class.machine-tab-active]="tab.id === activeMachineTabId()"
+            [class.machine-tab-disabled]="executionLocked()"
             role="tab"
             [attr.aria-selected]="tab.id === activeMachineTabId()"
+            [attr.aria-disabled]="executionLocked()"
             [title]="getTabTitle(tab.name, tab.dirty)"
             (click)="activateTab(tab.id)"
           >
@@ -33,6 +36,7 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
                 type="button"
                 class="machine-tab-close"
                 [attr.aria-label]="'editor.closeTab' | translate"
+                [disabled]="executionLocked()"
                 (click)="closeTab(tab.id, $event)"
               >
                 <span class="pi pi-times" aria-hidden="true"></span>
@@ -95,6 +99,10 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
       user-select: none;
     }
 
+    .machine-tab-disabled {
+      cursor: default;
+    }
+
     .machine-tab-active {
       background: var(--p-content-background);
       color: var(--p-text-color);
@@ -152,6 +160,15 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
       background: var(--p-content-hover-background);
     }
 
+    .machine-tab-close:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+
+    .machine-tab-close:disabled:hover {
+      background: transparent;
+    }
+
     .machine-tab-close .pi {
       font-size: 0.65rem;
     }
@@ -173,17 +190,27 @@ export class MachineEditorPanel {
   private readonly store = inject(JtvStore);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly i18n = inject(TranslationService);
+  private readonly loading = inject(LoadingIndicatorService);
 
   readonly machineTabs = this.store.designMachineTabs;
   readonly activeMachineTabId = this.store.activeDesignMachineTabId;
+  readonly executionLocked = computed(() => this.loading.visible() || this.store.ate().children.length > 0);
 
   activateTab(machineId: string): void {
+    if (this.executionLocked()) {
+      return;
+    }
+
     this.store.selectDesignMachine(machineId);
   }
 
   closeTab(machineId: string, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+
+    if (this.executionLocked()) {
+      return;
+    }
 
     if (this.store.isDesignMachineDirty(machineId)) {
       this.confirmationService.confirm({

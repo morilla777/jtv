@@ -59,6 +59,8 @@ describe('JtvStore ATE subtrace navigation', () => {
 
       expect(store.continueAteExecution(machineExpandNode.id)).toBe(true);
       expect(store.selectedMachine().name).toBe('SUB_EXPAND');
+      expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('SUB_EXPAND');
+      expect(store.designMachineTabs().map((tab) => tab.name)).toEqual(['MAIN', 'SUB_EXPAND']);
       expect(store.ate().children.map((node) => node.iconSrc)).toEqual([
         'assets/images/a_ATE.gif',
         'assets/images/R_ATE.gif',
@@ -80,6 +82,7 @@ describe('JtvStore ATE subtrace navigation', () => {
       const stopNode = expandedBranch.children.at(-1)!;
       expect(store.continueAteExecution(stopNode.id)).toBe(true);
       expect(store.selectedMachine().name).toBe('MAIN');
+      expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('MAIN');
       expect(store.selectedTapeSnapshot()).toEqual({
         headPosition: 1,
         cells: {
@@ -90,6 +93,7 @@ describe('JtvStore ATE subtrace navigation', () => {
 
       expect(store.continueAteExecution(machineExpandNode.id)).toBe(true);
       expect(store.selectedMachine().name).toBe('SUB_EXPAND');
+      expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('SUB_EXPAND');
       expect(store.ate().children[2].children.at(-1)).toEqual(expect.objectContaining({
         iconSrc: 'assets/images/stop_ATE.gif',
         kind: 'stop',
@@ -98,10 +102,12 @@ describe('JtvStore ATE subtrace navigation', () => {
       const revisitedStopNode = store.ate().children[2].children.at(-1)!;
       expect(store.continueAteExecution(revisitedStopNode.id)).toBe(true);
       expect(store.selectedMachine().name).toBe('MAIN');
+      expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('MAIN');
       expect(store.ate().children).toHaveLength(2);
 
       expect(store.continueAteExecution(machineExpandNode.id)).toBe(true);
       expect(store.returnFromAteSubtrace()).toBe(true);
+      expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('MAIN');
     } finally {
       injector.destroy();
     }

@@ -863,12 +863,10 @@ export class ExplorerPanel {
     event.preventDefault();
     event.stopPropagation();
     const expandedNodeId = node.data?.ateNodeId ?? '';
-    const continued = this.store.hasAteSubtrace(expandedNodeId)
-      ? this.store.continueAteExecution(expandedNodeId)
-      : await this.loading.run(
-        () => this.store.continueAteExecution(expandedNodeId),
-        this.i18n.translate('loading.executing'),
-      );
+    const continued = await this.loading.run(
+      () => this.store.continueAteExecution(expandedNodeId),
+      this.i18n.translate('loading.executing'),
+    );
 
     if (continued) {
       this.focusAteExpandedBranch(expandedNodeId);
@@ -894,7 +892,10 @@ export class ExplorerPanel {
 
     this.lastAteRightClick = null;
     this.scrollAteTreeToTop();
-    const returned = this.store.returnFromAteSubtrace();
+    const returned = await this.loading.run(
+      () => this.store.returnFromAteSubtrace(),
+      this.i18n.translate('loading.executing'),
+    );
 
     if (returned) {
       this.focusAteExpandedBranch(this.store.selectedAteNode()?.id ?? nodeId);

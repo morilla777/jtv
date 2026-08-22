@@ -2054,6 +2054,12 @@ export class JtvStore {
       tapes: this.cloneTapeStates(current.tapes),
     });
 
+    const subtraceDesignMachineId = this.getSubtraceDesignMachineId(parentNode);
+
+    if (subtraceDesignMachineId) {
+      this.activateDesignMachineTabForExecution(subtraceDesignMachineId);
+    }
+
     this.state.update((state) => ({
       ...state,
       activeToolId: null,
@@ -2066,7 +2072,7 @@ export class JtvStore {
       selectedCanvasLinkId: null,
       selectedCanvasNodeId: null,
       selectedMachine: {
-        id: `ate-subtrace-${this.ateNavigationStack.length}`,
+        id: subtraceDesignMachineId ?? `ate-subtrace-${this.ateNavigationStack.length}`,
         name: subtrace.machineName,
       },
       selectedTapeIndex: 0,
@@ -2115,6 +2121,7 @@ export class JtvStore {
     }
 
     this.activeDesignMachineId = frame.activeDesignMachineId;
+    this.bumpMachineWorkspaceRevision();
     this.state.update((state) => ({
       ...state,
       activeToolId: null,
@@ -2133,7 +2140,29 @@ export class JtvStore {
   }
 
   clearAte(): void {
+    const rootFrame = this.ateNavigationStack[0];
     this.ateNavigationStack = [];
+
+    if (rootFrame) {
+      this.activeDesignMachineId = rootFrame.activeDesignMachineId;
+      this.bumpMachineWorkspaceRevision();
+      this.state.update((current) => ({
+        ...current,
+        ate: new AteTraceRecorder(rootFrame.selectedMachine.name).root,
+        machineGraph: rootFrame.machineGraph,
+        machineGraphView: rootFrame.machineGraphView,
+        metaValues: rootFrame.metaValues,
+        parameterAssignments: rootFrame.parameterAssignments,
+        selectedAteNodeId: null,
+        selectedCanvasLinkId: rootFrame.selectedCanvasLinkId,
+        selectedCanvasNodeId: rootFrame.selectedCanvasNodeId,
+        selectedMachine: rootFrame.selectedMachine,
+        selectedTapeIndex: Math.min(rootFrame.selectedTapeIndex, rootFrame.tapes.length - 1),
+        tapes: this.cloneTapeStates(rootFrame.tapes),
+      }));
+      return;
+    }
+
     this.state.update((current) => ({
       ...current,
       ate: new AteTraceRecorder(current.selectedMachine.name).root,
@@ -2782,6 +2811,30 @@ export class JtvStore {
     }
 
     this.openDesignMachineTabIds.update((machineIds) => [...machineIds, machineId]);
+  }
+
+  private activateDesignMachineTabForExecution(machineId: string): void {
+    if (!this.designMachines.has(machineId)) {
+      return;
+    }
+
+    this.openDesignMachineTab(machineId);
+    this.activeDesignMachineId = machineId;
+    this.bumpMachineWorkspaceRevision();
+  }
+
+  private getSubtraceDesignMachineId(parentNode: AteNode): string | null {
+    if (!parentNode.machineNodeId) {
+      return null;
+    }
+
+    const node = this.findMachineNode(parentNode.machineNodeId);
+
+    if (!(node instanceof SubmachineNode) || !this.designMachines.has(node.submachineId)) {
+      return null;
+    }
+
+    return node.submachineId;
   }
 
   private getSubmachineShortNameForNodeView(nodeId: string): string | undefined {

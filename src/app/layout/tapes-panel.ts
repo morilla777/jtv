@@ -171,13 +171,14 @@ interface TapeRowView {
                     [attr.height]="tapeCellHeight"
                     [attr.rx]="cell.edge ? 4 : 0"
                     [attr.ry]="cell.edge ? 4 : 0"
-                    class="tape-cell tape-cell-selectable"
+                    class="tape-cell"
+                    [class.tape-cell-selectable]="!executionLocked()"
                     [class.tape-cell-active]="cell.active"
                     tabindex="-1"
                     focusable="false"
                     (mousedown)="$event.preventDefault()"
                     (click)="selectTapeCell(tape.id, cell.position)"
-                    (mouseenter)="hoveredTapeCell.set({ tapeId: tape.id, position: cell.position })"
+                    (mouseenter)="setHoveredTapeCell(tape.id, cell.position)"
                     (mouseleave)="clearHoveredTapeCell(tape.id, cell.position)"
                   ></rect>
                   <text [attr.x]="cell.x + tapeCellWidth / 2" [attr.y]="tape.y + cellTextBaselineOffset" text-anchor="middle" class="cell-value">
@@ -609,6 +610,15 @@ export class TapesPanel {
     if (hovered?.tapeId === tapeId && hovered.position === position) {
       this.hoveredTapeCell.set(null);
     }
+  }
+
+  setHoveredTapeCell(tapeId: string, position: number): void {
+    if (this.executionLocked()) {
+      this.hoveredTapeCell.set(null);
+      return;
+    }
+
+    this.hoveredTapeCell.set({ tapeId, position });
   }
 
   private isEditableTarget(target: EventTarget | null): boolean {
