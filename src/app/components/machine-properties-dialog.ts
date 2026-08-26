@@ -12,7 +12,8 @@ export interface MachinePropertiesDialogValue {
   readonly description: string;
 }
 
-const MACHINE_NAME_PATTERN = /^[A-Za-z0-9_]+$/;
+const MACHINE_NAME_PATTERN = /^[A-Za-z0-9_-]+$/;
+const MACHINE_SHORT_NAME_PATTERN = /^[A-Za-z0-9_]+$/;
 
 @Component({
   selector: 'app-machine-properties-dialog',
@@ -38,8 +39,9 @@ const MACHINE_NAME_PATTERN = /^[A-Za-z0-9_]+$/;
             id="machineNameInput"
             type="text"
             formControlName="name"
-            maxlength="15"
+            maxlength="20"
             autocomplete="off"
+            (input)="normalizeUppercaseInput('name', $event)"
           />
         </label>
 
@@ -52,6 +54,7 @@ const MACHINE_NAME_PATTERN = /^[A-Za-z0-9_]+$/;
             formControlName="shortName"
             maxlength="4"
             autocomplete="off"
+            (input)="normalizeUppercaseInput('shortName', $event)"
           />
         </label>
 
@@ -155,7 +158,7 @@ export class MachinePropertiesDialog {
       nonNullable: true,
       validators: [
         Validators.required,
-        Validators.maxLength(15),
+        Validators.maxLength(20),
         Validators.pattern(MACHINE_NAME_PATTERN),
       ],
     }),
@@ -164,7 +167,7 @@ export class MachinePropertiesDialog {
       validators: [
         Validators.required,
         Validators.maxLength(4),
-        Validators.pattern(MACHINE_NAME_PATTERN),
+        Validators.pattern(MACHINE_SHORT_NAME_PATTERN),
       ],
     }),
     description: new FormControl('', {
@@ -197,11 +200,32 @@ export class MachinePropertiesDialog {
     const value = this.form.getRawValue();
 
     this.acceptProperties.emit({
-      name: value.name.trim(),
-      shortName: value.shortName.trim(),
+      name: value.name.trim().toUpperCase(),
+      shortName: value.shortName.trim().toUpperCase(),
       description: value.description.trim(),
     });
     this.close();
+  }
+
+  normalizeUppercaseInput(controlName: 'name' | 'shortName', event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const upperValue = input.value.toUpperCase();
+
+    if (input.value !== upperValue) {
+      const selectionStart = input.selectionStart;
+      const selectionEnd = input.selectionEnd;
+
+      input.value = upperValue;
+      this.form.controls[controlName].setValue(upperValue, { emitEvent: false });
+
+      if (selectionStart !== null && selectionEnd !== null) {
+        input.setSelectionRange(selectionStart, selectionEnd);
+      }
+
+      return;
+    }
+
+    this.form.controls[controlName].setValue(upperValue, { emitEvent: false });
   }
 
   cancel(): void {

@@ -95,7 +95,7 @@ interface TapeRowView {
               pButton
               type="button"
               class="tape-write-button image-toolbar-button p-button-secondary"
-              icon="pi pi-pencil"
+              icon="pi pi-send"
               [attr.aria-label]="'simulator.tapeActions.write' | translate"
               [title]="'simulator.tapeActions.write' | translate"
               [disabled]="executionLocked()"
