@@ -277,6 +277,7 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                 class="arrow-hit-area"
                 (mouseenter)="hoverLink(link.linkId)"
                 (mouseleave)="clearHoveredElement()"
+                (pointerdown)="startDraggingCanvasSelectionFromLink(link.linkId, $event)"
                 (click)="selectLink(link.linkId); $event.stopPropagation()"
                 (dblclick)="editLink(link.linkId, $event)"
                 (contextmenu)="showLinkContextMenu(link.linkId, $event)"
@@ -291,6 +292,7 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                 [attr.marker-end]="getLinkMarkerEnd(link)"
                 (mouseenter)="hoverLink(link.linkId)"
                 (mouseleave)="clearHoveredElement()"
+                (pointerdown)="startDraggingCanvasSelectionFromLink(link.linkId, $event)"
                 (click)="selectLink(link.linkId); $event.stopPropagation()"
                 (dblclick)="editLink(link.linkId, $event)"
                 (contextmenu)="showLinkContextMenu(link.linkId, $event)"
@@ -307,6 +309,7 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                     [class.edge-label-hovered]="isHoveredLink(link.linkId)"
                     (mouseenter)="hoverLink(link.linkId)"
                     (mouseleave)="clearHoveredElement()"
+                    (pointerdown)="startDraggingCanvasSelectionFromLink(link.linkId, $event)"
                     (click)="selectLink(link.linkId); $event.stopPropagation()"
                     (dblclick)="editLink(link.linkId, $event)"
                     (contextmenu)="showLinkContextMenu(link.linkId, $event)"
@@ -323,6 +326,7 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                     [class.edge-label-hovered]="isHoveredLink(link.linkId)"
                     (mouseenter)="hoverLink(link.linkId)"
                     (mouseleave)="clearHoveredElement()"
+                    (pointerdown)="startDraggingCanvasSelectionFromLink(link.linkId, $event)"
                     (click)="selectLink(link.linkId); $event.stopPropagation()"
                     (dblclick)="editLink(link.linkId, $event)"
                     (contextmenu)="showLinkContextMenu(link.linkId, $event)"
@@ -346,6 +350,22 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
                     (click)="selectLink(link.linkId); $event.stopPropagation()"
                     (contextmenu)="showLinkContextMenu(link.linkId, $event)"
                   ></circle>
+                }
+                @if (link.canvasSelected) {
+                  @for (handle of getLinkEndpointHandles(link); track handle.endpoint) {
+                    <circle
+                      [attr.cx]="handle.point.x"
+                      [attr.cy]="handle.point.y"
+                      r="5"
+                      class="link-endpoint-handle"
+                      [class.link-endpoint-handle-target]="handle.endpoint === 'target'"
+                      (pointerdown)="startDraggingLinkEndpoint(link.linkId, handle.endpoint, $event)"
+                      (mouseenter)="hoverLink(link.linkId)"
+                      (mouseleave)="clearHoveredElement()"
+                      (click)="selectLink(link.linkId); $event.stopPropagation()"
+                      (contextmenu)="showLinkContextMenu(link.linkId, $event)"
+                    ></circle>
+                  }
                 }
               }
             }
@@ -662,6 +682,21 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
       fill: rgb(255, 230, 255);
     }
 
+    .link-endpoint-handle {
+      fill: #fff;
+      stroke: rgb(255, 0, 255);
+      stroke-width: 1.5;
+      cursor: grab;
+    }
+
+    .link-endpoint-handle-target {
+      fill: rgb(255, 230, 255);
+    }
+
+    .link-endpoint-handle:active {
+      cursor: grabbing;
+    }
+
     .link-vertex-draft {
       pointer-events: none;
     }
@@ -711,7 +746,9 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private resizeObserver: ResizeObserver | null = null;
   readonly conditionDialogMode = signal<'conditional-link' | 'autolink' | null>(null);
   readonly conditionDialogVisible = signal(false);
-  private draggedNodeGroup: { nodeId: string; lastPoint: ViewPoint } | null = null;
+  private draggedNodeGroup: { nodeId: string; lastPoint: ViewPoint; mode: 'group' | 'selection' } | null = null;
+  private draggedCanvasSelection: { lastPoint: ViewPoint } | null = null;
+  private readonly draggedLinkEndpointPoint = signal<ViewPoint | null>(null);
   private canvasSelectionStart: ViewPoint | null = null;
   private readonly canvasSelectionCurrent = signal<ViewPoint | null>(null);
   private suppressNextCanvasClick = false;
@@ -881,6 +918,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private contextMenuNodeId: string | null = null;
   private contextMenuLinkId: string | null = null;
   private draggedLinkVertex: { linkId: string; pointIndex: number; lastPoint: ViewPoint } | null = null;
+  private draggedLinkEndpoint: { linkId: string; endpoint: 'source' | 'target' } | null = null;
 
   readonly nodeContextMenuItems: MenuItem[] = [
     {
@@ -1144,6 +1182,31 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     }));
   }
 
+  getLinkEndpointHandles(link: MachineLinkView): { endpoint: 'source' | 'target'; point: ViewPoint }[] {
+    const points = this.getRenderableLinkPoints(link);
+    const sourcePoint = points[0];
+    const targetPoint = points.at(-1);
+    const draggedEndpoint = this.draggedLinkEndpoint;
+    const draggedPoint = this.draggedLinkEndpointPoint();
+
+    return sourcePoint && targetPoint
+      ? [
+        {
+          endpoint: 'source',
+          point: draggedEndpoint?.linkId === link.linkId && draggedEndpoint.endpoint === 'source' && draggedPoint
+            ? draggedPoint
+            : sourcePoint,
+        },
+        {
+          endpoint: 'target',
+          point: draggedEndpoint?.linkId === link.linkId && draggedEndpoint.endpoint === 'target' && draggedPoint
+            ? draggedPoint
+            : targetPoint,
+        },
+      ]
+      : [];
+  }
+
   getLinkMarkerEnd(link: MachineLinkView): string {
     if (link.canvasSelected) {
       return 'url(#canvas-selected-arrowhead)';
@@ -1287,8 +1350,10 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
   handleCanvasPointerMove(event: PointerEvent): void {
     this.updateCanvasRegionSelection(event);
+    this.dragCanvasSelection(event);
     this.dragSelectedNodeGroup(event);
     this.dragLinkVertex(event);
+    this.dragLinkEndpoint(event);
     this.updateTransitionDraft(event);
   }
 
@@ -1336,6 +1401,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
   handleCanvasPointerUp(event: PointerEvent): void {
     this.finishCanvasRegionSelection(event);
+    this.finishDraggingLinkEndpoint(event);
     this.stopDragging();
   }
 
@@ -1404,11 +1470,17 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
     event.preventDefault();
     this.stopDragging();
-    this.store.selectCanvasNode(nodeId);
+    const nodeWasInSelection = this.store.isCanvasNodeInRegionSelection(nodeId);
+
+    if (!nodeWasInSelection) {
+      this.store.selectCanvasNode(nodeId);
+    }
+
     this.store.beginMachineHistoryTransaction();
     this.draggedNodeGroup = {
       nodeId,
       lastPoint: point,
+      mode: nodeWasInSelection ? 'selection' : 'group',
     };
   }
 
@@ -1427,7 +1499,12 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       return;
     }
 
-    this.store.moveCanvasGroupContainingNode(this.draggedNodeGroup.nodeId, delta);
+    if (this.draggedNodeGroup.mode === 'selection') {
+      this.store.moveSelectedCanvasElements(delta);
+    } else {
+      this.store.moveCanvasGroupContainingNode(this.draggedNodeGroup.nodeId, delta);
+    }
+
     this.draggedNodeGroup = {
       ...this.draggedNodeGroup,
       lastPoint: point,
@@ -1458,6 +1535,73 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     };
   }
 
+  startDraggingCanvasSelectionFromLink(linkId: string, event: PointerEvent): void {
+    if (!this.isPointerToolActive() || !this.store.isCanvasLinkInRegionSelection(linkId)) {
+      return;
+    }
+
+    const svg = (event.currentTarget as SVGGraphicsElement).ownerSVGElement;
+    const point = svg ? this.getSvgPoint(svg, event) : null;
+
+    if (!point) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.stopDragging();
+    this.store.beginMachineHistoryTransaction();
+    this.draggedCanvasSelection = {
+      lastPoint: point,
+    };
+  }
+
+  dragCanvasSelection(event: PointerEvent): void {
+    if (!this.draggedCanvasSelection) {
+      return;
+    }
+
+    const point = this.getSvgPoint(event.currentTarget as SVGSVGElement, event);
+    const delta = {
+      x: point.x - this.draggedCanvasSelection.lastPoint.x,
+      y: point.y - this.draggedCanvasSelection.lastPoint.y,
+    };
+
+    if (delta.x === 0 && delta.y === 0) {
+      return;
+    }
+
+    this.store.moveSelectedCanvasElements(delta);
+    this.draggedCanvasSelection = {
+      lastPoint: point,
+    };
+  }
+
+  startDraggingLinkEndpoint(linkId: string, endpoint: 'source' | 'target', event: PointerEvent): void {
+    if (!this.isPointerToolActive()) {
+      return;
+    }
+
+    const svg = (event.currentTarget as SVGGraphicsElement).ownerSVGElement;
+    const point = svg ? this.getSvgPoint(svg, event) : null;
+
+    if (!point) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    (event.currentTarget as SVGElement).setPointerCapture?.(event.pointerId);
+    this.stopDragging();
+    this.store.beginMachineHistoryTransaction();
+    this.store.selectCanvasLink(linkId);
+    this.draggedLinkEndpoint = {
+      linkId,
+      endpoint,
+    };
+    this.draggedLinkEndpointPoint.set(point);
+  }
+
   dragLinkVertex(event: PointerEvent): void {
     if (!this.draggedLinkVertex) {
       return;
@@ -1480,11 +1624,39 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     };
   }
 
+  dragLinkEndpoint(event: PointerEvent): void {
+    if (!this.draggedLinkEndpoint) {
+      return;
+    }
+
+    this.draggedLinkEndpointPoint.set(this.getSvgPoint(event.currentTarget as SVGSVGElement, event));
+  }
+
+  finishDraggingLinkEndpoint(event: PointerEvent): void {
+    if (!this.draggedLinkEndpoint) {
+      return;
+    }
+
+    const point = this.getSvgPoint(event.currentTarget as SVGSVGElement, event);
+    const targetNode = this.getNodeAtPoint(point);
+
+    if (targetNode) {
+      this.store.reconnectCanvasLinkEndpoint(
+        this.draggedLinkEndpoint.linkId,
+        this.draggedLinkEndpoint.endpoint,
+        targetNode.nodeId,
+      );
+    }
+  }
+
   stopDragging(): void {
-    const hadDrag = !!this.draggedNodeGroup || !!this.draggedLinkVertex;
+    const hadDrag = !!this.draggedNodeGroup || !!this.draggedCanvasSelection || !!this.draggedLinkVertex || !!this.draggedLinkEndpoint;
 
     this.draggedNodeGroup = null;
+    this.draggedCanvasSelection = null;
     this.draggedLinkVertex = null;
+    this.draggedLinkEndpoint = null;
+    this.draggedLinkEndpointPoint.set(null);
 
     if (hadDrag) {
       this.store.commitMachineHistoryTransaction();
@@ -2007,6 +2179,25 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     };
   }
 
+  private getNodeAtPoint(point: ViewPoint): MachineNodeView | null {
+    const nodes = [...this.machineGraphView().nodes].reverse();
+
+    return nodes.find((node) => this.isPointInsideNode(point, node)) ?? null;
+  }
+
+  private isPointInsideNode(point: ViewPoint, node: MachineNodeView): boolean {
+    if (node.kind === 'hub') {
+      return this.getSquaredDistance(point, node.position) <= 16 * 16;
+    }
+
+    const bounds = this.getNodeVisualBounds(node);
+
+    return point.x >= bounds.x - 4 &&
+      point.x <= bounds.x + bounds.width + 4 &&
+      point.y >= bounds.y - 4 &&
+      point.y <= bounds.y + bounds.height + 4;
+  }
+
   private getPolylinePath(points: readonly ViewPoint[]): string {
     const [startPoint, ...restPoints] = points;
 
@@ -2042,11 +2233,30 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     const sourceReference = intermediatePoints[0] ?? this.getNodeVisualCenter(targetNode);
     const targetReference = intermediatePoints.at(-1) ?? this.getNodeVisualCenter(sourceNode);
 
-    return [
+    const renderablePoints = [
       this.getNearestNodeAnchor(sourceNode, sourceReference),
       ...intermediatePoints,
       this.getNearestNodeAnchor(targetNode, targetReference),
     ];
+
+    const draggedEndpoint = this.draggedLinkEndpoint;
+    const draggedPoint = this.draggedLinkEndpointPoint();
+
+    if (draggedEndpoint?.linkId !== link.linkId || !draggedPoint) {
+      return renderablePoints;
+    }
+
+    return renderablePoints.map((point, index) => {
+      if (draggedEndpoint.endpoint === 'source' && index === 0) {
+        return draggedPoint;
+      }
+
+      if (draggedEndpoint.endpoint === 'target' && index === renderablePoints.length - 1) {
+        return draggedPoint;
+      }
+
+      return point;
+    });
   }
 
   private getLinkSourceNode(link: MachineLinkView): MachineNodeView | null {

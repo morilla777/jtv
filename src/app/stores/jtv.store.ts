@@ -1310,6 +1310,62 @@ export class JtvStore {
     this.markMachineDirty();
   }
 
+  isCanvasNodeInRegionSelection(nodeId: string): boolean {
+    return this.selectedCanvasNodeIds().has(nodeId);
+  }
+
+  isCanvasLinkInRegionSelection(linkId: string): boolean {
+    return this.selectedCanvasLinkIds().has(linkId);
+  }
+
+  moveSelectedCanvasElements(delta: ViewPoint): void {
+    if (
+      this.state().activeToolId !== 'pointer' ||
+      (delta.x === 0 && delta.y === 0) ||
+      (this.selectedCanvasNodeIds().size === 0 && this.selectedCanvasLinkIds().size === 0)
+    ) {
+      return;
+    }
+
+    const selectedNodeIds = this.selectedCanvasNodeIds();
+    const selectedLinkIds = this.selectedCanvasLinkIds();
+    const selectedGroupIds = new Set(
+      this.state().machineGraphView.nodes
+        .filter((node) => selectedNodeIds.has(node.nodeId))
+        .map((node) => node.groupId),
+    );
+
+    this.state.update((current) => ({
+      ...current,
+      machineGraphView: {
+        ...current.machineGraphView,
+        groups: current.machineGraphView.groups.map((group) => selectedGroupIds.has(group.groupId)
+          ? {
+            ...group,
+            position: this.translatePoint(group.position, delta),
+          }
+          : group),
+        nodes: current.machineGraphView.nodes.map((node) => selectedGroupIds.has(node.groupId)
+          ? {
+            ...node,
+            position: this.translatePoint(node.position, delta),
+          }
+          : node),
+        links: current.machineGraphView.links.map((link) => {
+          if (selectedLinkIds.has(link.linkId)) {
+            return {
+              ...link,
+              points: link.points?.map((point) => this.translatePoint(point, delta)),
+            };
+          }
+
+          return this.translateLinkForMovedGroups(link, selectedGroupIds, delta);
+        }),
+      },
+    }));
+    this.markMachineDirty();
+  }
+
   makeCanvasNodeInitial(nodeId: string): void {
     if (this.state().activeToolId !== 'pointer' || !this.canMakeCanvasNodeInitial(nodeId)) {
       return;
@@ -1358,9 +1414,19 @@ export class JtvStore {
       return;
     }
 
-    const selectedNodeIds = new Set(
+    const initiallySelectedNodeIds = new Set(
       this.state().machineGraphView.nodes
         .filter((node) => this.canvasRegionIntersectsNode(bounds, node))
+        .map((node) => node.nodeId),
+    );
+    const selectedGroupIds = new Set(
+      this.state().machineGraphView.nodes
+        .filter((node) => initiallySelectedNodeIds.has(node.nodeId))
+        .map((node) => node.groupId),
+    );
+    const selectedNodeIds = new Set(
+      this.state().machineGraphView.nodes
+        .filter((node) => selectedGroupIds.has(node.groupId))
         .map((node) => node.nodeId),
     );
     const selectedLinkIds = new Set<string>();
@@ -1779,6 +1845,111 @@ export class JtvStore {
       selectedCanvasNodeId: null,
     }));
     this.markMachineDirty();
+  }
+
+  reconnectCanvasLinkEndpoint(linkId: string, endpoint: 'source' | 'target', nodeId: string): void {
+    if (this.state().activeToolId !== 'pointer') {
+      return;
+    }
+
+    let changed = false;
+
+    this.state.update((current) => {
+      const link = current.machineGraph.links.find((item) => item.id === linkId);
+      const linkView = current.machineGraphView.links.find((item) => item.linkId === linkId);
+      const nodeView = current.machineGraphView.nodes.find((item) => item.nodeId === nodeId);
+      const group = nodeView
+        ? current.machineGraph.groups.find((item) => item.id === nodeView.groupId)
+        : null;
+      const node = group ? this.findMachineNodeInGroup(group, nodeId) : null;
+
+      if (!link || !linkView || linkView.kind === 'autolink' || !nodeView || !group || !node) {
+        return current;
+      }
+
+      if (endpoint === 'source' && !group.exit) {
+        return current;
+      }
+
+      if (
+        endpoint === 'source' &&
+        link.sourceGroup?.id === group.id &&
+        linkView.sourceGroupId === group.id
+      ) {
+        return current;
+      }
+
+      if (
+        endpoint === 'target' &&
+        link.targetGroup?.id === group.id &&
+        link.targetNode?.id === node.id &&
+        linkView.targetGroupId === group.id &&
+        linkView.targetNodeId === node.id
+      ) {
+        return current;
+      }
+
+      if (endpoint === 'source') {
+        link.sourceGroup = group;
+      } else {
+        link.targetGroup = group;
+        link.targetNode = node;
+      }
+
+      const sourceNodeView = endpoint === 'source'
+        ? current.machineGraphView.nodes.find((item) => item.nodeId === group.exit?.id)
+        : this.getLinkSourceNodeView(current.machineGraph.groups, current.machineGraphView.nodes, {
+          ...linkView,
+          sourceGroupId: link.sourceGroup?.id ?? linkView.sourceGroupId,
+        });
+      const targetNodeView = endpoint === 'target'
+        ? nodeView
+        : this.getLinkTargetNodeView(current.machineGraph.groups, current.machineGraphView.nodes, linkView);
+      const points = linkView.points ?? [];
+      const updatedPoints = points.length >= 2
+        ? points.map((point, index) => {
+          if (endpoint === 'source' && index === 0 && sourceNodeView) {
+            return this.getNodeRightAnchor(sourceNodeView);
+          }
+
+          if (endpoint === 'target' && index === points.length - 1 && targetNodeView) {
+            return this.getNodeLeftAnchor(targetNodeView);
+          }
+
+          return point;
+        })
+        : points;
+
+      changed = true;
+
+      return {
+        ...current,
+        machineGraph: {
+          ...current.machineGraph,
+          links: [...current.machineGraph.links],
+        },
+        machineGraphView: {
+          ...current.machineGraphView,
+          links: current.machineGraphView.links.map((item) =>
+            item.linkId === linkId
+              ? {
+                ...item,
+                sourceGroupId: endpoint === 'source' ? group.id : item.sourceGroupId,
+                targetGroupId: endpoint === 'target' ? group.id : item.targetGroupId,
+                targetNodeId: endpoint === 'target' ? node.id : item.targetNodeId,
+                points: updatedPoints,
+              }
+              : item,
+          ),
+        },
+        selectedCanvasLinkId: linkId,
+        selectedCanvasNodeId: null,
+      };
+    });
+
+    if (changed) {
+      this.markMachineDirty();
+    }
   }
 
   setTapeValue(tapeId: string, value: string): void {
@@ -4003,11 +4174,73 @@ export class JtvStore {
     };
   }
 
+  private translateLinkForMovedGroups(
+    link: MachineLinkView,
+    groupIds: ReadonlySet<string>,
+    delta: ViewPoint,
+  ): MachineLinkView {
+    if (!link.points?.length) {
+      return link;
+    }
+
+    const sourceMoved = groupIds.has(link.sourceGroupId);
+    const targetMoved = groupIds.has(link.targetGroupId);
+
+    if (!sourceMoved && !targetMoved) {
+      return link;
+    }
+
+    if (sourceMoved && targetMoved) {
+      return {
+        ...link,
+        points: link.points.map((point) => this.translatePoint(point, delta)),
+      };
+    }
+
+    return {
+      ...link,
+      points: link.points.map((point, index) => {
+        const isSourcePoint = sourceMoved && index === 0;
+        const isTargetPoint = targetMoved && index === link.points!.length - 1;
+
+        return isSourcePoint || isTargetPoint ? this.translatePoint(point, delta) : point;
+      }),
+    };
+  }
+
   private translatePoint(point: ViewPoint, delta: ViewPoint): ViewPoint {
     return {
       x: point.x + delta.x,
       y: point.y + delta.y,
     };
+  }
+
+  private getLinkSourceNodeView(
+    groups: readonly MachineGroup[],
+    nodes: readonly MachineNodeView[],
+    link: Pick<MachineLinkView, 'sourceGroupId'>,
+  ): MachineNodeView | null {
+    const sourceGroup = groups.find((group) => group.id === link.sourceGroupId);
+
+    return sourceGroup?.exit
+      ? nodes.find((node) => node.nodeId === sourceGroup.exit?.id) ?? null
+      : null;
+  }
+
+  private getLinkTargetNodeView(
+    groups: readonly MachineGroup[],
+    nodes: readonly MachineNodeView[],
+    link: Pick<MachineLinkView, 'targetGroupId' | 'targetNodeId'>,
+  ): MachineNodeView | null {
+    if (link.targetNodeId) {
+      return nodes.find((node) => node.nodeId === link.targetNodeId) ?? null;
+    }
+
+    const targetGroup = groups.find((group) => group.id === link.targetGroupId);
+
+    return targetGroup?.entry
+      ? nodes.find((node) => node.nodeId === targetGroup.entry?.id) ?? null
+      : null;
   }
 
   private getNodeRightAnchor(node: { kind?: string; label: string; position: ViewPoint; width?: number }): ViewPoint {
