@@ -180,6 +180,7 @@ export const es: Record<string, string> = {
   'toast.submachineReferenced': 'No puede eliminar esta m\u00e1quina ya que est\u00e1 referenciada desde la m\u00e1quina invocadora',
   'toast.submachineCutReferenced': 'No puede cortar esta m\u00e1quina ya que est\u00e1 referenciada desde la m\u00e1quina invocadora',
   'toast.noSubmachinesToInsert': 'No existen subm\u00e1quinas para insertar',
+  'confirm.title': 'Confirmaci\u00f3n',
   'confirm.yes': 'S\u00ed',
   'confirm.no': 'No',
   'confirm.deleteSubmachine': '\u00bfSeguro que desea eliminar esta m\u00e1quina?',

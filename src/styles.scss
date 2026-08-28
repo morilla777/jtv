@@ -5,3 +5,41 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   margin: 0;
 }
+
+.p-dialog {
+  --p-dialog-background: var(--p-primary-color);
+  --p-dialog-border-color: var(--p-primary-color);
+  background: var(--p-primary-color) !important;
+  border-color: var(--p-primary-color) !important;
+  overflow: hidden;
+}
+
+.p-dialog .p-dialog-header {
+  background: var(--p-primary-color) !important;
+  border-bottom: 1px solid var(--p-primary-active-color);
+  color: var(--p-primary-contrast-color);
+  margin: -1px -1px 0;
+  padding: 0.35rem 0.75rem;
+}
+
+.p-dialog .p-dialog-content,
+.p-dialog .p-dialog-footer {
+  background: var(--p-content-background);
+  color: var(--p-text-color);
+}
+
+.p-dialog .p-dialog-content {
+  padding-top: calc(1rem + 10px);
+}
+
+.p-dialog .p-dialog-header .p-dialog-close-button {
+  color: var(--p-primary-contrast-color);
+  height: 1.6rem;
+  min-width: 1.6rem;
+  width: 1.6rem;
+}
+
+.p-dialog .p-dialog-header .p-dialog-close-button:hover {
+  background: color-mix(in srgb, var(--p-primary-contrast-color) 18%, transparent);
+  color: var(--p-primary-contrast-color);
+}

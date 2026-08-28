@@ -215,9 +215,11 @@ export class MachineEditorPanel {
     if (this.store.isDesignMachineDirty(machineId)) {
       this.confirmationService.confirm({
         key: 'machine',
+        header: this.i18n.translate('confirm.title'),
         message: this.i18n.translate('confirm.closeDirtyTab'),
         acceptLabel: this.i18n.translate('confirm.yes'),
         rejectLabel: this.i18n.translate('confirm.no'),
+        rejectButtonStyleClass: 'p-button-secondary',
         accept: () => {
           this.store.closeDesignMachineTab(machineId);
         },

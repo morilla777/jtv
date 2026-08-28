@@ -754,9 +754,11 @@ export class ExplorerPanel {
 
     this.confirmationService.confirm({
       key: 'machine',
+      header: this.i18n.translate('confirm.title'),
       message: this.i18n.translate('confirm.deleteSubmachine'),
       acceptLabel: this.i18n.translate('confirm.yes'),
       rejectLabel: this.i18n.translate('confirm.no'),
+      rejectButtonStyleClass: 'p-button-secondary',
       accept: () => {
         this.store.deleteDesignMachine(machineId);
         queueMicrotask(() => {

@@ -180,6 +180,7 @@ export const en: Record<string, string> = {
   'toast.submachineReferenced': 'This machine cannot be deleted because it is referenced from the invoking machine',
   'toast.submachineCutReferenced': 'This machine cannot be cut because it is referenced from the invoking machine',
   'toast.noSubmachinesToInsert': 'There are no submachines to insert',
+  'confirm.title': 'Confirmation',
   'confirm.yes': 'Yes',
   'confirm.no': 'No',
   'confirm.deleteSubmachine': 'Are you sure you want to delete this machine?',
