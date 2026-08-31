@@ -809,7 +809,7 @@ interface LanguageOption {
 
     :host ::ng-deep .about-dialog .p-dialog-content {
       max-height: min(82vh, 760px);
-      padding: 0 1rem 1rem;
+      padding: 1rem;
       overflow: auto;
     }
 

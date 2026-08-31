@@ -231,6 +231,11 @@ export class SubmachineNode extends AbstractMachineNode {
     traceRecorder: AteTraceRecorder,
     result: MachineGraphRunResult,
   ): void {
+    if (result.traceTerminalRecorded) {
+      this.attachLastTraceNodeContinuation(context, traceRecorder, result);
+      return;
+    }
+
     if (result.status === 'completed') {
       traceRecorder.recordStop();
       return;
@@ -259,6 +264,27 @@ export class SubmachineNode extends AbstractMachineNode {
     }
 
     traceRecorder.recordError();
+  }
+
+  private attachLastTraceNodeContinuation(
+    context: { tapes: readonly Tape[]; metaValues: MetaValueDictionary },
+    traceRecorder: AteTraceRecorder,
+    result: MachineGraphRunResult,
+  ): void {
+    if (!result.continuation) {
+      return;
+    }
+
+    const lastNode = traceRecorder.root.children.at(-1);
+
+    if (!lastNode?.machineNodeId) {
+      return;
+    }
+
+    (lastNode as { continuation?: AteContinuationSnapshot }).continuation = this.createAteContinuationSnapshot(
+      result.continuation,
+      context,
+    );
   }
 
   private createAteContinuationSnapshot(

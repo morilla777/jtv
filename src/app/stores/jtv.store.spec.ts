@@ -18,6 +18,7 @@ import multiplicadoraFile from '../../assets/examples/multiplicadora.jtv.json';
 import multiplicadora2File from '../../assets/examples/multiplicadora2.jtv.json';
 import palindromeFile from '../../assets/examples/palindrome.jtv.json';
 import tarea3vfinalFile from '../../assets/examples/tarea3vfinal.jtv.json';
+import subsNd2File from '../../assets/examples/subs_nd2.jtv.json';
 
 type TestJtvStore = JtvStore & { destroy: () => void };
 let storage: Map<string, string>;
@@ -243,6 +244,99 @@ describe('JtvStore ATE subtrace navigation', () => {
         'assets/images/expand_ATE.gif',
         'assets/images/expand_ATE.gif',
       ]);
+    } finally {
+      injector.destroy();
+    }
+  });
+
+  it.each([
+    { branchIndex: 0, writtenSymbol: 'a' },
+    { branchIndex: 1, writtenSymbol: 'b' },
+    { branchIndex: 2, writtenSymbol: 'c' },
+  ])('expands nested nondeterministic custom submachine branch $writtenSymbol without recording errors', ({ branchIndex, writtenSymbol }) => {
+    storage.set('jtv-settings', JSON.stringify({
+      burstSize: 1000,
+      maxTapeCount: 10,
+      oldNotation: false,
+    }));
+    const injector = createJtvInjector();
+
+    try {
+      const store = runInInjectionContext(injector, () => injector.get(JtvStore));
+
+      store.importMachineFile(subsNd2File as JtvFile);
+      expect(store.runMachineOnFirstTape()).toBe(true);
+
+      const subNdNode = store.ate().children[0];
+      expect(subNdNode).toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/M_ND_ATE.gif',
+        label: 'SUB_ND()',
+      }));
+
+      expect(store.continueAteExecution(subNdNode.id)).toBe(true);
+      expect(store.ate().children).toHaveLength(1);
+      const nestedNdNode = store.ate().children[0];
+      expect(nestedNdNode).toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/M_ND_ATE.gif',
+        label: 'ND2()',
+      }));
+
+      expect(store.continueAteExecution(nestedNdNode.id)).toBe(true);
+      const branches = store.ate().children.filter((node) => node.iconSrc === 'assets/images/expand_ATE.gif');
+      expect(branches).toHaveLength(3);
+
+      const selectedBranch = branches[branchIndex];
+      expect(store.continueAteExecution(selectedBranch.id)).toBe(true);
+      expect(selectedBranch.children.at(-1)).not.toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/error_ATE.gif',
+        kind: 'error',
+      }));
+      expect(selectedBranch.children.map((node) => [node.iconSrc, node.label])).toEqual([
+        ['assets/images/link_ATE.gif', ''],
+        ['assets/images/a_ATE.gif', writtenSymbol],
+        ['assets/images/R_ATE.gif', ''],
+        ['assets/images/stop_ATE.gif', ''],
+      ]);
+      expect(store.ate().children.flatMap((node) => node.children).some((node) => node.kind === 'error')).toBe(false);
+
+      const selectedBranchStop = selectedBranch.children.at(-1);
+      expect(selectedBranchStop).toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/stop_ATE.gif',
+        kind: 'stop',
+      }));
+
+      expect(store.continueAteExecution(selectedBranchStop!.id)).toBe(true);
+      expect(store.selectedMachine().name).toBe('SUB_ND');
+      expect(store.ate().children.map((node) => node.iconSrc)).toEqual([
+        'assets/images/M_ND_ATE.gif',
+        'assets/images/stop_ATE.gif',
+      ]);
+
+      const subNdStop = store.ate().children.at(-1)!;
+      expect(store.continueAteExecution(subNdStop.id)).toBe(true);
+      expect(store.selectedMachine().name).toBe('SUBS-ND2');
+      expect(store.ate().children.map((node) => [node.iconSrc, node.label])).toEqual([
+        ['assets/images/M_ND_ATE.gif', 'SUB_ND()'],
+        ['assets/images/R_ATE.gif', ''],
+        ['assets/images/a_ATE.gif', 'd'],
+        ['assets/images/R_ATE.gif', ''],
+        ['assets/images/a_ATE.gif', 'e'],
+        ['assets/images/stop_ATE.gif', ''],
+      ]);
+      const finalStop = store.ate().children.at(-1)!;
+      store.selectAteNode(finalStop.id);
+      expect(store.selectedTapeSnapshot()).toEqual({
+        headPosition: 4,
+        cells: {
+          1: writtenSymbol,
+          3: 'd',
+          4: 'e',
+        },
+      });
+      expect(finalStop).toEqual(expect.objectContaining({
+        iconSrc: 'assets/images/stop_ATE.gif',
+        kind: 'stop',
+      }));
     } finally {
       injector.destroy();
     }
