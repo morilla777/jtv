@@ -51,7 +51,7 @@ interface LanguageOption {
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'new')">
                   <img class="file-menu-icon" src="assets/images/New16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.new' | translate }}</span>
-                  <span class="menu-shortcut">Ctrl+N</span>
+                  <span class="menu-shortcut">Ctrl+Alt+N</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'open')">
                   <img class="file-menu-icon" src="assets/images/Open16.gif" alt="" />
@@ -66,7 +66,7 @@ interface LanguageOption {
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'saveAs')">
                   <img class="file-menu-icon" src="assets/images/SaveAs16.gif" alt="" />
                   <span>{{ 'topbar.menu.file.saveAs' | translate }}</span>
-                  <span class="menu-shortcut">Ctrl+Shift+S</span>
+                  <span class="menu-shortcut">Ctrl+Alt+S</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runFileMenuAction($event, 'import')">
                   <img class="file-menu-icon" src="assets/images/Import16.gif" alt="" />
@@ -129,7 +129,7 @@ interface LanguageOption {
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked" (click)="runSettingsMenuAction($event, 'notationChange')">
                   <img class="file-menu-icon" src="assets/images/NotationChange16.gif" alt="" />
                   <span>{{ 'topbar.menu.settings.notationChange' | translate }}</span>
-                  <span class="menu-shortcut">Ctrl+Shift+N</span>
+                  <span class="menu-shortcut">Ctrl+Alt+Shift+N</span>
                 </button>
               </div>
             }
@@ -168,7 +168,7 @@ interface LanguageOption {
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !hasSelectedCanvasNode" (click)="runEditMenuAction($event, 'changeTape')">
                   <img class="file-menu-icon" src="assets/images/ChangeTape16.gif" alt="" />
                   <span>{{ 'topbar.menu.edit.changeTape' | translate }}</span>
-                  <span class="menu-shortcut">Ctrl+T</span>
+                  <span class="menu-shortcut">Ctrl+Alt+T</span>
                 </button>
                 <button type="button" role="menuitem" class="file-menu-item" [disabled]="executionLocked || !hasCanvasSelection" (click)="runEditMenuAction($event, 'cut')">
                   <img class="file-menu-icon" src="assets/images/Cut16.gif" alt="" />
@@ -1243,6 +1243,46 @@ export class Topbar {
       return;
     }
 
+    if (hasPrimaryModifier && event.altKey && !event.shiftKey && key === 'n') {
+      event.preventDefault();
+
+      if (!this.executionLocked) {
+        this.newMachine();
+      }
+
+      return;
+    }
+
+    if (hasPrimaryModifier && event.altKey && event.shiftKey && key === 'n') {
+      event.preventDefault();
+
+      if (!this.executionLocked) {
+        this.openNotationChangeDialog();
+      }
+
+      return;
+    }
+
+    if (hasPrimaryModifier && event.altKey && !event.shiftKey && key === 't') {
+      event.preventDefault();
+
+      if (!this.executionLocked) {
+        this.changeSelectedCanvasNodeTape();
+      }
+
+      return;
+    }
+
+    if (hasPrimaryModifier && event.altKey && !event.shiftKey && key === 's') {
+      event.preventDefault();
+
+      if (!this.executionLocked) {
+        void this.saveMachineAs();
+      }
+
+      return;
+    }
+
     if (this.executionLocked || event.altKey || !hasPrimaryModifier) {
       return;
     }
@@ -1447,12 +1487,6 @@ export class Topbar {
   }
 
   private handlePrimaryKeyboardShortcut(event: KeyboardEvent, key: string): void {
-    if (key === 'n') {
-      event.preventDefault();
-      this.newMachine();
-      return;
-    }
-
     if (key === 'o') {
       event.preventDefault();
       void this.openMachine();
@@ -1495,12 +1529,6 @@ export class Topbar {
       return;
     }
 
-    if (key === 't') {
-      event.preventDefault();
-      this.changeSelectedCanvasNodeTape();
-      return;
-    }
-
     if (key === 'x') {
       event.preventDefault();
       this.cutSelectedCanvasElements();
@@ -1526,18 +1554,6 @@ export class Topbar {
   }
 
   private handleShiftKeyboardShortcut(event: KeyboardEvent, key: string): void {
-    if (key === 's') {
-      event.preventDefault();
-      void this.saveMachineAs();
-      return;
-    }
-
-    if (key === 'n') {
-      event.preventDefault();
-      this.openNotationChangeDialog();
-      return;
-    }
-
     if (key === 'z') {
       event.preventDefault();
       this.redo();
