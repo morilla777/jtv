@@ -209,7 +209,7 @@ export function restoreMachineFromJtvFile(file: JtvFile): RestoredJtvMachine {
     autolinks,
   };
   const parameterAssignments = { ...file.parameterAssignments };
-  const metaValues = collectMetaValues(machineGraph, parameterAssignments, file.metaValues);
+  const metaValues = file.metaValues;
 
   return {
     selectedMachine: { ...file.machine },

@@ -45,6 +45,24 @@ describe('Legacy JTV importer', () => {
   });
 
   it.each([
+    'COPIADORA.jtv',
+    'COPIADORA2.jtv',
+    'IGUALES ABC.jtv',
+    'MONUS.jtv',
+    'MULTIPLICADORA.jtv',
+    'MULTIPLICADORA2.jtv',
+    'PALINDROME.jtv',
+  ])('does not expose legacy invocation parameters as top-level parameters for %s', (fileName) => {
+    const file = importLegacyExample(fileName);
+    const restored = restoreMachineFromJtvFile(file);
+
+    expect(file.parameterAssignments).toEqual({});
+    expect(file.metaValues.parameters).toEqual([]);
+    expect(restored.parameterAssignments).toEqual({});
+    expect(restored.metaValues.parameters).toEqual([]);
+  });
+
+  it.each([
     [
       'ab',
       {

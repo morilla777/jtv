@@ -465,14 +465,8 @@ export class LegacyJtvImporter {
     for (const node of nodes) {
       const nodeName = this.getNodeName(node);
 
-      if (node.kind === 'escritora' && /^[A-Z]$/.test(nodeName)) {
-        parameters.add(nodeName);
-      } else if (node.kind === 'escritora' && this.isLegacyVariableName(nodeName)) {
+      if (node.kind === 'escritora' && this.isLegacyVariableName(nodeName)) {
         variables.add(nodeName);
-      }
-
-      for (const parameterName of Object.keys(this.parseParameters(node.element))) {
-        parameters.add(parameterName);
       }
     }
 
@@ -483,9 +477,7 @@ export class LegacyJtvImporter {
         }
 
         for (const acceptedValue of clause.acceptedValues) {
-          if (/^[A-Z]$/.test(acceptedValue)) {
-            parameters.add(acceptedValue);
-          } else if (this.isLegacyVariableName(acceptedValue)) {
+          if (this.isLegacyVariableName(acceptedValue)) {
             variables.add(acceptedValue);
           }
         }
