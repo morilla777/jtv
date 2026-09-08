@@ -95,6 +95,7 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
                   <ng-template pTemplate="default" let-node>
                     <span
                       class="ate-tree-node"
+                      [class.ate-tree-node-selected]="isAteTreeNodeSelected(node)"
                       (dblclick)="continueAteExecution(node, $event)"
                       (contextmenu)="handleAteNodeContextMenu(node, $event)"
                     >
@@ -258,14 +259,12 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
     }
 
     :host ::ng-deep .ate-tree .p-tree-node-content.p-tree-node-selected {
-      background: red !important;
-      color: #fff !important;
+      background: transparent !important;
+      color: inherit !important;
     }
 
-    :host ::ng-deep .ate-tree .p-tree-node-content.p-tree-node-selected .p-tree-node-label,
-    :host ::ng-deep .ate-tree .p-tree-node-content.p-tree-node-selected .ate-tree-node,
-    :host ::ng-deep .ate-tree .p-tree-node-content.p-tree-node-selected .ate-tree-node span {
-      color: #fff !important;
+    :host ::ng-deep .ate-tree .p-tree-node-content.p-tree-node-selected .p-tree-node-label {
+      color: inherit !important;
     }
 
     :host ::ng-deep .p-tree-node-label {
@@ -287,6 +286,16 @@ const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
       gap: 0.1875rem;
       min-width: 0;
       line-height: 1;
+      padding: 1px 0.25rem;
+    }
+
+    .ate-tree-node-selected {
+      background: red;
+      color: #fff;
+    }
+
+    .ate-tree-node-selected span {
+      color: #fff;
     }
 
     .ate-tree-icon {
@@ -504,6 +513,7 @@ export class ExplorerPanel {
   selectedMachineNode: TreeNode | null = null;
   selectedAteNode: TreeNode | null = null;
   private ateTreeBusyToken = 0;
+  private shouldScrollSelectedAteNodeIntoView = false;
   private readonly syncSelectedMachineTreeNodeEffect = effect(() => {
     this.selectedMachineNode = this.findTreeNodeByMachineId(
       this.mainMachineNodes(),
@@ -516,7 +526,8 @@ export class ExplorerPanel {
 
     this.selectedAteNode = selectedNodeId ? this.findTreeNodeByAteNodeId(nodes, selectedNodeId) : null;
 
-    if (this.selectedAteNode && selectedNodeId) {
+    if (this.shouldScrollSelectedAteNodeIntoView && this.selectedAteNode && selectedNodeId) {
+      this.shouldScrollSelectedAteNodeIntoView = false;
       this.scrollSelectedAteNodeIntoView(selectedNodeId);
     }
   });
@@ -555,7 +566,12 @@ export class ExplorerPanel {
   }
 
   selectAteNode(node: TreeNode): void {
+    this.shouldScrollSelectedAteNodeIntoView = false;
     this.store.selectAteNode(node.data?.ateNodeId ?? null);
+  }
+
+  isAteTreeNodeSelected(node: TreeNode): boolean {
+    return node.data?.ateNodeId === this.store.selectedAteNode()?.id;
   }
 
   showAteTreeRenderSpinner(): void {
@@ -871,6 +887,7 @@ export class ExplorerPanel {
     );
 
     if (continued) {
+      this.shouldScrollSelectedAteNodeIntoView = true;
       this.focusAteExpandedBranch(expandedNodeId);
     }
   }
@@ -900,6 +917,7 @@ export class ExplorerPanel {
     );
 
     if (returned) {
+      this.shouldScrollSelectedAteNodeIntoView = true;
       this.focusAteExpandedBranch(this.store.selectedAteNode()?.id ?? nodeId);
     }
   }
@@ -937,6 +955,7 @@ export class ExplorerPanel {
     const nextNode = nodes[nextIndex];
 
     this.selectedAteNode = nextNode;
+    this.shouldScrollSelectedAteNodeIntoView = true;
     this.store.selectAteNode(nextNode.data?.ateNodeId ?? null);
   }
 
@@ -1018,9 +1037,7 @@ export class ExplorerPanel {
         this.ateTree?.scrollToVirtualIndex(selectedIndex);
       }
 
-      const selectedElement = this.hostElement.nativeElement.querySelector(
-        '.ate-tree .p-tree-node-content.p-tree-node-selected',
-      );
+      const selectedElement = this.hostElement.nativeElement.querySelector('.ate-tree .ate-tree-node-selected');
 
       selectedElement?.scrollIntoView({
         block: 'nearest',
