@@ -2197,6 +2197,10 @@ export class JtvStore {
     return !!this.findAteNode(this.state().ate, nodeId)?.subtrace;
   }
 
+  hasActiveAteSubtrace(): boolean {
+    return this.ateNavigationStack.length > 0;
+  }
+
   returnFromAteSubtrace(): boolean {
     if (this.ateNavigationStack.length === 0) {
       return false;

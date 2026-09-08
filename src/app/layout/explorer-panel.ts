@@ -20,6 +20,12 @@ const NEW_NOTATION_ATE_ICON_BY_OLD_ICON: Readonly<Record<string, string>> = {
 
 const ATE_TREE_RENDER_SPINNER_MIN_MS = 520;
 
+interface AteTreeScrollPosition {
+  readonly left: number;
+  readonly selectedNodeIndex: number;
+  readonly top: number;
+}
+
 @Component({
   selector: 'app-explorer-panel',
   imports: [TabsModule, TreeModule, ProgressSpinnerModule, TranslatePipe, MachinePropertiesDialog],
@@ -509,10 +515,12 @@ export class ExplorerPanel {
   private readonly expandedAteNodeIds = signal<ReadonlySet<string>>(new Set<string>());
   readonly ateTreeBusy = signal(false);
   readonly ateNodes = computed<TreeNode[]>(() => [this.toTreeNode(this.store.ate())]);
+  readonly selectedAteNodeId = computed(() => this.store.selectedAteNode()?.id ?? null);
 
   selectedMachineNode: TreeNode | null = null;
   selectedAteNode: TreeNode | null = null;
   private ateTreeBusyToken = 0;
+  private readonly ateTreeScrollStack: AteTreeScrollPosition[] = [];
   private shouldScrollSelectedAteNodeIntoView = false;
   private readonly syncSelectedMachineTreeNodeEffect = effect(() => {
     this.selectedMachineNode = this.findTreeNodeByMachineId(
@@ -521,7 +529,7 @@ export class ExplorerPanel {
     );
   });
   private readonly syncSelectedAteTreeNode = effect(() => {
-    const selectedNodeId = this.store.selectedAteNode()?.id ?? null;
+    const selectedNodeId = this.selectedAteNodeId();
     const nodes = this.ateNodes();
 
     this.selectedAteNode = selectedNodeId ? this.findTreeNodeByAteNodeId(nodes, selectedNodeId) : null;
@@ -548,6 +556,7 @@ export class ExplorerPanel {
       label: this.getAteNodeLabel(node),
       data: {
         iconSrc: node.kind === 'root' ? this.getAteRootIconSrc() : this.getAteIconSrc(node.iconSrc),
+        kind: node.kind,
         ateNodeId: node.id,
       },
       expanded,
@@ -571,7 +580,7 @@ export class ExplorerPanel {
   }
 
   isAteTreeNodeSelected(node: TreeNode): boolean {
-    return node.data?.ateNodeId === this.store.selectedAteNode()?.id;
+    return node.data?.ateNodeId === this.selectedAteNodeId();
   }
 
   showAteTreeRenderSpinner(): void {
@@ -881,12 +890,42 @@ export class ExplorerPanel {
     event.preventDefault();
     event.stopPropagation();
     const expandedNodeId = node.data?.ateNodeId ?? '';
+    const entersSubtrace = this.store.hasAteSubtrace(expandedNodeId);
+    const exitsSubtrace = this.store.hasActiveAteSubtrace() && this.isAteSubtraceExitNode(node);
+    const scrollPosition = exitsSubtrace ? this.ateTreeScrollStack.pop() ?? null : null;
+
+    if (entersSubtrace) {
+      this.ateTreeScrollStack.push(this.captureAteTreeScrollPosition(expandedNodeId));
+    }
+
     const continued = await this.loading.run(
       () => this.store.continueAteExecution(expandedNodeId),
       this.i18n.translate('loading.executing'),
     );
 
+    if (!continued && entersSubtrace) {
+      this.ateTreeScrollStack.pop();
+    }
+
+    if (!continued && exitsSubtrace && scrollPosition) {
+      this.ateTreeScrollStack.push(scrollPosition);
+    }
+
     if (continued) {
+      if (exitsSubtrace) {
+        this.shouldScrollSelectedAteNodeIntoView = false;
+        this.focusAteExpandedBranch(this.selectedAteNodeId() ?? expandedNodeId);
+        this.restoreAteSelection();
+        this.restoreAteTreeScrollPosition(scrollPosition);
+        return;
+      }
+
+      if (entersSubtrace) {
+        this.shouldScrollSelectedAteNodeIntoView = false;
+        this.scrollAteTreeToTop();
+        return;
+      }
+
       this.shouldScrollSelectedAteNodeIntoView = true;
       this.focusAteExpandedBranch(expandedNodeId);
     }
@@ -910,15 +949,19 @@ export class ExplorerPanel {
     }
 
     this.lastAteRightClick = null;
-    this.scrollAteTreeToTop();
+    const scrollPosition = this.ateTreeScrollStack.pop() ?? null;
     const returned = await this.loading.run(
       () => this.store.returnFromAteSubtrace(),
       this.i18n.translate('loading.executing'),
     );
 
     if (returned) {
-      this.shouldScrollSelectedAteNodeIntoView = true;
-      this.focusAteExpandedBranch(this.store.selectedAteNode()?.id ?? nodeId);
+      this.shouldScrollSelectedAteNodeIntoView = false;
+      this.focusAteExpandedBranch(this.selectedAteNodeId() ?? nodeId);
+      this.restoreAteSelection();
+      this.restoreAteTreeScrollPosition(scrollPosition);
+    } else if (scrollPosition) {
+      this.ateTreeScrollStack.push(scrollPosition);
     }
   }
 
@@ -932,6 +975,10 @@ export class ExplorerPanel {
     queueMicrotask(() => {
       this.selectedAteNode = this.findTreeNodeByAteNodeId(this.ateNodes(), selectedNodeId);
     });
+  }
+
+  private isAteSubtraceExitNode(node: TreeNode): boolean {
+    return node.data?.kind === 'stop' || node.data?.kind === 'hanging' || node.data?.kind === 'error';
   }
 
   handleAteKeydown(event: KeyboardEvent): void {
@@ -1049,6 +1096,42 @@ export class ExplorerPanel {
   private scrollAteTreeToTop(): void {
     this.ateTree?.scrollToVirtualIndex(0);
     this.ateTree?.scrollTo({ top: 0 });
+  }
+
+  private captureAteTreeScrollPosition(selectedNodeId: string): AteTreeScrollPosition {
+    const scrollContainer = this.getAteTreeScrollContainer();
+
+    return {
+      left: scrollContainer?.scrollLeft ?? 0,
+      selectedNodeIndex: this.getVisibleAteTreeNodeIndex(selectedNodeId),
+      top: scrollContainer?.scrollTop ?? 0,
+    };
+  }
+
+  private restoreAteTreeScrollPosition(position: AteTreeScrollPosition | null): void {
+    if (!position) {
+      return;
+    }
+
+    void this.waitForAteTreeRender().then(() => {
+      if (position.selectedNodeIndex >= 0) {
+        this.ateTree?.scrollToVirtualIndex(Math.max(0, position.selectedNodeIndex - 3));
+      } else {
+        this.ateTree?.scrollTo({ top: position.top, left: position.left });
+      }
+
+      const scrollContainer = this.getAteTreeScrollContainer();
+
+      if (scrollContainer) {
+        scrollContainer.scrollLeft = position.left;
+      }
+    });
+  }
+
+  private getAteTreeScrollContainer(): HTMLElement | null {
+    return this.hostElement.nativeElement.querySelector(
+      '.ate-tree .p-virtualscroller, .ate-tree .p-tree-root, .ate-tree',
+    );
   }
 
   private getVisibleAteTreeNodeIndex(ateNodeId: string): number {
