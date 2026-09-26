@@ -664,6 +664,31 @@ describe('JtvStore ATE subtrace navigation', () => {
       store.destroy();
     }
   });
+
+  it.each([
+    ['search-left', 'L'],
+    ['search-right', 'R'],
+    ['search-left-inverse', 'L'],
+    ['search-right-inverse', 'R'],
+  ] as const)('initializes %s with the selected symbol', (toolId, label) => {
+    const store = createStoreWithBurstSize(20);
+
+    try {
+      store.selectSymbol('b');
+      store.selectTool(toolId);
+      store.insertActiveToolNodeAt({ x: 100, y: 100 });
+
+      expect(store.machineGraphView().nodes).toContainEqual(
+        expect.objectContaining({
+          kind: 'submachine',
+          label,
+          subscriptLabel: 'b',
+        }),
+      );
+    } finally {
+      store.destroy();
+    }
+  });
 });
 
 function createCustomParameterizedSubmachineFile(): JtvFile {

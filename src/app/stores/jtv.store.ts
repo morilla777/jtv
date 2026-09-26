@@ -3923,7 +3923,7 @@ export class JtvStore {
         'BUSCADORA_L',
         'L',
         'A',
-        { A: SymbolValue.BLANK },
+        { A: state.selectedSymbol },
         tapeIndex,
       );
     }
@@ -3935,7 +3935,7 @@ export class JtvStore {
         'BUSCADORA_R',
         'R',
         'A',
-        { A: SymbolValue.BLANK },
+        { A: state.selectedSymbol },
         tapeIndex,
       );
     }
@@ -3947,7 +3947,7 @@ export class JtvStore {
         'BUSCADORA_NOT_L',
         'L',
         'A',
-        { A: SymbolValue.BLANK },
+        { A: state.selectedSymbol },
         tapeIndex,
       );
     }
@@ -3959,7 +3959,7 @@ export class JtvStore {
         'BUSCADORA_NOT_R',
         'R',
         'A',
-        { A: SymbolValue.BLANK },
+        { A: state.selectedSymbol },
         tapeIndex,
       );
     }
