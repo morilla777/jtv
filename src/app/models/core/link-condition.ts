@@ -77,9 +77,9 @@ export class LinkCondition {
         const values = item.acceptedValues.join(',');
         const content = this.formatClauseContent(item, values, showTapeIndex);
 
-        return item.negated ? `not ${content}` : content;
+        return item.negated ? `[not ${content}]` : `[${content}]`;
       })
-      .join(' & ');
+      .join('');
   }
 
   private formatClauseContent(clause: ReadConditionClause, values: string, showTapeIndex: boolean): string {

@@ -80,7 +80,7 @@ export interface JtvMachineState {
 
 export interface JtvLinkEditState {
   readonly mode: 'conditional-link' | 'autolink';
-  readonly clause: ReadConditionClause;
+  readonly clauses: readonly ReadConditionClause[];
   readonly nodeId?: string;
   readonly autolinkOrientation?: AutolinkOrientation;
 }
@@ -861,19 +861,19 @@ export class JtvStore {
   createConditionalLinkBetweenNodes(
     sourceNodeId: string,
     targetNodeId: string,
-    clause: ReadConditionClause,
+    clauses: readonly ReadConditionClause[],
     vertices: readonly ViewPoint[] = [],
   ): void {
     if (this.state().activeToolId !== 'conditional-transition' || sourceNodeId === targetNodeId) {
       return;
     }
 
-    this.createLinkBetweenNodes(sourceNodeId, targetNodeId, this.createLinkConditionFromClause(clause), vertices);
+    this.createLinkBetweenNodes(sourceNodeId, targetNodeId, this.createLinkConditionFromClauses(clauses), vertices);
   }
 
   createConditionalAutolinkForNode(
     nodeId: string,
-    clause: ReadConditionClause,
+    clauses: readonly ReadConditionClause[],
     orientation: AutolinkOrientation,
   ): void {
     if (this.state().activeToolId !== 'loop-transition') {
@@ -900,7 +900,7 @@ export class JtvStore {
       const autolink = new Autolink(
         this.createMachineLinkId(current.machineGraph, 'autolink'),
         node,
-        this.createLinkConditionFromClause(clause),
+        this.createLinkConditionFromClauses(clauses),
       );
 
       return {
@@ -935,7 +935,7 @@ export class JtvStore {
     if (graphLink) {
       return {
         mode: 'conditional-link',
-        clause: this.getFirstConditionClauseOrDefault(graphLink.condition),
+        clauses: this.getConditionClausesOrDefault(graphLink.condition),
       };
     }
 
@@ -948,7 +948,7 @@ export class JtvStore {
 
     return {
       mode: 'autolink',
-      clause: this.getFirstConditionClauseOrDefault(autolink.condition),
+      clauses: this.getConditionClausesOrDefault(autolink.condition),
       nodeId: autolink.node?.id,
       autolinkOrientation: autolinkView?.autolinkOrientation ?? 'right',
     };
@@ -1040,7 +1040,7 @@ export class JtvStore {
 
   updateCanvasLinkCondition(
     linkId: string,
-    clause: ReadConditionClause,
+    clauses: readonly ReadConditionClause[],
     autolinkOrientation?: AutolinkOrientation,
   ): void {
     if (this.state().activeToolId !== 'pointer') {
@@ -1055,7 +1055,7 @@ export class JtvStore {
         return current;
       }
 
-      const condition = this.createLinkConditionFromClause(clause);
+      const condition = this.createLinkConditionFromClauses(clauses);
 
       if (link) {
         link.condition = condition;
@@ -3628,19 +3628,21 @@ export class JtvStore {
     }));
   }
 
-  private getFirstConditionClauseOrDefault(condition: LinkCondition | null): ReadConditionClause {
-    return condition?.clauses[0]
-      ? {
-        tapeIndex: condition.clauses[0].tapeIndex,
-        acceptedValues: [...condition.clauses[0].acceptedValues],
-        negated: condition.clauses[0].negated,
-        assignToVariableName: condition.clauses[0].assignToVariableName,
-      }
-      : {
-        tapeIndex: 0,
-        acceptedValues: [],
-        negated: false,
-      };
+  private getConditionClausesOrDefault(condition: LinkCondition | null): ReadConditionClause[] {
+    if (condition?.clauses.length) {
+      return condition.clauses.map((clause) => ({
+        tapeIndex: clause.tapeIndex,
+        acceptedValues: [...clause.acceptedValues],
+        negated: clause.negated,
+        assignToVariableName: clause.assignToVariableName,
+      }));
+    }
+
+    return [{
+      tapeIndex: 0,
+      acceptedValues: [],
+      negated: false,
+    }];
   }
 
   private getMachineLinkLabels(graph: MachineGraph, showTapeIndex: boolean): Map<string, string> {
@@ -3670,8 +3672,16 @@ export class JtvStore {
     return count;
   }
 
-  private createLinkConditionFromClause(clause: ReadConditionClause): LinkCondition | null {
-    return clause.acceptedValues.length > 0 ? new LinkCondition([clause]) : null;
+  private createLinkConditionFromClauses(clauses: readonly ReadConditionClause[]): LinkCondition | null {
+    const populatedClauses = clauses
+      .filter((clause) => clause.acceptedValues.length > 0)
+      .map((clause) => ({
+        ...clause,
+        acceptedValues: [...clause.acceptedValues],
+      }))
+      .sort((left, right) => left.tapeIndex - right.tapeIndex);
+
+    return populatedClauses.length > 0 ? new LinkCondition(populatedClauses) : null;
   }
 
   private findMachineNodeInGroup(group: MachineGroup, nodeId: string): MachineNode | null {

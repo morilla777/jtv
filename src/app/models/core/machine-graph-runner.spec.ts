@@ -427,6 +427,24 @@ describe('MachineGraphRunner', () => {
     expect(condition.evaluate({ tapes: [firstTape, secondTape], metaValues: new MetaValueDictionary() }).success).toBe(true);
   });
 
+  it('evaluates and labels independent conditions for multiple tapes', () => {
+    const firstTape = new Tape();
+    const secondTape = new Tape();
+    firstTape.write(SymbolValue.of('a')!);
+    secondTape.write(SymbolValue.of('b')!);
+    const condition = new LinkCondition([
+      { tapeIndex: 0, acceptedValues: ['a'] },
+      { tapeIndex: 1, acceptedValues: ['b'], negated: true },
+    ]);
+
+    expect(condition.getAteLabel(true)).toBe('[a;1][not b;2]');
+    expect(condition.evaluate({ tapes: [firstTape, secondTape], metaValues: new MetaValueDictionary() }).success).toBe(false);
+
+    secondTape.write(SymbolValue.of('c')!);
+
+    expect(condition.evaluate({ tapes: [firstTape, secondTape], metaValues: new MetaValueDictionary() }).success).toBe(true);
+  });
+
   it('writes the current value of a variable node', () => {
     const tape = new Tape();
     const variable = new VariableValue('α');

@@ -10,6 +10,7 @@ import { JtvSettingsService } from '../services/jtv-settings.service';
 import { LoadingIndicatorService } from '../services/loading-indicator.service';
 import { TranslationService } from '../services/translation.service';
 import { JtvStore } from '../stores/jtv.store';
+import { ReadConditionClause } from '../models/core/read-condition-clause';
 import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
 
 @Component({
@@ -909,6 +910,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   conditionSymbolsSelected: string[] = [this.conditionSymbols[0]];
   conditionVariablesSelected: string[] = [];
   conditionParametersSelected: string[] = [];
+  conditionClauses: ReadConditionClause[] = [];
   autolinkOrientation: 'top' | 'bottom' | 'left' | 'right' = 'right';
   conditionDialogDraft: ConditionDialogValue = this.createConditionDialogValue();
   submachineParameterDialogVisible = false;
@@ -1306,12 +1308,14 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.clearTransitionDraft();
     this.store.selectCanvasLink(linkId);
     this.editingLinkId.set(linkId);
-    this.conditionTapeIndex = editState.clause.tapeIndex;
-    this.conditionNegated = editState.clause.negated ?? false;
-    this.conditionAssignToVariable = editState.clause.assignToVariableName ?? null;
-    this.conditionSymbolsSelected = editState.clause.acceptedValues.filter((value) => this.conditionSymbols.includes(value));
-    this.conditionVariablesSelected = editState.clause.acceptedValues.filter((value) => this.conditionVariables.includes(value));
-    this.conditionParametersSelected = editState.clause.acceptedValues.filter((value) => this.conditionParameters.includes(value));
+    const activeClause = editState.clauses[0];
+    this.conditionTapeIndex = activeClause.tapeIndex;
+    this.conditionNegated = activeClause.negated ?? false;
+    this.conditionAssignToVariable = activeClause.assignToVariableName ?? null;
+    this.conditionSymbolsSelected = activeClause.acceptedValues.filter((value) => this.conditionSymbols.includes(value));
+    this.conditionVariablesSelected = activeClause.acceptedValues.filter((value) => this.conditionVariables.includes(value));
+    this.conditionParametersSelected = activeClause.acceptedValues.filter((value) => this.conditionParameters.includes(value));
+    this.conditionClauses = editState.clauses.map(cloneReadConditionClause);
     this.autolinkOrientation = editState.autolinkOrientation ?? 'right';
     this.autolinkTargetNodeId.set(editState.nodeId ?? null);
     this.conditionDialogMode.set(editState.mode);
@@ -1830,6 +1834,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
     this.autolinkTargetNodeId.set(nodeId);
     this.conditionDialogMode.set('autolink');
+    this.conditionClauses = [];
     this.normalizeAutolinkOrientation();
     this.refreshConditionDialogDraft();
     this.conditionDialogVisible.set(true);
@@ -1871,6 +1876,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     if (this.store.activeToolId() === 'conditional-transition') {
       this.conditionalTransitionTargetNodeId.set(nodeId);
       this.conditionDialogMode.set('conditional-link');
+      this.conditionClauses = [];
       this.refreshConditionDialogDraft();
       this.conditionDialogVisible.set(true);
       return;
@@ -1896,6 +1902,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       selectedSymbols: [...this.conditionSymbolsSelected],
       selectedVariables: [...this.conditionVariablesSelected],
       selectedParameters: [...this.conditionParametersSelected],
+      clauses: this.conditionClauses.map((clause) => this.createConditionDialogClauseValue(clause)),
       orientation: this.autolinkOrientation,
     };
   }
@@ -1911,12 +1918,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     if (editingLinkId) {
       this.store.updateCanvasLinkCondition(
         editingLinkId,
-        {
-          tapeIndex: this.conditionTapeIndex,
-          assignToVariableName: this.conditionAssignToVariable ?? undefined,
-          acceptedValues: this.getAcceptedConditionValues(),
-          negated: this.conditionNegated,
-        },
+        this.conditionClauses,
         this.conditionDialogMode() === 'autolink' ? this.autolinkOrientation : undefined,
       );
       this.conditionDialogVisible.set(false);
@@ -1939,12 +1941,12 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
       return;
     }
 
-    this.store.createConditionalLinkBetweenNodes(sourceNodeId, targetNodeId, {
-      tapeIndex: this.conditionTapeIndex,
-      assignToVariableName: this.conditionAssignToVariable ?? undefined,
-      acceptedValues: this.getAcceptedConditionValues(),
-      negated: this.conditionNegated,
-    }, this.transitionDraftVertices());
+    this.store.createConditionalLinkBetweenNodes(
+      sourceNodeId,
+      targetNodeId,
+      this.conditionClauses,
+      this.transitionDraftVertices(),
+    );
     this.conditionDialogVisible.set(false);
     this.conditionalTransitionTargetNodeId.set(null);
     this.conditionDialogMode.set(null);
@@ -1984,12 +1986,7 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
 
     this.store.createConditionalAutolinkForNode(
       nodeId,
-      {
-        tapeIndex: this.conditionTapeIndex,
-        assignToVariableName: this.conditionAssignToVariable ?? undefined,
-        acceptedValues: this.getAcceptedConditionValues(),
-        negated: this.conditionNegated,
-      },
+      this.conditionClauses,
       this.autolinkOrientation,
     );
     this.conditionDialogVisible.set(false);
@@ -2004,10 +2001,6 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     }
   }
 
-  private getAcceptedConditionValues(): string[] {
-    return [...this.conditionSymbolsSelected, ...this.conditionVariablesSelected, ...this.conditionParametersSelected];
-  }
-
   private applyConditionDialogValue(value: ConditionDialogValue): void {
     this.conditionTapeIndex = value.tapeIndex;
     this.conditionNegated = value.negated;
@@ -2015,7 +2008,24 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     this.conditionSymbolsSelected = [...value.selectedSymbols];
     this.conditionVariablesSelected = [...value.selectedVariables];
     this.conditionParametersSelected = [...value.selectedParameters];
+    this.conditionClauses = value.clauses.map((clause) => ({
+      tapeIndex: clause.tapeIndex,
+      assignToVariableName: clause.assignToVariable ?? undefined,
+      acceptedValues: [...clause.selectedSymbols, ...clause.selectedVariables, ...clause.selectedParameters],
+      negated: clause.negated,
+    }));
     this.autolinkOrientation = value.orientation;
+  }
+
+  private createConditionDialogClauseValue(clause: ReadConditionClause): ConditionDialogValue['clauses'][number] {
+    return {
+      tapeIndex: clause.tapeIndex,
+      negated: clause.negated ?? false,
+      assignToVariable: clause.assignToVariableName ?? null,
+      selectedSymbols: clause.acceptedValues.filter((value) => this.conditionSymbols.includes(value)),
+      selectedVariables: clause.acceptedValues.filter((value) => this.conditionVariables.includes(value)),
+      selectedParameters: clause.acceptedValues.filter((value) => this.conditionParameters.includes(value)),
+    };
   }
 
   private clearTransitionDraft(): void {
@@ -2438,4 +2448,13 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
   private getAutolinkAnchor(link: MachineLinkView): ViewPoint {
     return link.points?.[0] ?? { x: 0, y: 0 };
   }
+}
+
+function cloneReadConditionClause(clause: ReadConditionClause): ReadConditionClause {
+  return {
+    tapeIndex: clause.tapeIndex,
+    assignToVariableName: clause.assignToVariableName,
+    acceptedValues: [...clause.acceptedValues],
+    negated: clause.negated,
+  };
 }

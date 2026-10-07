@@ -11,13 +11,17 @@ export interface ConditionDialogTapeOption {
   readonly label: string;
 }
 
-export interface ConditionDialogValue {
+export interface ConditionDialogClauseValue {
   tapeIndex: number;
   negated: boolean;
   assignToVariable: string | null;
   selectedSymbols: string[];
   selectedVariables: string[];
   selectedParameters: string[];
+}
+
+export interface ConditionDialogValue extends ConditionDialogClauseValue {
+  clauses: ConditionDialogClauseValue[];
   orientation: AutolinkOrientation;
 }
 
@@ -36,17 +40,19 @@ export interface ConditionDialogValue {
     >
       <div class="condition-dialog">
         <div class="condition-summary">
-          @if (draft.negated) {
-            <span class="condition-overline-symbol">[{{ conditionSymbolLabel() }}]</span>
-          } @else {
-            <span>[{{ conditionSymbolLabel() }}]</span>
+          @for (condition of conditionSummary(); track condition.tapeIndex) {
+            @if (condition.negated) {
+              <span>[<span class="condition-overline-symbol">{{ condition.label }}</span>]</span>
+            } @else {
+              <span>[{{ condition.label }}]</span>
+            }
           }
         </div>
 
         <div class="condition-grid" [class.condition-grid-without-orientation]="!showOrientation">
           <fieldset class="condition-fieldset tape-fieldset">
             <legend>{{ 'conditionDialog.tape' | translate }}</legend>
-            <select [(ngModel)]="draft.tapeIndex" class="condition-select">
+            <select [ngModel]="draft.tapeIndex" (ngModelChange)="selectTape($event)" class="condition-select">
               @for (tape of tapeOptions; track tape.value) {
                 <option [ngValue]="tape.value">{{ tape.label }}</option>
               }
@@ -191,6 +197,9 @@ export interface ConditionDialogValue {
       min-height: 1.5rem;
       font-family: 'Times New Roman', Times, serif;
       font-style: italic;
+      display: flex;
+      gap: 0.25rem;
+      flex-wrap: wrap;
     }
 
     .condition-overline-symbol {
@@ -363,16 +372,38 @@ export class ConditionDialog implements OnChanges {
     }
   }
 
-  conditionSymbolLabel(): string {
-    const values = this.getAcceptedConditionValues().join(',');
-    const content = this.draft.assignToVariable ? `${this.draft.assignToVariable} = ${values}` : values;
+  conditionSummary(): readonly { tapeIndex: number; label: string; negated: boolean }[] {
+    return this.getClausesIncludingActiveDraft().map((clause) => {
+      const values = getAcceptedConditionValues(clause).join(',');
+      const content = clause.assignToVariable ? `${clause.assignToVariable} = ${values}` : values;
 
-    return values ? `${content}${this.tapeOptions.length > 1 ? `;${this.draft.tapeIndex + 1}` : ''}` : '';
+      return {
+        tapeIndex: clause.tapeIndex,
+        label: `${content}${this.tapeOptions.length > 1 ? `;${clause.tapeIndex + 1}` : ''}`,
+        negated: clause.negated,
+      };
+    });
+  }
+
+  selectTape(tapeIndex: number | string): void {
+    const nextTapeIndex = Number(tapeIndex);
+    const clauses = this.getClausesIncludingActiveDraft();
+    const nextClause = clauses.find((clause) => clause.tapeIndex === nextTapeIndex)
+      ?? createEmptyConditionDialogClauseValue(nextTapeIndex);
+
+    this.draft = {
+      ...this.draft,
+      ...cloneConditionDialogClauseValue(nextClause),
+      clauses,
+    };
   }
 
   acceptDraft(): void {
     this.suppressNextHide = true;
-    this.accept.emit(cloneConditionDialogValue(this.draft));
+    this.accept.emit({
+      ...cloneConditionDialogValue(this.draft),
+      clauses: this.getClausesIncludingActiveDraft(),
+    });
   }
 
   clearDraft(): void {
@@ -384,6 +415,7 @@ export class ConditionDialog implements OnChanges {
       selectedSymbols: [],
       selectedVariables: [],
       selectedParameters: [],
+      clauses: [],
       orientation: 'right',
     };
   }
@@ -423,8 +455,17 @@ export class ConditionDialog implements OnChanges {
     this.cancel.emit();
   }
 
-  private getAcceptedConditionValues(): string[] {
-    return [...this.draft.selectedSymbols, ...this.draft.selectedVariables, ...this.draft.selectedParameters];
+  private getClausesIncludingActiveDraft(): ConditionDialogClauseValue[] {
+    const activeClause = cloneConditionDialogClauseValue(this.draft);
+    const clauses = this.draft.clauses.filter((clause) => clause.tapeIndex !== activeClause.tapeIndex);
+
+    if (getAcceptedConditionValues(activeClause).length > 0) {
+      clauses.push(activeClause);
+    }
+
+    return clauses
+      .map(cloneConditionDialogClauseValue)
+      .sort((left, right) => left.tapeIndex - right.tapeIndex);
   }
 }
 
@@ -436,6 +477,7 @@ function createEmptyConditionDialogValue(): ConditionDialogValue {
     selectedSymbols: [],
     selectedVariables: [],
     selectedParameters: [],
+    clauses: [],
     orientation: 'right',
   };
 }
@@ -448,6 +490,33 @@ function cloneConditionDialogValue(value: ConditionDialogValue): ConditionDialog
     selectedSymbols: [...value.selectedSymbols],
     selectedVariables: [...value.selectedVariables],
     selectedParameters: [...value.selectedParameters],
+    clauses: value.clauses.map(cloneConditionDialogClauseValue),
     orientation: value.orientation,
   };
+}
+
+function createEmptyConditionDialogClauseValue(tapeIndex: number): ConditionDialogClauseValue {
+  return {
+    tapeIndex,
+    negated: false,
+    assignToVariable: null,
+    selectedSymbols: [],
+    selectedVariables: [],
+    selectedParameters: [],
+  };
+}
+
+function cloneConditionDialogClauseValue(value: ConditionDialogClauseValue): ConditionDialogClauseValue {
+  return {
+    tapeIndex: value.tapeIndex,
+    negated: value.negated,
+    assignToVariable: value.assignToVariable,
+    selectedSymbols: [...value.selectedSymbols],
+    selectedVariables: [...value.selectedVariables],
+    selectedParameters: [...value.selectedParameters],
+  };
+}
+
+function getAcceptedConditionValues(value: ConditionDialogClauseValue): string[] {
+  return [...value.selectedSymbols, ...value.selectedVariables, ...value.selectedParameters];
 }

@@ -689,6 +689,34 @@ describe('JtvStore ATE subtrace navigation', () => {
       store.destroy();
     }
   });
+
+  it('updates and restores independent link conditions for multiple tapes', () => {
+    const store = createStoreWithBurstSize(20);
+
+    try {
+      store.importMachineFile(copiadora2File as JtvFile);
+      store.selectTool('pointer');
+      const linkId = store.machineGraphView().links[0]?.linkId;
+
+      expect(linkId).toBeTruthy();
+
+      store.updateCanvasLinkCondition(linkId!, [
+        { tapeIndex: 0, acceptedValues: ['a'] },
+        { tapeIndex: 1, acceptedValues: ['b'], negated: true },
+      ]);
+
+      expect(store.getCanvasLinkEditState(linkId!)).toEqual(expect.objectContaining({
+        clauses: [
+          { tapeIndex: 0, acceptedValues: ['a'], negated: undefined, assignToVariableName: undefined },
+          { tapeIndex: 1, acceptedValues: ['b'], negated: true, assignToVariableName: undefined },
+        ],
+      }));
+      expect(store.machineGraphView().links.find((link) => link.linkId === linkId)?.label)
+        .toBe('[a;1][not b;2]');
+    } finally {
+      store.destroy();
+    }
+  });
 });
 
 function createCustomParameterizedSubmachineFile(): JtvFile {
