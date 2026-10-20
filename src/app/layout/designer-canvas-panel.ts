@@ -300,41 +300,28 @@ import { MachineLinkView, MachineNodeView, ViewPoint } from '../models/view';
               ></path>
 
               @if (link.label) {
-                @if (getNegatedSymbolLabel(link.label); as symbol) {
-                  <text
-                    [attr.x]="getLinkLabelPosition(link).x"
-                    [attr.y]="getLinkLabelPosition(link).y"
-                    class="edge-label"
-                    [class.edge-label-selected]="link.selected"
-                    [class.edge-label-canvas-selected]="link.canvasSelected"
-                    [class.edge-label-hovered]="isHoveredLink(link.linkId)"
-                    (mouseenter)="hoverLink(link.linkId)"
-                    (mouseleave)="clearHoveredElement()"
-                    (pointerdown)="startDraggingCanvasSelectionFromLink(link.linkId, $event)"
-                    (click)="selectLink(link.linkId); $event.stopPropagation()"
-                    (dblclick)="editLink(link.linkId, $event)"
-                    (contextmenu)="showLinkContextMenu(link.linkId, $event)"
-                  >
-                    <tspan class="overline-symbol">[{{ symbol }}]</tspan>
-                  </text>
-                } @else {
-                  <text
-                    [attr.x]="getLinkLabelPosition(link).x"
-                    [attr.y]="getLinkLabelPosition(link).y"
-                    class="edge-label"
-                    [class.edge-label-selected]="link.selected"
-                    [class.edge-label-canvas-selected]="link.canvasSelected"
-                    [class.edge-label-hovered]="isHoveredLink(link.linkId)"
-                    (mouseenter)="hoverLink(link.linkId)"
-                    (mouseleave)="clearHoveredElement()"
-                    (pointerdown)="startDraggingCanvasSelectionFromLink(link.linkId, $event)"
-                    (click)="selectLink(link.linkId); $event.stopPropagation()"
-                    (dblclick)="editLink(link.linkId, $event)"
-                    (contextmenu)="showLinkContextMenu(link.linkId, $event)"
-                  >
-                    {{ link.label }}
-                  </text>
-                }
+                <text
+                  [attr.x]="getLinkLabelPosition(link).x"
+                  [attr.y]="getLinkLabelPosition(link).y"
+                  class="edge-label"
+                  [class.edge-label-selected]="link.selected"
+                  [class.edge-label-canvas-selected]="link.canvasSelected"
+                  [class.edge-label-hovered]="isHoveredLink(link.linkId)"
+                  (mouseenter)="hoverLink(link.linkId)"
+                  (mouseleave)="clearHoveredElement()"
+                  (pointerdown)="startDraggingCanvasSelectionFromLink(link.linkId, $event)"
+                  (click)="selectLink(link.linkId); $event.stopPropagation()"
+                  (dblclick)="editLink(link.linkId, $event)"
+                  (contextmenu)="showLinkContextMenu(link.linkId, $event)"
+                >
+                  @for (segment of getLinkConditionLabelSegments(link.label); track $index) {
+                    @if (segment.negated) {
+                      <tspan>[</tspan><tspan class="overline-symbol">{{ segment.content }}</tspan><tspan>]</tspan>
+                    } @else {
+                      <tspan>{{ segment.text }}</tspan>
+                    }
+                  }
+                </text>
               }
 
               @if (isPointerToolActive() && link.kind !== 'autolink') {
@@ -1137,8 +1124,8 @@ export class DesignerCanvasPanel implements AfterViewInit, OnDestroy {
     };
   }
 
-  getNegatedSymbolLabel(label: string): string | null {
-    return /^\[not (.+)\]$/.exec(label)?.[1] ?? null;
+  getLinkConditionLabelSegments(label: string): readonly LinkConditionLabelSegment[] {
+    return parseLinkConditionLabel(label);
   }
 
   getNodeTapeNumber(node: MachineNodeView): number {
@@ -2457,4 +2444,24 @@ function cloneReadConditionClause(clause: ReadConditionClause): ReadConditionCla
     acceptedValues: [...clause.acceptedValues],
     negated: clause.negated,
   };
+}
+
+export interface LinkConditionLabelSegment {
+  readonly content: string;
+  readonly negated: boolean;
+  readonly text: string;
+}
+
+export function parseLinkConditionLabel(label: string): readonly LinkConditionLabelSegment[] {
+  const matches = [...label.matchAll(/\[(not )?([^\]]*)\]/g)];
+
+  if (matches.length === 0 || matches.map((match) => match[0]).join('') !== label) {
+    return [{ content: label, negated: false, text: label }];
+  }
+
+  return matches.map((match) => ({
+    content: match[2],
+    negated: !!match[1],
+    text: match[0],
+  }));
 }
