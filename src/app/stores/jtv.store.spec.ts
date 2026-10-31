@@ -84,6 +84,7 @@ describe('JtvStore ATE subtrace navigation', () => {
       expect(store.continueAteExecution(stopNode.id)).toBe(true);
       expect(store.selectedMachine().name).toBe('MAIN');
       expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('MAIN');
+      expect(store.designMachineTabs().map((tab) => tab.name)).toEqual(['MAIN']);
       expect(store.selectedTapeSnapshot()).toEqual({
         headPosition: 1,
         cells: {
@@ -104,13 +105,70 @@ describe('JtvStore ATE subtrace navigation', () => {
       expect(store.continueAteExecution(revisitedStopNode.id)).toBe(true);
       expect(store.selectedMachine().name).toBe('MAIN');
       expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('MAIN');
+      expect(store.designMachineTabs().map((tab) => tab.name)).toEqual(['MAIN']);
       expect(store.ate().children).toHaveLength(2);
 
       expect(store.continueAteExecution(machineExpandNode.id)).toBe(true);
       expect(store.returnFromAteSubtrace()).toBe(true);
       expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('MAIN');
+      expect(store.designMachineTabs().map((tab) => tab.name)).toEqual(['MAIN']);
     } finally {
       injector.destroy();
+    }
+  });
+
+  it('opens a temporary translated tab while exploring a preinstalled submachine trace', () => {
+    const store = createStoreWithBurstSize(1000);
+
+    try {
+      store.importMachineFile(copiadoraFile as JtvFile);
+      store.setTapeValue('tape-1', 'aba');
+      expect(store.runMachineOnFirstTape()).toBe(true);
+      const searchNode = store.ate().children.find((node) => node.label === 'BUSCADORA_L()' && node.subtrace);
+
+      expect(searchNode).toBeTruthy();
+      expect(store.continueAteExecution(searchNode!.id)).toBe(true);
+
+      const activeTabId = store.activeDesignMachineTabId();
+      expect(activeTabId).toMatch(/^ate-subtrace-/);
+      expect(store.designMachineTabs().find((tab) => tab.id === activeTabId)).toEqual({
+        id: activeTabId,
+        name: 'BUSCADORA_L',
+        labelKey: 'ate.preinstalled.searchLeftRoot',
+        isRoot: false,
+        dirty: false,
+      });
+
+      expect(store.returnFromAteSubtrace()).toBe(true);
+      expect(store.designMachineTabs().find((tab) => tab.id === activeTabId)).toBeUndefined();
+      expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('COPIADORA');
+    } finally {
+      store.destroy();
+    }
+  });
+
+  it('keeps a submachine tab that was already open before ATE navigation', () => {
+    const store = createStoreWithBurstSize(2);
+
+    try {
+      store.importMachineFile(createSubmachineExpansionFile());
+      const rootMachineId = store.rootMachineTreeNodeId();
+      const submachineId = store.machineTree().children[0]?.id;
+
+      expect(submachineId).toBeTruthy();
+      store.selectDesignMachine(submachineId!);
+      store.selectDesignMachine(rootMachineId);
+      expect(store.designMachineTabs().map((tab) => tab.name)).toEqual(['MAIN', 'SUB_EXPAND']);
+
+      expect(store.runMachineOnFirstTape()).toBe(true);
+      const submachineNode = store.ate().children[0];
+      expect(store.continueAteExecution(submachineNode.id)).toBe(true);
+      expect(store.returnFromAteSubtrace()).toBe(true);
+
+      expect(store.designMachineTabs().map((tab) => tab.name)).toEqual(['MAIN', 'SUB_EXPAND']);
+      expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('MAIN');
+    } finally {
+      store.destroy();
     }
   });
 

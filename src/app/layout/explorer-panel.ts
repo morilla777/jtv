@@ -568,7 +568,9 @@ export class ExplorerPanel {
 
   private getAteNodeLabel(node: AteNode): string {
     if (node.kind === 'root') {
-      return node.label || this.i18n.translate('explorer.ateRootLabel');
+      return node.labelKey
+        ? this.i18n.translate(node.labelKey)
+        : node.label || this.i18n.translate('explorer.ateRootLabel');
     }
 
     return node.labelKey ? this.i18n.translate(node.labelKey) : node.label;

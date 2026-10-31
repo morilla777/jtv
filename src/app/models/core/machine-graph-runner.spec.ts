@@ -19,6 +19,8 @@ import { SubmachineDefinition } from './execution-context';
 import { SubmachineNode } from './submachine-node';
 import { VariableValue } from './variable-value';
 import { WriterNode } from './writer-node';
+import { en } from '../../i18n/translations/en';
+import { es } from '../../i18n/translations/es';
 import binarioDecimalFile from '../../../assets/examples/binario_decimal.jtv.json';
 import binarioUnarioFile from '../../../assets/examples/binario_unario.jtv.json';
 import copiadora2File from '../../../assets/examples/copiadora2.jtv.json';
@@ -927,12 +929,20 @@ describe('MachineGraphRunner', () => {
     expect(ok).toBe(true);
     expect(submachineNode.getAteIconName()).toBe('M_ATE.gif');
     expect(submachineNode.getAteLabel()).toBe('BUSCADORA_L()');
+    expect(submachineNode.getAteLabelKey()).toBe('ate.preinstalled.searchLeft');
+    const traceRecorder = new AteTraceRecorder('MAIN');
+    traceRecorder.recordMachineNode(submachineNode);
+    expect(traceRecorder.root.children[0]).toEqual(expect.objectContaining({
+      label: 'BUSCADORA_L()',
+      labelKey: 'ate.preinstalled.searchLeft',
+    }));
     expect(submachineNode.getAteSubtrace()).toEqual(
       expect.objectContaining({
         machineName: 'BUSCADORA_L',
         graph: submachine.graph,
         root: expect.objectContaining({
           label: 'BUSCADORA_L',
+          labelKey: 'ate.preinstalled.searchLeftRoot',
           children: expect.arrayContaining([
             expect.objectContaining({
               iconSrc: 'assets/images/L_ATE.gif',
@@ -971,6 +981,32 @@ describe('MachineGraphRunner', () => {
         2: 'b',
       },
     });
+  });
+
+  it.each([
+    ['buscadora_l', 'ate.preinstalled.searchLeft', 'ate.preinstalled.searchLeftRoot', 'BUSCADORA_L()', 'SEARCH_L()'],
+    ['buscadora_r', 'ate.preinstalled.searchRight', 'ate.preinstalled.searchRightRoot', 'BUSCADORA_R()', 'SEARCH_R()'],
+    ['buscadora_not_l', 'ate.preinstalled.searchNotLeft', 'ate.preinstalled.searchNotLeftRoot', 'BUSCADORA_NOT_L()', 'SEARCH_NOT_L()'],
+    ['buscadora_not_r', 'ate.preinstalled.searchNotRight', 'ate.preinstalled.searchNotRightRoot', 'BUSCADORA_NOT_R()', 'SEARCH_NOT_R()'],
+  ])('internationalizes the %s ATE label', (submachineId, labelKey, rootLabelKey, spanishLabel, englishLabel) => {
+    const node = new SubmachineNode('search-node', submachineId, spanishLabel.slice(0, -2), 'M', 'A', {}, 0);
+
+    expect(node.getAteLabelKey()).toBe(labelKey);
+    expect(node.getAteRootLabelKey()).toBe(rootLabelKey);
+    expect(es[labelKey]).toBe(spanishLabel);
+    expect(en[labelKey]).toBe(englishLabel);
+    expect(es[rootLabelKey]).toBe(spanishLabel.slice(0, -2));
+    expect(en[rootLabelKey]).toBe(englishLabel.slice(0, -2));
+  });
+
+  it('keeps non-search submachine ATE labels literal', () => {
+    const shiftNode = new SubmachineNode('shift-node', 'shift_l', 'SHIFT_L', 'S', '', {}, 0);
+    const customNode = new SubmachineNode('custom-node', 'custom', 'CUSTOM', 'M', '', {}, 0);
+
+    expect(shiftNode.getAteLabelKey()).toBeUndefined();
+    expect(shiftNode.getAteRootLabelKey()).toBeUndefined();
+    expect(customNode.getAteLabelKey()).toBeUndefined();
+    expect(customNode.getAteRootLabelKey()).toBeUndefined();
   });
 
   it('executes a submachine node against its configured caller tape', () => {

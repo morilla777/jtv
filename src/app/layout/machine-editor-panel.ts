@@ -21,12 +21,12 @@ import { DesignerCanvasPanel } from './designer-canvas-panel';
             role="tab"
             [attr.aria-selected]="tab.id === activeMachineTabId()"
             [attr.aria-disabled]="executionLocked()"
-            [title]="getTabTitle(tab.name, tab.dirty)"
+            [title]="getTabTitle(getTabLabel(tab), tab.dirty)"
             (click)="activateTab(tab.id)"
           >
             <img class="machine-tab-icon" src="assets/images/Gear.gif" alt="" />
             <span class="machine-tab-label">
-              {{ tab.name || ('explorer.ateRootLabel' | translate) }}
+              {{ getTabLabel(tab) }}
               @if (tab.dirty) {
                 <span class="machine-tab-dirty" aria-hidden="true">*</span>
               }
@@ -195,6 +195,14 @@ export class MachineEditorPanel {
   readonly machineTabs = this.store.designMachineTabs;
   readonly activeMachineTabId = this.store.activeDesignMachineTabId;
   readonly executionLocked = computed(() => this.loading.visible() || this.store.ate().children.length > 0);
+
+  getTabLabel(tab: { name: string; labelKey?: string }): string {
+    if (tab.labelKey) {
+      return this.i18n.translate(tab.labelKey);
+    }
+
+    return tab.name || this.i18n.translate('explorer.ateRootLabel');
+  }
 
   activateTab(machineId: string): void {
     if (this.executionLocked()) {

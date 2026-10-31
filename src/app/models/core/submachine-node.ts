@@ -23,6 +23,20 @@ export type PreinstalledSubmachineId =
   | 'shift_l'
   | 'shift_r';
 
+const PREINSTALLED_ATE_LABEL_KEYS: Partial<Record<PreinstalledSubmachineId, string>> = {
+  buscadora_l: 'ate.preinstalled.searchLeft',
+  buscadora_r: 'ate.preinstalled.searchRight',
+  buscadora_not_l: 'ate.preinstalled.searchNotLeft',
+  buscadora_not_r: 'ate.preinstalled.searchNotRight',
+};
+
+const PREINSTALLED_ATE_ROOT_LABEL_KEYS: Partial<Record<PreinstalledSubmachineId, string>> = {
+  buscadora_l: 'ate.preinstalled.searchLeftRoot',
+  buscadora_r: 'ate.preinstalled.searchRightRoot',
+  buscadora_not_l: 'ate.preinstalled.searchNotLeftRoot',
+  buscadora_not_r: 'ate.preinstalled.searchNotRightRoot',
+};
+
 export class SubmachineNode extends AbstractMachineNode {
   private readonly runner = new MachineGraphRunner();
   private lastAteSubtrace: AteSubtrace | null = null;
@@ -65,7 +79,10 @@ export class SubmachineNode extends AbstractMachineNode {
       maxSteps: context.maxSteps,
       submachines: context.submachines,
     };
-    const traceRecorder = new AteTraceRecorder(definition.name, { showTapeIndexes: submachineTapes.length > 1 });
+    const traceRecorder = new AteTraceRecorder(definition.name, {
+      rootLabelKey: this.getAteRootLabelKey(),
+      showTapeIndexes: submachineTapes.length > 1,
+    });
     const result = this.runner.runBurst(definition.graph, submachineContext, traceRecorder, {
       maxSteps: context.maxSteps,
     });
@@ -135,6 +152,14 @@ export class SubmachineNode extends AbstractMachineNode {
 
   override getAteLabel(): string {
     return `${this.submachineName}()`;
+  }
+
+  getAteLabelKey(): string | undefined {
+    return PREINSTALLED_ATE_LABEL_KEYS[this.submachineId as PreinstalledSubmachineId];
+  }
+
+  getAteRootLabelKey(): string | undefined {
+    return PREINSTALLED_ATE_ROOT_LABEL_KEYS[this.submachineId as PreinstalledSubmachineId];
   }
 
   getParameterDisplayValue(): string {

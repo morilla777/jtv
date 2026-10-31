@@ -9,12 +9,16 @@ export class AteTraceRecorder {
 
   readonly root: AteNode;
 
-  constructor(machineName: string, options: { root?: AteNode; showTapeIndexes?: boolean; nextEntryId?: number } = {}) {
+  constructor(
+    machineName: string,
+    options: { root?: AteNode; rootLabelKey?: string; showTapeIndexes?: boolean; nextEntryId?: number } = {},
+  ) {
     this.showTapeIndexes = options.showTapeIndexes ?? false;
     this.nextEntryId = options.nextEntryId ?? 1;
     this.root = options.root ?? {
       id: 'ate-root',
       label: machineName,
+      labelKey: options.rootLabelKey,
       iconSrc: this.getIconSrc('ATE_ATE.gif'),
       kind: 'root',
       children: [],
@@ -25,6 +29,7 @@ export class AteTraceRecorder {
     this.root.children.push({
       id: this.createEntryId('node'),
       label: node.getAteLabel(),
+      labelKey: node.getAteLabelKey?.(),
       iconSrc: this.getIconSrc(node.getAteIconName()),
       kind: 'machine-node',
       machineNodeId: node.id,

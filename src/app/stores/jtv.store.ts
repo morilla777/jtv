@@ -138,6 +138,7 @@ export interface JtvMachineTreeNode {
 export interface JtvMachineTab {
   readonly id: string;
   readonly name: string;
+  readonly labelKey?: string;
   readonly isRoot: boolean;
   readonly dirty: boolean;
 }
@@ -166,6 +167,7 @@ interface CanvasClipboard {
 interface AteNavigationFrame {
   readonly activeDesignMachineId: string;
   readonly ate: AteNode;
+  readonly openedDesignMachineTabId: string | null;
   readonly parentAteNodeId: string;
   readonly machineGraph: MachineGraph;
   readonly machineGraphView: MachineGraphView;
@@ -478,14 +480,18 @@ export class JtvStore {
   });
   readonly activeDesignMachineTabId = computed(() => {
     this.machineWorkspaceRevision();
+    const selectedMachineId = this.state().selectedMachine.id;
 
-    return this.activeDesignMachineId;
+    return this.ateNavigationStack.length > 0 && !this.designMachines.has(selectedMachineId)
+      ? selectedMachineId
+      : this.activeDesignMachineId;
   });
   readonly designMachineTabs = computed<JtvMachineTab[]>(() => {
     this.machineWorkspaceRevision();
     const dirtyMachineIds = this.dirtyDesignMachineIds();
+    const current = this.state();
 
-    return this.openDesignMachineTabIds()
+    const designTabs = this.openDesignMachineTabIds()
       .map((machineId) => this.designMachines.get(machineId))
       .filter((machine): machine is JtvDesignMachine => !!machine)
       .map((machine) => ({
@@ -494,6 +500,22 @@ export class JtvStore {
         isRoot: machine.id === this.rootDesignMachineId,
         dirty: dirtyMachineIds.has(machine.id),
       }));
+
+    const temporaryTabs = [
+      ...this.ateNavigationStack.map((frame) => ({ machine: frame.selectedMachine, ate: frame.ate })),
+      { machine: current.selectedMachine, ate: current.ate },
+    ]
+      .filter(({ machine }) => !this.designMachines.has(machine.id))
+      .filter(({ machine }, index, items) => items.findIndex((item) => item.machine.id === machine.id) === index)
+      .map(({ machine, ate }) => ({
+        id: machine.id,
+        name: machine.name,
+        labelKey: ate.labelKey,
+        isRoot: false,
+        dirty: false,
+      }));
+
+    return [...designTabs, ...temporaryTabs];
   });
   readonly canPasteDesignMachine = computed(() => {
     this.designMachineClipboardRevision();
@@ -2063,6 +2085,7 @@ export class JtvStore {
 
   runMachineOnFirstTape(): boolean {
     this.saveActiveDesignMachine();
+    this.closeTabsOpenedForAteNavigation(this.ateNavigationStack);
     this.ateNavigationStack = [];
     const tapes = this.state().tapes;
 
@@ -2212,10 +2235,15 @@ export class JtvStore {
 
   private enterAteSubtrace(parentNode: AteNode, subtrace: AteSubtrace): void {
     const current = this.state();
+    const subtraceDesignMachineId = this.getSubtraceDesignMachineId(parentNode);
+    const openedDesignMachineTabId = subtraceDesignMachineId && !this.openDesignMachineTabIds().includes(subtraceDesignMachineId)
+      ? subtraceDesignMachineId
+      : null;
 
     this.ateNavigationStack.push({
       activeDesignMachineId: this.activeDesignMachineId,
       ate: current.ate,
+      openedDesignMachineTabId,
       parentAteNodeId: parentNode.id,
       machineGraph: current.machineGraph,
       machineGraphView: current.machineGraphView,
@@ -2228,8 +2256,6 @@ export class JtvStore {
       selectedTapeIndex: current.selectedTapeIndex,
       tapes: this.cloneTapeStates(current.tapes),
     });
-
-    const subtraceDesignMachineId = this.getSubtraceDesignMachineId(parentNode);
 
     if (subtraceDesignMachineId) {
       this.activateDesignMachineTabForExecution(subtraceDesignMachineId);
@@ -2296,6 +2322,7 @@ export class JtvStore {
     }
 
     this.activeDesignMachineId = frame.activeDesignMachineId;
+    this.closeTabsOpenedForAteNavigation([frame]);
     this.bumpMachineWorkspaceRevision();
     this.state.update((state) => ({
       ...state,
@@ -2316,6 +2343,7 @@ export class JtvStore {
 
   clearAte(): void {
     const rootFrame = this.ateNavigationStack[0];
+    this.closeTabsOpenedForAteNavigation(this.ateNavigationStack);
     this.ateNavigationStack = [];
 
     if (rootFrame) {
@@ -2925,6 +2953,7 @@ export class JtvStore {
   }
 
   private loadDesignMachine(machineId: string, options: { saveCurrent?: boolean } = {}): void {
+    this.closeTabsOpenedForAteNavigation(this.ateNavigationStack);
     this.ateNavigationStack = [];
 
     if (options.saveCurrent ?? true) {
@@ -2996,6 +3025,22 @@ export class JtvStore {
     this.openDesignMachineTab(machineId);
     this.activeDesignMachineId = machineId;
     this.bumpMachineWorkspaceRevision();
+  }
+
+  private closeTabsOpenedForAteNavigation(frames: readonly AteNavigationFrame[]): void {
+    const tabIds = new Set(
+      frames
+        .map((frame) => frame.openedDesignMachineTabId)
+        .filter((machineId): machineId is string => !!machineId),
+    );
+
+    if (tabIds.size === 0) {
+      return;
+    }
+
+    this.openDesignMachineTabIds.update((machineIds) =>
+      machineIds.filter((machineId) => !tabIds.has(machineId)),
+    );
   }
 
   private getSubtraceDesignMachineId(parentNode: AteNode): string | null {

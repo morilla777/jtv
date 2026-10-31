@@ -60,6 +60,14 @@ export const en: Record<string, string> = {
   'explorer.machineMenu.properties': 'Properties',
   'ate.hanging': 'HANGING',
   'ate.error': 'ERROR',
+  'ate.preinstalled.searchLeft': 'SEARCH_L()',
+  'ate.preinstalled.searchRight': 'SEARCH_R()',
+  'ate.preinstalled.searchNotLeft': 'SEARCH_NOT_L()',
+  'ate.preinstalled.searchNotRight': 'SEARCH_NOT_R()',
+  'ate.preinstalled.searchLeftRoot': 'SEARCH_L',
+  'ate.preinstalled.searchRightRoot': 'SEARCH_R',
+  'ate.preinstalled.searchNotLeftRoot': 'SEARCH_NOT_L',
+  'ate.preinstalled.searchNotRightRoot': 'SEARCH_NOT_R',
 
   // Designer
   'designer.title': 'Machine Design',

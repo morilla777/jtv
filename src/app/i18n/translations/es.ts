@@ -60,6 +60,14 @@ export const es: Record<string, string> = {
   'explorer.machineMenu.properties': 'Propiedades',
   'ate.hanging': 'COLGADA',
   'ate.error': 'ERROR',
+  'ate.preinstalled.searchLeft': 'BUSCADORA_L()',
+  'ate.preinstalled.searchRight': 'BUSCADORA_R()',
+  'ate.preinstalled.searchNotLeft': 'BUSCADORA_NOT_L()',
+  'ate.preinstalled.searchNotRight': 'BUSCADORA_NOT_R()',
+  'ate.preinstalled.searchLeftRoot': 'BUSCADORA_L',
+  'ate.preinstalled.searchRightRoot': 'BUSCADORA_R',
+  'ate.preinstalled.searchNotLeftRoot': 'BUSCADORA_NOT_L',
+  'ate.preinstalled.searchNotRightRoot': 'BUSCADORA_NOT_R',
 
   // Designer
   'designer.title': 'Diseño de Máquina',
