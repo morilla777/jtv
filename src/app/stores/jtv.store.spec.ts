@@ -142,6 +142,7 @@ describe('JtvStore ATE subtrace navigation', () => {
       expect(store.returnFromAteSubtrace()).toBe(true);
       expect(store.designMachineTabs().find((tab) => tab.id === activeTabId)).toBeUndefined();
       expect(store.designMachineTabs().find((tab) => tab.id === store.activeDesignMachineTabId())?.name).toBe('COPIADORA');
+      expect(store.selectedAteNode()?.id).toBe(searchNode!.id);
     } finally {
       store.destroy();
     }
@@ -225,6 +226,7 @@ describe('JtvStore ATE subtrace navigation', () => {
       const submachineStopNode = store.ate().children.at(-1)!;
       expect(store.continueAteExecution(submachineStopNode.id)).toBe(true);
       expect(store.selectedMachine().name).toBe('MAIN');
+      expect(store.selectedAteNode()?.id).toBe(machineNode.id);
 
       store.selectAteNode(mainStopNode.id);
       expect(store.selectedTapeSnapshot()).toEqual({

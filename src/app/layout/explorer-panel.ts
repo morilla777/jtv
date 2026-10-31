@@ -520,6 +520,7 @@ export class ExplorerPanel {
   selectedMachineNode: TreeNode | null = null;
   selectedAteNode: TreeNode | null = null;
   private ateTreeBusyToken = 0;
+  private ateNavigationViewRestoreToken = 0;
   private readonly ateTreeScrollStack: AteTreeScrollPosition[] = [];
   private shouldScrollSelectedAteNodeIntoView = false;
   private readonly syncSelectedMachineTreeNodeEffect = effect(() => {
@@ -917,8 +918,7 @@ export class ExplorerPanel {
       if (exitsSubtrace) {
         this.shouldScrollSelectedAteNodeIntoView = false;
         this.focusAteExpandedBranch(this.selectedAteNodeId() ?? expandedNodeId);
-        this.restoreAteSelection();
-        this.restoreAteTreeScrollPosition(scrollPosition);
+        this.restoreAteNavigationView(scrollPosition);
         return;
       }
 
@@ -960,8 +960,7 @@ export class ExplorerPanel {
     if (returned) {
       this.shouldScrollSelectedAteNodeIntoView = false;
       this.focusAteExpandedBranch(this.selectedAteNodeId() ?? nodeId);
-      this.restoreAteSelection();
-      this.restoreAteTreeScrollPosition(scrollPosition);
+      this.restoreAteNavigationView(scrollPosition);
     } else if (scrollPosition) {
       this.ateTreeScrollStack.push(scrollPosition);
     }
@@ -1110,12 +1109,10 @@ export class ExplorerPanel {
     };
   }
 
-  private restoreAteTreeScrollPosition(position: AteTreeScrollPosition | null): void {
-    if (!position) {
-      return;
-    }
+  private async restoreAteTreeScrollPosition(position: AteTreeScrollPosition | null): Promise<void> {
+    await this.waitForAteTreeRender();
 
-    void this.waitForAteTreeRender().then(() => {
+    if (position) {
       if (position.selectedNodeIndex >= 0) {
         this.ateTree?.scrollToVirtualIndex(Math.max(0, position.selectedNodeIndex - 3));
       } else {
@@ -1127,6 +1124,25 @@ export class ExplorerPanel {
       if (scrollContainer) {
         scrollContainer.scrollLeft = position.left;
       }
+    }
+  }
+
+  private restoreAteNavigationView(position: AteTreeScrollPosition | null): void {
+    const restoreToken = ++this.ateNavigationViewRestoreToken;
+    const selectedNodeId = this.selectedAteNodeId();
+
+    if (!selectedNodeId) {
+      return;
+    }
+
+    void this.restoreAteTreeScrollPosition(position).then(async () => {
+      await this.waitForAteTreeRender();
+
+      if (restoreToken !== this.ateNavigationViewRestoreToken || this.selectedAteNodeId() !== selectedNodeId) {
+        return;
+      }
+
+      this.selectedAteNode = this.findTreeNodeByAteNodeId(this.ateNodes(), selectedNodeId);
     });
   }
 
